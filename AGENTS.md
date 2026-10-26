@@ -25,6 +25,13 @@ Read `docs/hackathon/rules-summary.md` first. The full page text is in `docs/hac
 ## Work split and plan
 See `docs/plan.md` for who builds what, the timeline and the Meta API budget. Update its "Handoff log" section at the end of each working session.
 
+## Working with several coding tools
+Claude Code, Antigravity (Gemini / Claude models) and Muse Code all work in this repo. Git is the only shared memory between them.
+- Start every session with `git pull`, then read `docs/plan.md` (plan and Handoff log).
+- One tool works on one task at a time, on its own branch: `claude/<task>`, `agy/<task>`, `muse/<task>`. Never let two tools edit the same files at once.
+- Finish every session with small commits, an updated Handoff log entry (what was done, what is next, known issues), and a push. Merge to `main` only when the loop still runs end to end.
+- Agent logic is built mainly in Muse Code (Meta tooling counts in judging). Gemini 4 Argon reviews milestone diffs before merge.
+
 ## Working style
 - Python for agents and analysis. The browser game stays simple and config-driven, with event logging.
 - Keep the demo path runnable end to end at every milestone, and update the README Status checklist as items land.
