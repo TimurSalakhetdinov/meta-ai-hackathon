@@ -22,8 +22,15 @@ Building the agent logic in Muse Code also shows our use of Meta tooling.
 - [ ] Validation against our own human play sessions.
 - [ ] README with setup and run instructions, the "Status" checklist, and the 3-minute demo video.
 
+### Antigravity (Gemini 4 Argon, Gemini 3.8 Flash, Claude Opus 5.5 / Sonnet 5.5): whole event
+Weekly limits reset around Nov 1, so there are two full windows during the event.
+- **Gemini 4 Argon**: architecture decisions, hard debugging, and a review pass on each milestone (play loop, analyst, A/B). Also a second opinion on prompts and on the demo storyline.
+- **Claude Opus / Sonnet 5.5**: continues Claude-style work after Claude Code access ends on Oct 29, for refactors and fixes in code Claude Code wrote.
+- **Gemini 3.8 Flash**: routine edits, tests, docs and README polish, to save the stronger models' limits.
+- Muse Code remains the main tool for agent logic from Oct 29, so the Meta tooling story stays strong.
+
 ## Meta API budget ($150 credits, valid for the 10-day window)
-Code is written with Claude Code and Muse Code, not with API credits. Credits go to running the product.
+Code is written with Claude Code, Muse Code and Antigravity, not with API credits. Credits go to running the product.
 
 | Share | Use |
 |---|---|
