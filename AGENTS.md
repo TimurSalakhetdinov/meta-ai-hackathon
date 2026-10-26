@@ -17,6 +17,7 @@ Read `docs/hackathon/rules-summary.md` first. The full page text is in `docs/hac
 
 ## Hard constraints
 - **Never use internal InnoGames data, code, configs or screenshots.** Use our own browser game and synthetic or self-recorded sessions only.
+- **Never export `META_API_KEY` globally in the shell.** Muse Code prefers `META_API_KEY` over the browser sign-in, so an exported key makes coding sessions bill the $150 credits instead of the subscription. Load the key only inside the app (for example from `.env` with python-dotenv).
 - **Never commit secrets.** The Meta API key comes from the `META_API_KEY` env var. Keep `.env` in `.gitignore`.
 - The Meta API budget is $150 total. Cache responses, keep runs small while developing, and log token usage.
 - Each config change must pass through the human approval gate. Never auto-apply.
