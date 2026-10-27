@@ -127,3 +127,13 @@ By the end of Oct 29, the repo contains a **visually impressive, high-craft 2.5D
 
 ## Handoff log
 - 2026-10-27: Task re-scoped with Gemini 4 Argon to focus Claude Code's two days (Oct 27–29) on building a high-craft 2.5D isometric strategy game (*Dawn Age → Stone Age*) with 7 buildings, 4 resources + population/workers, a 5-node visual Tech Tree, F2P UI chrome, FastAPI config/patch/approval backend, unbiased telemetry, and `#right-dock` AI Director UI. Ready for Claude Code to start Day 1.
+- 2026-10-27 (Claude Code, `claude/build-game`): Day 1 and Day 2 of `docs/tasks/claude-code-build-game.md` are built. Done: isometric game client (`frontend/static/`), FastAPI config, patch and approval backend, telemetry sink with server-derived `stuck`, `#right-dock` (Telemetry Pill, AI Director with Live, Analyst & Designer and A/B tabs, Approve/Reject gate), config inspector, side-by-side replay, stub persona bot behind Watch Bot Play, 36 passing tests (unit plus headless Playwright). Stub bot check (3 personas x seeds 42 and 7): A stalls at `onb_03_handoff` in 5 of 6 runs, B completes onboarding in 6 of 6 and reaches the Stone Age in 2 of 6. Notes for the next tool:
+  - The game emits a `heartbeat` event (resources, score, free workers) every few sim seconds.
+  - Config fields added beyond the spec: `research_toolmaking_wood_cost`, `research_masonry_wood_cost`, `research_stone_age_*_cost`, `lock_optional_builds_until_step` (locks optional builds while `stepIndex <= ` that step).
+  - The Woodcutter Hut produces only after Basic Toolmaking. This makes the A stall a true deadlock.
+  - Optional builds get the NEW! ribbon and high salience only from `onb_03_handoff` on.
+  - Click results are `advanced`, `collected`, `rejected`, `noop` and `ui`. A harvest is `advanced` only when it makes a new build or tech affordable, otherwise `collected` (not progress).
+  - No worker assignment toggle yet: each producer takes a fixed number of workers.
+  - Expected console 404s: `/analysis` and `/api/ab_summary` until the analyst and experiment agents write them.
+  - `stub_bot.js` is a placeholder for the Muse Spark playtester. It reads only `getRenderedTargets()` and logs `provider_mode: stub`. Replay refuses stub runs without `&dev=1`.
+  - Next: Playwright runner with Muse Spark (`--mode meta`), analyst writing `runs/<id>/analysis.json`, experiment agent writing `runs/ab_summary.json`.

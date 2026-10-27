@@ -39,17 +39,50 @@ flowchart LR
 
 ## Status
 
-- [ ] Browser game with config-driven onboarding and event logging
-- [ ] Playtester agents (computer use)
-- [ ] Analyst: funnel + friction ranking
-- [ ] Designer agent + human approval gate
+- [x] Browser game with config-driven onboarding and event logging (2.5D isometric, Dawn Age to Stone Age)
+- [x] Config, patch and human approval gate backend (FastAPI, Pydantic)
+- [x] Unbiased telemetry: raw events, server-derived `stuck` events and run summaries
+- [x] In-game AI Director dock: Telemetry Pill, live stream, patch diff, Approve/Reject, A/B tab
+- [x] Side-by-side replay of two recorded runs
+- [x] Stub persona bot behind Watch Bot Play (offline placeholder, labelled STUB)
+- [ ] Playtester agents with Muse Spark (computer use)
+- [ ] Analyst: funnel and friction ranking (SAM 3.1 plus Muse Spark)
+- [ ] Designer agent proposing patches
 - [ ] Experiment agent: A/B reruns and report
 - [ ] Validation against human sessions
 - [ ] Demo video
 
+The onboarding friction in the base config is planted on purpose, so the loop has a known problem to find. At `onb_03_handoff` the Woodcutter Hut is unlocked and marked NEW!, while the Research button is small. A player who builds the hut drops below the 30 wood that Basic Toolmaking needs, and the hut produces nothing without that tech. `configs/patches/patch_001.json` is a hand-written seed patch for the approval-gate demo until the designer agent exists.
+
 ## Getting started
 
-_Setup and run instructions coming soon._
+You need Python 3.11 and [uv](https://docs.astral.sh/uv/).
+
+```bash
+uv venv && uv pip install -e .
+.venv/bin/playwright install chromium
+.venv/bin/uvicorn backend.app:app --port 8000
+```
+
+Open these URLs on `http://localhost:8000`:
+
+| URL | What it shows |
+|---|---|
+| `/?variant=A&seed=42` | Base config (planted friction) |
+| `/?variant=B&patch_id=patch_001&seed=42` | Patched config; returns 403 until a human approves `patch_001` in the AI Director |
+| `/?variant=A&bot=1&persona=impatient_newcomer&speed=4` | Watch Bot Play with the stub persona policy |
+| `/?replay_a=<run_id>&replay_b=<run_id>&speed=4` | Side-by-side replay; add `&dev=1` for runs not played by Muse Spark |
+| `/?variant=A&inspect_config=1` | Config inspector: which lever drives which UI element |
+
+Other URL parameters: `seed`, `speed` (1 to 4), `run_id`, `telemetry=0`. Runs are written to `runs/<run_id>/` (`events.jsonl`, `bot_steps.jsonl`, `summary.json`, `resolved_config.json`).
+
+The Meta API key is read only inside the app from `.env` (`META_API_KEY=...`). Do not export it in your shell.
+
+Run the tests (unit tests plus headless Playwright end-to-end and layout tests):
+
+```bash
+.venv/bin/python -m pytest -q
+```
 
 ## Author
 
