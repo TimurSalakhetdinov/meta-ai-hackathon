@@ -1,0 +1,6 @@
+{
+  "analysis_version": "v1",
+  "stuck_idle_sim_sec": 30.0,
+  "stuck_rejected_streak": 3,
+  "stuck_abort_per_step": 3
+}

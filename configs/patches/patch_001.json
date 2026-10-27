@@ -1,0 +1,15 @@
+{
+  "patch_id": "patch_001",
+  "status": "validated",
+  "created_by": "designer_agent",
+  "created_at": "2026-10-27T12:00:00Z",
+  "title": "Guard the onboarding handoff",
+  "rationale": "Seed fixture for the approval-gate demo, written by hand until the designer agent exists. Hypothesis: at onb_03_handoff players build the unlocked Woodcutter Hut, drop below the wood needed for Basic Toolmaking, and miss the low-salience Research button. Lock optional builds until the handoff is complete, make Research pulse, add starting wood and show the idle hint sooner.",
+  "target_step": "onb_03_handoff",
+  "body": {
+    "lock_optional_builds_until_step": "onb_03_handoff",
+    "research_button_salience": "high_pulse",
+    "starting_wood": 120,
+    "idle_hint_delay_sec": 6.0
+  }
+}

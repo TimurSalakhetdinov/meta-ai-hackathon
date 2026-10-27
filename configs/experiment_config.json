@@ -1,0 +1,10 @@
+{
+  "seeds": [42, 43, 44, 45, 46, 47, 48, 49],
+  "personas": ["first_time_casual", "impatient_newcomer", "optimizer"],
+  "demo_seed": 42,
+  "run_types": {
+    "onboarding": {"max_bot_steps": 25, "start": "t0", "stop_on": ["onboarding_completed", "stuck_abort", "max_steps"]},
+    "full_window": {"max_bot_steps": 100, "start": "t0", "sim_window_sec": 1200, "stop_on": ["sim_window_end", "stuck_abort", "max_steps"]}
+  },
+  "default_speed": 2.0
+}
