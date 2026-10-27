@@ -55,9 +55,9 @@ flowchart LR
 | Replay player | `frontend/static/replay.js` | `/?replay_a=<run>&replay_b=<run>&speed=4`: side-by-side playback from recorded artifacts on one timeline, no API calls. Refuses runs whose `provider_mode` is not `meta` unless `?dev=1`. |
 | Config & patch service | `backend/config_service.py` | Loads `configs/base_config.json`, applies patches, validates with Pydantic, enforces the approval gate, writes the audit log. |
 | Telemetry sink | `backend/telemetry.py` | Appends events to `runs/<run_id>/events.jsonl`, derives `stuck` with `AnalysisConfig`, writes `summary.json`. |
-| Bot runner | `backend/bot_runner.py` | Async Playwright. Opens the game with URL params, waits for idle, captures the 960x540 clip, calls the Meta client, draws the cyan click ring, clicks, records video and frames. |
-| Meta client | `backend/meta_client.py` | SAM 3.1 segmentation and set-of-mark rendering, Muse Spark decisions, disk cache, cost ledger and budget buckets, provider switch `stub` / `open_weights` / `meta`, `META_CACHE_ONLY` mode. |
-| Agents | `backend/agents/` | `analyst.py`, `designer.py`, `experiment.py` with typed interfaces and deterministic stub outputs. Real reasoning is written in Muse Code from Oct 29. |
+| Bot runner | `backend/bot_runner.py` | Async Playwright. One fresh `BrowserContext` and fresh bot memory per session. Opens the game with URL params, waits for idle, captures the 960x540 clip, calls the Meta client, draws the cyan click ring, clicks, records video and frames. |
+| Meta client | `backend/meta_client.py` | SAM 3.1 segmentation and set-of-mark rendering, Muse Spark decisions (configurable model id, contributor by default), disk cache (Muse cache off in experiment mode), cost ledger and budget buckets, provider switch `stub` / `open_weights` / `meta`, `META_CACHE_ONLY` mode. |
+| Agents | `backend/agents/` | `analyst.py`, `designer.py`, `experiment.py` with typed interfaces and deterministic stub outputs. `experiment.py` owns the worker pool and paired statistics. Real reasoning is written in Muse Code from Oct 29. |
 | CLI | `backend/cli.py` | `run-session`, `run-closed-loop`, `replay` commands. |
 
 ## 3. Stack and repo layout
@@ -70,8 +70,9 @@ flowchart LR
 configs/
   base_config.json        # immutable baseline, contains the planted handoff friction
   analysis_config.json    # fixed stuck rule, versioned (not patchable)
-  budget_config.json      # budget buckets and per-session cap
-  personas.json           # persona prompts
+  budget_config.json      # budget buckets, caps, muse_model_id, worker pool size
+  personas.json           # persona prompts (3 experiment personas)
+  experiment_config.json  # seeds (8), personas, run type, MAX_BOT_STEPS per run type
   patches/
     patch_001.json        # patch body + metadata + status
     audit_log.jsonl       # append-only lifecycle transitions
@@ -85,6 +86,7 @@ tests/
 runs/                     # gitignored; selected demo runs copied to runs_demo/ if needed
   <run_id>/  resolved_config.json  events.jsonl  bot_steps.jsonl  summary.json
              frames/  som_masks/  video/
+  checkpoints/<baseline>/<persona>_<seed>.json   # stretch: golden early-play checkpoints
   .cache/  cost_ledger.jsonl  ab_summary.json  voiceover_sheet.txt
 ```
 
@@ -157,7 +159,7 @@ The game emits **raw events only**. `stuck` is derived on the Python side with a
 - Derived event (Python): `stuck`, tagged with `analysis_version`.
 - `AnalysisConfig` (versioned, fixed across variants): `stuck_idle_sim_sec` (no state-advancing action for this long in simulated time) and `stuck_rejected_streak` (consecutive rejected or no-op clicks in one step).
 
-**Bot decisions** go to a separate `bot_steps.jsonl`: `run_id, bot_step_index, correlation_id, sim_elapsed_sec, provider_mode, frame_phash, sam_cache_hit, sam_marks_count, sam_latency_ms, muse_cache_hit, muse_latency_ms, prompt_tokens, completion_tokens, estimated_cost_usd, bucket, observation_summary, thought, chosen_mark_id, target_xy`. Before each click the runner sets `window.__BOT_CTX__ = {bot_step_index, correlation_id}` so the resulting game events carry the same ids. The AI Director Live tab shows the joined view (decision, then outcome).
+**Bot decisions** go to a separate `bot_steps.jsonl`: `run_id, bot_step_index, correlation_id, sim_elapsed_sec, provider_mode, model_id, model_mode, frame_phash, sam_cache_hit, sam_marks_count, sam_latency_ms, muse_cache_hit, muse_latency_ms, prompt_tokens, completion_tokens, estimated_cost_usd, bucket, observation_summary, thought, chosen_mark_id, target_xy`. Before each click the runner sets `window.__BOT_CTX__ = {bot_step_index, correlation_id}` so the resulting game events carry the same ids. The AI Director Live tab shows the joined view (decision, then outcome).
 
 **Metrics** (`summary.json`, computed from `events.jsonl`):
 - `time_to_first_action_sec`: simulated time of the first `click`.
@@ -178,9 +180,11 @@ The game emits **raw events only**. `stuck` is derived on the Python side with a
 ```
 The runner clicks the centroid of the chosen mask (or `fallback_xy`), draws the cyan ring, then waits for `window.__GAME_STATE__` to report idle with the new click sequence before the next capture.
 
-**Personas** (`configs/personas.json`): `impatient_newcomer` (skims text, clicks the most prominent affordable thing), `careful_builder` (reads prompts, matches labels before spending), more later in Muse Code.
+**Personas** (`configs/personas.json`), the three used in every experiment: `first_time_casual` (reads the tutorial, acts carefully, gets lost in a crowded UI), `impatient_newcomer` (rush-clicker: skips text, clicks the most prominent affordable thing; the demo persona), `optimizer` (min-maxer: counts resources, looks for bottlenecks). Prompts are tuned later in Muse Code.
 
-**Loop and stop conditions.** One model call per stable idle state, never per frame. Stop on `first_achievement` (success), `MAX_BOT_STEPS` (default 25), or `stuck_abort` after 3 derived stuck events in the same step.
+**Fresh state per session.** Each session gets a new Playwright `BrowserContext` (no `localStorage` / `IndexedDB` carry-over) and a new bot memory (message history, last-actions memory, scratchpad). Nothing is shared between sessions except the read-only SAM cache.
+
+**Loop and stop conditions.** One model call per stable idle state, never per frame. Stop on `first_achievement` (success, onboarding runs), `MAX_BOT_STEPS`, or `stuck_abort` after 3 derived stuck events in the same step. `MAX_BOT_STEPS` depends on the run type: ~25 for `onboarding` runs (from `t=0`), ~100 for `full_window` runs (0-20 min, ~80 steps expected). Full-window runs continue past the first achievement until the 20-minute sim mark.
 
 **Vision policy.**
 - Recorded and reported runs use honest vision: SAM 3.1 marks on the screenshot, Muse Spark picks the mark.
@@ -192,15 +196,21 @@ The runner clicks the centroid of the chosen mask (or `fallback_xy`), draws the 
 - `mulberry32(seed)` drives all randomness; `?seed=` in the URL.
 - One simulation clock: `sim.advance(realDelta * speed)`, `?speed=1..4`. Events log both wall and simulated time, so metrics do not depend on playback speed.
 - Variants by URL: `/?variant=A&seed=42&persona=impatient_newcomer&speed=2` and `/?variant=B&patch_id=patch_001&seed=42&...`. The page loads `GET /api/config?variant=…&patch_id=…`; the backend merges and validates, and refuses unapproved patches.
-- Experiment runner: for a seed list of length N, run (A, seed_i) and (B, seed_i) sequentially, same persona, same provider mode; aggregate paired results into `runs/ab_summary.json`. Report N honestly; one pair is a demo, not evidence.
+- Experiment matrix (`configs/experiment_config.json`): 3 personas x 8 fixed seeds (`42`-`49`) = 24 sessions per variant, 48 per A/B pair, paired by `(persona, seed)`. Variation comes from seeds and personas, not LLM temperature.
+- Experiment runner: one **canary** session first (abort the batch if it crashes or its tokens/cost are far above the estimate), then a **worker pool** of parallel sessions (`worker_pool_size`, default 5, configurable; 1 = sequential for debugging). Each worker uses its own fresh `BrowserContext`. Same model id, mode and provider for every session in an experiment; the runner refuses to mix them.
+- Run types: `onboarding` (from `t=0`, for patches that touch the first 10 minutes) and `full_window` (0-20 min end to end, also the final validation). No survivor filtering between stages.
+- Baseline reuse: an approved B becomes the baseline of the next loop and is not rerun, as long as the pairs, seeds, model id and mode are unchanged.
+- **Stretch: golden checkpoints.** For early-play patches that provably do not touch the first 10 minutes, a session may start from one saved state per `(persona, seed)` recorded on the current baseline. Never used when the patch touches onboarding. Skip if it complicates Day 1-2; end-to-end full-window runs are cheap enough in contributor mode.
+- **Paired statistics** in `runs/ab_summary.json`: per pair outcomes for A and B; binary metrics (`onboarding_completed`, stuck yes/no) with McNemar's test (exact) and a 95% CI for the difference in proportions (Wilson or bootstrap); continuous metrics (`time_to_first_action_sec`, `stuck_events`) as `N`, `median_delta` and a paired bootstrap 95% CI (Wilcoxon signed-rank optional). Report N honestly; with 24 pairs only large effects are detectable.
 
 ## 8. Cost control for the $150 Meta credits
 
-- **Cache.** SAM results keyed by a perceptual hash of the frame (reuse when the screen did not change). Muse Spark responses keyed by `sha256(model, persona, prompt_version, frame_phash, last_actions)`. Re-running a cached seed costs nothing.
-- **Budget buckets** (`configs/budget_config.json`, following `docs/plan.md`): dev ~10%, playtester runs ~50%, analysis ~15%, reserve ~25%. Every call records its bucket in `runs/cost_ledger.jsonl` and checks both the bucket and a per-session cap (low dev default, configurable). Reserve spending needs an explicit `--use-reserve` flag. Over budget raises `BudgetCapExceededError` and falls back to cache.
+- **Model id.** `muse_model_id` in `configs/budget_config.json`, default `muse-spark-1.3-contributor` (contributor mode, ~12x cheaper; Meta may train on the content). One value switches to standard `muse-spark-1.3`. Every ledger line records `model_id` and `model_mode` (`contributor` | `standard`). SAM 3.1 has no contributor mode.
+- **Cache.** SAM results keyed by a perceptual hash of the game frame: always on. Muse Spark responses keyed by `sha256(model_id, persona, prompt_version, frame_phash, last_actions)`: **disabled in experiment mode**, because identical starts would share one cached decision and turn N sessions into one. The Muse cache is written and read only for replay/recording (`META_CACHE_ONLY=1`), parser debugging and stub tests.
+- **Budget buckets** (`configs/budget_config.json`, following `docs/plan.md`): dev ~5%, playtester runs ~70%, analysis ~10%, reserve ~15%; global stop at $140. Every call records its bucket, model id and mode in `runs/cost_ledger.jsonl` and checks the bucket, the global stop and a per-session cap ($2, configurable). The cap checks must be safe under parallel workers (one lock around the ledger). Reserve spending needs an explicit `--use-reserve` flag. Over budget raises `BudgetCapExceededError` and falls back to cache.
 - **Provider switch** `META_PROVIDER = stub | open_weights | meta`. Most building and testing runs on `stub`; prompt tuning on open-weights models via Baseten or Modal credits; `meta` for calibration and recorded runs.
 - **`META_CACHE_ONLY=1`** drives a real browser session from cached decisions only, for recording and for the Nov 9 live final if credits have expired.
-- **Estimate** (fill from the day-1 measurement, no assumed prices):
+- **Estimate** (planning numbers in `docs/plan.md`; replace with the day-1 measurement of 3 full sessions):
   `cost ≈ N_runs × avg_steps × ((1 − h_sam) × [SAM call cost] + (1 − h_muse) × [Muse Spark call cost]) + N_loops × [analyst + designer cost]`.
 - The API key is read inside the app from `.env` (python-dotenv). Never export `META_API_KEY` in the shell, never log or commit it.
 
@@ -209,9 +219,9 @@ The runner clicks the centroid of the chosen mask (or `fallback_xy`), draws the 
 | Day | Build | Acceptance check |
 |---|---|---|
 | **Day 1 (Oct 27–28)** | FastAPI app and static serving; `schemas.py` (GameConfig, GameConfigPatch, AnalysisConfig, TelemetryEvent, BotStepRecord); config service with approval gate and audit log; the game with three onboarding steps, optional Woodcutter Hut, Research, first achievement; seeded clock; raw events; derived stuck; right dock with Telemetry Pill and AI Director (approval gate UI). | Manually playing `?variant=A&seed=42` and building the optional hut at the handoff yields `action_rejected` and a derived `stuck` in `events.jsonl`. Approving `patch_001` in the AI Director moves it `validated → approved`; `?variant=B&patch_id=patch_001` locks optional builds and pulses Research. Unapproved patch returns 403. |
-| **Day 2 (Oct 28–29)** | Bot runner (clip capture, set-of-mark loop, click ring, idle barrier, video and frames); Meta client (cache, buckets, ledger, provider switch, cache-only mode); agent stubs; replay route; CLI `run-closed-loop`; tests; README run instructions; handoff note in `docs/plan.md`. | `python -m backend.cli run-closed-loop --mode stub --seeds 42,43` runs play A → diagnose → propose `patch_001` → human approve (CLI prompt) → paired A/B rerun and writes `ab_summary.json`. One live smoke run (`--mode meta --seed 42`) writes real `som_masks/`, logs cost, and replays at zero cost from cache. `pytest` passes. |
+| **Day 2 (Oct 28–29)** | Bot runner (clip capture, set-of-mark loop, click ring, idle barrier, video and frames, fresh context per session); Meta client (configurable model id, cache with experiment mode, buckets, ledger, provider switch, cache-only mode); experiment runner (canary + worker pool, paired stats); agent stubs; replay route; CLI `run-closed-loop`; tests; README run instructions; handoff note in `docs/plan.md`. | `python -m backend.cli run-closed-loop --mode stub --seeds 42,43` runs play A → diagnose → propose `patch_001` → human approve (CLI prompt) → paired A/B rerun (canary, then worker pool) and writes `ab_summary.json` with paired statistics. The default stub experiment over 3 personas x 8 seeds also completes. One live smoke run (`--mode meta --seed 42`) writes real `som_masks/`, logs cost, and replays at zero cost from cache. `pytest` passes. |
 
-**Tests (Day 2):** config merge and validation (explicit null, extra keys rejected, ranges); approval gate (403 on unapproved); unbiased metrics (changing `idle_hint_delay_sec` does not change `stuck_events` for the same event trace); stub divergence (the variant-blind stub stalls on A and completes B on the same seed); cache and budget buckets; dock does not intersect the bot clip; end-to-end closed loop on stubs.
+**Tests (Day 2):** config merge and validation (explicit null, extra keys rejected, ranges); approval gate (403 on unapproved); unbiased metrics (changing `idle_hint_delay_sec` does not change `stuck_events` for the same event trace); stub divergence (the variant-blind stub stalls on A and completes B on the same seed); cache and budget buckets; no Muse cache hit shared between experiment sessions; model id default and switch; paired statistics; fresh context per session; dock does not intersect the bot clip; end-to-end closed loop on stubs.
 
 ## 10. Risks and scope cuts
 
@@ -221,7 +231,8 @@ The runner clicks the centroid of the chosen mask (or `fallback_xy`), draws the 
 | Content depth | 20 minutes of real content is too much | Three onboarding steps plus a few free-play steps to the first achievement, compressed by `speed`. |
 | Baseline does not stall live | Muse Spark reads "Research" and clicks it | Icon-only, small, low-contrast Research in the baseline; bright optional hut tile; check live early. |
 | SAM noise or merges | Too many tiny masks or merged icons | Area filter, top K marks, 16 px spacing and borders, click mask centroids, cache by frame hash. |
-| Latency and rate limits | Slow or failing steps during recording | Run sequentially, never record the first uncached run, record with `META_CACHE_ONLY=1`. |
+| Latency and rate limits | Slow batches; contributor mode is limited to 150 RPM | Canary first, pool of ~5 workers (stays under 150 RPM), back off on 429. Never record the first uncached run; record with `META_CACHE_ONLY=1`. |
+| Parallel runs on a bug | A broken prompt or selector burns credits fast | Canary session gates every batch; per-session $2 cap and global stop at $140. |
 | A/B split-screen sync | Runs end at different times | Replay route on one shared timeline; freeze A with a `STALLED` badge while B finishes. |
 | Coordinate drift | HiDPI or CSS scaling | Fixed 1280x540 viewport, `device_scale_factor=1`, fixed-position game root. |
 | Credits expire before Nov 9 | Live final without API | Cached runs plus cache-only replay. |
