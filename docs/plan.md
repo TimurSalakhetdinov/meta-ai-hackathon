@@ -139,3 +139,11 @@ Many short, independent sessions, not one long run. One pair is a demo, not evid
   - `runs_demo/` holds one stub loop without frames (1.7 MB). Its `patch_005` exists only in the demo config copy, not in `configs/patches/`.
   - Not verified: the Docker build (the daemon was not running) and any live Meta call.
   - Next: the PM feature studio (`docs/tasks/claude-code-pm-feature-studio.md`), then a first small live run in meta mode.
+- 2026-10-28 (Claude Code, `claude/pm-feature-studio`): The PM feature studio from `docs/tasks/claude-code-pm-feature-studio.md` is built. 75 tests pass, all at $0 Meta spend.
+  - Done: `feature_plugin` in config and game, five personas with archetype, emblem and citations, `/api/feature_studio/{propose,playtest,jobs,report,rework}`, and the Architect's Council dock (Feature Forge, Council Report, Live Chronicle).
+  - The stub parser reads free text into a plugin. The emblem is a procedural PNG in stub mode; Muse Image runs only in meta mode.
+  - A feature patch stacks on the latest approved non-feature patch, so arm A plays that baseline and the arms differ only by the feature.
+  - The verdict uses measured data only. A drop in tutorial completion or Stone Age is HURTS; the takeaway reports the McNemar p-value.
+  - The NEW! pulse clears after the first use, so stub bots no longer spam the feature button.
+  - Real stub playtest (5 personas, seed 42, full window): Raider Ambush at step 2 and its free-play rework both read HURTS. Each time one of five personas lost Stone Age (40% to 20%, McNemar p = 1.00). That is noise at n = 5; the clean HURTS then POSITIVE story is shown only by the unit test with a deterministic fake session.
+  - Next: run more seeds before trusting a studio verdict, then a first small live run in meta mode.

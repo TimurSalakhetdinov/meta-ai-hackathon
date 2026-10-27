@@ -54,6 +54,7 @@ flowchart LR
 - [x] Experiment agent: canary, worker pool, paired A/B reruns, McNemar and bootstrap report
 - [x] Closed loop from the CLI in stub mode (`python -m backend.cli run-closed-loop`)
 - [x] Committed demo runs in `runs_demo/` and a Dockerfile for a single-port deploy
+- [x] Feature studio in the dock: free-text feature to a validated patch with a stub emblem, five research-grounded personas, playtest behind the approval gate, verdict report and rework (stub mode, $0)
 - [ ] Validation against human sessions
 - [ ] Demo video
 
