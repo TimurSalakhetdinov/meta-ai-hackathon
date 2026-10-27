@@ -24,9 +24,13 @@ Keep all Phase 1 onboarding steps (`onb_01_shelter`, `onb_02_forager`, `onb_03_h
 - **Chapter Quest Tracker & Claimable Rewards (`quest_tracker`):**
   - Beneath the Advisor card on the left, show an active **Chapter Quest Card** (*Chapter I: Founding the Tribe* → *Chapter II: Rise of Stone* → *Chapter III: Bronze Dawn*) with a progress bar and a **`[🎁 Claim Reward]`** button (`btn_claim_quest`) when a quest objective finishes, awarding bonus resources/RP.
   - Controlled by config lever `auto_claim_quest_rewards: bool = False` (when `false`, rewards wait for the player to click `btn_claim_quest`; when `true`, rewards grant automatically upon quest completion).
-- **Expedition / Scout Map Modal (`btn_expedition`, 3 Province Nodes):**
-  - While city buildings are cycling in `free_play`, players can open the **Scout / Expedition Map** (`btn_expedition` in the bottom HUD) showing 3 original prehistoric province encounters (*1. Misty River Crossing*, *2. Megalithic Ruins*, *3. Sunlit Quarry Ridge*).
-  - Sending a scout party costs Food (`expedition_food_cost`, default `20`) and immediately awards a burst of Research Points (`+6 RP`), Stone (`+15 Stone`), and `+15` settlement score — giving players an active tactical loop alongside city management.
+- **Expedition / Battle Map Modal (`btn_expedition`, 3 Tactical Encounters) & New-Feature A/B Levers:**
+  - Players can open the **Battle / Expedition Map** (`btn_expedition` in the bottom HUD) showing 3 original prehistoric tactical encounters (*1. Misty River Ambush*, *2. Megalithic Ruins Skirmish*, *3. Sunlit Quarry Ridge*).
+  - **Configurable Feature-Flag A/B Levers in `GameConfig`:**
+    - `unlock_expedition_at_step: Optional[StepId] = "free_play"` (`null` = feature disabled; `"onb_02_forager"` or `"onb_03_handoff"` = naive early-tutorial battle rollout; `"free_play"` = post-onboarding rollout).
+    - `expedition_wood_cost: int = 0` (when set `> 0` in a naive early-tutorial test, launching a battle cannibalizes the Wood needed for *Basic Toolmaking*!).
+    - `expedition_food_cost: int = 20` (in `free_play`, spends surplus Food while city timers tick and rewards `+6 RP`, `+15 Stone`, and `+15` score, eliminating idle dead-air).
+  - Add a fixture `configs/patches/patch_003_naive_battles.json` (`unlock_expedition_at_step: "onb_02_forager"`, `expedition_wood_cost: 20`) and `configs/patches/patch_004_tuned_battles.json` (`unlock_expedition_at_step: "free_play"`, `expedition_wood_cost: 0`, `expedition_food_cost: 20`) so we can demonstrate A/B testing a new tutorial feature (catching when early battles cannibalize onboarding vs. verifying when post-handoff battles improve progression).
 - **2 New Buildings (bringing total to 9 building types across the 8 buildable pads + pre-built Town Center & Research Tent):**
   - `granary` (**Granary**, unlocked by `tech_baskets` or `tech_toolmaking`): costs Wood + Food; passively boosts Food & Wood harvest yields by `+25%` and adds `+15` score.
   - `smelter` (**Copper Smelter**, unlocked by `tech_masonry`): costs Wood + Stone; produces `stone`/metal trade value (`+20` Stone per cycle) and adds `+25` score.
@@ -84,9 +88,13 @@ Implement the complete client layer from `docs/architecture.md` Sections 6 & 8:
   - Computes a 64-bit perceptual hash (`frame_phash` using Pillow `16x16` grayscale average/dct hash).
   - Checks disk cache `runs/.cache/sam/<frame_phash>.json` (SAM cache is **always on**).
   - In `meta` mode: calls the SAM 3.1 endpoint (behind a clean adapter `_call_sam_api(image_bytes)` with configurable URL/model from `BudgetConfig`; if `?assist=true` or in `stub` mode, derives bounding boxes from `rendered_targets`), filters out tiny/background masks, spaces marks ≥16 px apart, keeps top `K=8` interactive targets, and draws numbered high-contrast cyan/gold bounding boxes + label pills (`#1`..`#K`) onto the `960x540` image using Pillow, saving to `runs/<run_id>/som_masks/step_NNN.png`.
-- **Muse Spark Decision Pipeline:**
+- **Muse Spark Decision Pipeline & Playtester "Think-Aloud Protocol":**
   - `decide_action(...) -> MuseDecision`:
   - Uses `muse_model_id` from `configs/budget_config.json` (default `"muse-spark-1.3-contributor"`, switchable to `"muse-spark-1.3"`). Derives `model_mode = "contributor" if "contributor" in model_id else "standard"`.
+  - **Think-Aloud Playtester Output (`BotStepRecord`):** Just like human UX playtesters in a Think-Aloud study, each persona outputs first-person playtester commentary at every step:
+    - `observation_summary`: What visually stands out on screen right now.
+    - `thought`: First-person Think-Aloud monologue in the persona's voice explaining *why* they are clicking or why they feel confused/distracted/bored (e.g., *"Wait, both the Battle button and Woodcutter unlocked at once and the Battle icon is bright — I'll try the Battle first!"* or *"I can't figure out why Woodcutter says 'Needs Basic Toolmaking' — where do I get that?"*).
+    - `player_mood: Optional[Literal["engaged", "curious", "confused", "frustrated", "bored"]] = "engaged"` (optional field on `BotStepRecord`, rendered as a mood badge in the AI Director Live stream and quoted in `analysis.json`).
   - Cache key: `sha256(model_id, persona_id, prompt_version, frame_phash, last_actions_json)`.
   - **Experiment Cache Isolation:** When `experiment_mode=True` (and `META_CACHE_ONLY != "1"`), the Muse Spark cache is **not read** so repeated sessions do not share cached LLM outputs (though responses are still written to `runs/.cache/muse/` so `META_CACHE_ONLY=1` replays work later).
   - In `META_CACHE_ONLY=1`: reads strictly from disk cache; raises `CacheMissError` if not cached (zero network calls).
@@ -112,7 +120,7 @@ Implement the async Playwright computer-use runner:
 
 ### 7. `backend/agents/{analyst,designer,experiment}.py` & `backend/cli.py`
 - **`backend/agents/analyst.py`:**
-  - Inspects a run's `events.jsonl`, `bot_steps.jsonl`, `summary.json`, and `frames/`, renders an annotated `stuck_frame.png` (highlighting the top 3 SAM masks: Research button, Woodcutter card, Wood counter), and writes `runs/<run_id>/analysis.json` (which `GET /api/runs/{run_id}/analysis` serves to the AI Director tab so there are zero 404s!).
+  - Inspects a run's `events.jsonl`, `bot_steps.jsonl`, `summary.json`, and `frames/`, renders an annotated `stuck_frame.png` (highlighting the top 3 SAM masks: Research button, Woodcutter card, Wood counter), extracts key **Playtester Think-Aloud Quotes** (`playtester_quotes`: steps where `player_mood` is `confused`/`frustrated`/`bored` or right before `action_rejected`/`stuck`), and writes `runs/<run_id>/analysis.json` (served by `GET /api/runs/{run_id}/analysis` and displayed in the AI Director Analyst tab).
 - **`backend/agents/designer.py`:**
   - Reads `analysis.json` and proposes a validated patch via `ConfigService.propose(...)` (always stopping at `validated` status behind the Human Approval Gate — never auto-approves).
 - **`backend/agents/experiment.py`:**
