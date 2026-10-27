@@ -17,6 +17,8 @@ export const SPRITE_MANIFEST = {
   woodcutter_hut:        { file: 'woodcutter_hut.png',        width: 110, anchor: [0.50, 0.80] },
   stone_quarry:          { file: 'stone_quarry.png',          width: 118, anchor: [0.52, 0.76] },
   tribal_monument:       { file: 'tribal_monument.png',       width: 112, anchor: [0.50, 0.78] },
+  granary:               { file: 'granary.png',               width: 106, anchor: [0.50, 0.80] },
+  smelter:               { file: 'smelter.png',               width: 110, anchor: [0.50, 0.80], chimney: [0.70, 0.10] },
 };
 
 export async function loadSprites() {

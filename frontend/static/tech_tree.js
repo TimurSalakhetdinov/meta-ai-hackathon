@@ -1,16 +1,18 @@
-// 5-node Tech Tree modal. Nodes are buttons with data-target="tech_*"; clicks
+// 7-node Tech Tree modal. Nodes are buttons with data-target="tech_*"; clicks
 // are routed through main.js like every other click in #game-root.
 
 import { RESOURCE_LABEL, TECHS, TECH_ORDER } from './game.js';
 
 const NODE_POS = {
-  tech_toolmaking: [10, 118],
-  tech_woodworking: [244, 8],
-  tech_baskets: [244, 118],
-  tech_masonry: [244, 228],
-  tech_stone_age: [478, 168],
+  tech_toolmaking: [0, 118],
+  tech_woodworking: [170, 8],
+  tech_baskets: [170, 118],
+  tech_masonry: [170, 228],
+  tech_irrigation: [342, 50],
+  tech_stone_age: [342, 190],
+  tech_bronze_age: [514, 190],
 };
-const NODE_W = 176;
+const NODE_W = 150;
 const NODE_H = 82;
 
 export class TechTreeView {
@@ -22,7 +24,7 @@ export class TechTreeView {
 
   update(game) {
     const res = game.roundedResources();
-    this.rpLabel.textContent = `Research points: ${res.rp}  ·  Researched ${game.techs.size}/5`;
+    this.rpLabel.textContent = `Research points: ${res.rp}  ·  Researched ${game.techs.size}/${TECH_ORDER.length}`;
     const sig = JSON.stringify([res, [...game.techs]]);
     if (sig === this.signature) return;
     this.signature = sig;

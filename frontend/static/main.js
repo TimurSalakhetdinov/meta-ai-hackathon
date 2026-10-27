@@ -3,7 +3,8 @@
 // route (?replay_a=&replay_b=) is handed to replay.js instead.
 
 import { urlParams } from './clock.js';
-import { BUILDINGS, BUILD_ORDER, Game, RESOURCES } from './game.js';
+import { BUILDINGS, BUILD_ORDER, ENCOUNTERS, ERA_LABEL, Game, RESOURCES } from './game.js';
+import { Sfx, defaultMuted } from './audio.js';
 import { IsoRenderer } from './iso_renderer.js';
 import { loadSprites, spriteUrl } from './sprites.js';
 import { TechTreeView } from './tech_tree.js';
@@ -97,7 +98,9 @@ async function boot() {
     botCtx: () => window.__BOT_CTX__ || {},
   });
   renderer = new IsoRenderer($('world'), sprites, { seed: params.seed });
-  const hud = new Hud(game, config);
+  const sfx = new Sfx({ muted: defaultMuted(params) });
+  fxHandlers.push((fx) => { if (fx.type === 'sfx') sfx.play(fx.sound); });
+  const hud = new Hud(game, config, sfx);
   const techView = new TechTreeView($('tech-tree'), $('tech-rp'));
   fxHandlers.push((fx) => hud.onFx(fx));
 
@@ -110,7 +113,12 @@ async function boot() {
     const el = e.target.closest('[data-target]');
     let target = el ? el.dataset.target : null;
     if (!target && (e.target === $('world') || e.target === root)) target = renderer.hitTest(game, x, y)?.target_id || null;
+    // A click on a modal backdrop still names what lies underneath, so the game can say the map is blocked.
+    if (!target && e.target.classList.contains('modal-backdrop')) target = targetBelow(e.target, e.clientX, e.clientY, game, renderer, x, y);
     const outcome = game.click(target || 'empty', x, y);
+    if (target === 'btn_mute') sfx.toggle();
+    if (outcome.result === 'rejected') sfx.play('reject');
+    else if (outcome.result === 'ui' && target !== 'btn_mute') sfx.play('click');
     if (target === 'btn_speed') {
       game.clock.speed = SPEEDS[(SPEEDS.indexOf(game.clock.speed) + 1) % SPEEDS.length] || 1;
     }
@@ -173,9 +181,28 @@ function publishState(game, renderer) {
     modal_open: game.modal,
     selected_card: game.selectedCard,
     achieved: game.achieved,
+    bronze_achieved: game.bronzeAchieved,
+    quest_index: game.questIndex,
+    quest_claimable: game.questClaimable,
+    expedition_unlocked: game.expeditionUnlocked(),
+    battles: game.stats.battles,
+    upgrades: game.stats.upgrades,
+    techs: [...game.techs],
+    buildings: game.snapshot().buildings,
+    muted: !!window.__SFX_MUTED__,
     sim_elapsed_sec: game.snapshot().sim_elapsed_sec,
     run_id: game.meta.run_id,
   };
+}
+
+function targetBelow(backdrop, cx, cy, game, renderer, x, y) {
+  for (const el of document.elementsFromPoint(cx, cy)) {
+    if (backdrop.contains(el)) continue;
+    const t = el.closest('[data-target]');
+    if (t) return t.dataset.target;
+    if (el === $('world')) return renderer.hitTest(game, x, y)?.target_id || null;
+  }
+  return null;
 }
 
 // Real click at #game-root coordinates (used by the in-browser stub bot).
@@ -220,7 +247,11 @@ function renderedTargets(game, renderer, config) {
       t.computed_salience = st.affordable ? 'high' : 'low';
     } else if (id === 'btn_research') {
       t.computed_salience = config.research_button_salience;
-    } else if (id === 'btn_advisor_ok' || id === 'btn_close_research') {
+    } else if (id.startsWith('encounter_')) {
+      t.cleared = game.encountersCleared.has(id);
+      t.affordable = !t.cleared && !game.missing(game.expeditionCosts());
+      t.computed_salience = t.affordable ? 'high' : 'low';
+    } else if (['btn_advisor_ok', 'btn_close_research', 'btn_claim_quest', 'btn_close_expedition'].includes(id)) {
       t.computed_salience = 'high';
     } else {
       t.computed_salience = 'low';
@@ -235,10 +266,11 @@ function renderedTargets(game, renderer, config) {
       && renderer.hitTest(game, w.x + w.w / 2, w.y + w.h / 2)?.target_id === w.target_id;
     out.push({
       ...w, x: round1(w.x), y: round1(w.y), visible, locked: false,
-      affordable: w.kind === 'pad' ? !!game.selectedCard : true,
-      computed_salience: w.kind === 'pad' ? (game.selectedCard ? 'high' : 'low') : (w.ready ? 'high' : 'low'),
+      affordable: w.kind === 'pad' ? !!game.selectedCard : (w.kind === 'upgrade' ? w.affordable : true),
+      computed_salience: w.kind === 'pad' ? (game.selectedCard ? 'high' : 'low')
+        : (w.ready || (w.kind === 'worker' && !w.staffed) ? 'high' : 'low'),
       highlighted: guide === w.target_id,
-      label: w.kind === 'pad' ? `Building plot ${w.target_id.slice(4)}` : w.building_type,
+      label: worldLabel(w),
     });
   }
   return out;
@@ -250,9 +282,17 @@ function isNewContent(game, type) {
     && !game.buildings.some((b) => b.type === type);
 }
 
+function worldLabel(w) {
+  if (w.kind === 'pad') return `Building plot ${w.target_id.slice(4)}`;
+  if (w.kind === 'upgrade') return `Upgrade ${w.building_type} to Lv.${w.level + 1}`;
+  if (w.kind === 'worker') return `${w.staffed ? 'Unassign' : 'Assign'} worker (${w.building_type})`;
+  return w.level > 1 ? `${w.building_type} Lv.${w.level}` : w.building_type;
+}
+
 function kindOf(id) {
   if (id.startsWith('card_')) return 'build_card';
   if (id.startsWith('tech_')) return 'tech';
+  if (id.startsWith('encounter_')) return 'encounter';
   return 'button';
 }
 
@@ -262,9 +302,12 @@ function round1(v) {
 
 // ------------------------------------------------------------------- HUD
 class Hud {
-  constructor(game, config) {
+  constructor(game, config, sfx) {
     this.game = game;
     this.config = config;
+    this.sfx = sfx;
+    this.questSig = '';
+    this.portrait = 'welcome';
     this.prev = {};
     this.sig = '';
     this.inspectorOn = false;
@@ -279,6 +322,12 @@ class Hud {
         <span class="c-name">${BUILDINGS[type].label}</span>
         <span class="c-cost"></span>
         <span class="c-lock" hidden></span>
+      </button>`).join('');
+    const ex = game.expeditionCosts();
+    $('expedition-cost').textContent = `Each battle costs ${costText(ex) || 'nothing'} · win +6 RP, +15 Stone`;
+    $('encounters').innerHTML = ENCOUNTERS.map((e) => `
+      <button class="encounter" data-target="${e.id}" title="${e.label}">
+        <span class="e-ico">${e.icon}</span><span>${e.label}</span><small>${costText(ex) || 'Free'}</small>
       </button>`).join('');
   }
 
@@ -302,15 +351,29 @@ class Hud {
       this.prev.score = g.score;
     }
     $('btn_speed').textContent = `${g.clock.speed}x`;
-    $('era-name').textContent = g.era === 'stone_age' ? 'Stone Age' : 'Dawn Age';
-    $('era-banner').classList.toggle('stone', g.era === 'stone_age');
+    $('era-name').textContent = ERA_LABEL[g.era];
+    $('era-banner').classList.toggle('stone', g.era !== 'dawn_age');
+    $('era-banner').classList.toggle('bronze', g.era === 'bronze_age');
     const stepLabel = { onb_01_shelter: 'Step 1/3', onb_02_forager: 'Step 2/3', onb_03_handoff: 'Step 3/3', free_play: 'Free play' };
-    $('step-chip').textContent = g.achieved ? 'Stone Age' : stepLabel[g.step_id];
+    $('step-chip').textContent = g.achieved ? ERA_LABEL[g.era] : stepLabel[g.step_id];
     const text = g.advisorText();
     if ($('advisor-text').textContent !== text) $('advisor-text').textContent = text;
     $('advisor').querySelector('.bubble').classList.toggle('hinting', !!g.hint);
+    const mood = g.advisorMood();
+    if (mood !== this.portrait) {
+      this.portrait = mood;
+      $('advisor-portrait').src = `/static/assets/sprites/advisor_${mood}.png`;
+      $('advisor').classList.toggle('hint', mood === 'hint');
+    }
+    $('btn_mute').textContent = this.sfx.muted ? '\u{1F507}' : '\u{1F50A}';
+    $('btn_mute').classList.toggle('on', !this.sfx.muted);
+    window.__SFX_MUTED__ = this.sfx.muted;
     $('welcome-modal').hidden = g.modal !== 'welcome';
     $('research-modal').hidden = g.modal !== 'research';
+    $('expedition-modal').hidden = g.modal !== 'expedition';
+    $('btn_expedition').hidden = !g.expeditionUnlocked();
+    this.updateQuest();
+    if (g.modal === 'expedition') this.updateEncounters();
     this.updateCards();
     this.updateArrow();
     if (this.inspectorOn) this.placeInspectTags();
@@ -349,6 +412,40 @@ class Hud {
     }
   }
 
+  updateQuest() {
+    const g = this.game;
+    const q = g.quest;
+    const sig = JSON.stringify([g.questIndex, g.questClaimable, q && q.objectives.map(([, fn]) => fn(g))]);
+    if (sig === this.questSig) return;
+    this.questSig = sig;
+    const card = $('quest-card');
+    if (!q) {
+      $('quest-title').textContent = 'All chapters complete';
+      $('quest-objectives').innerHTML = '';
+      $('quest-fill').style.width = '100%';
+      $('btn_claim_quest').hidden = true;
+      card.classList.remove('done');
+      return;
+    }
+    const prog = g.questProgress();
+    $('quest-title').textContent = q.title;
+    $('quest-objectives').innerHTML = q.objectives.map(([label, fn]) => `<li class="${fn(g) ? 'ok' : ''}">${label}</li>`).join('');
+    $('quest-fill').style.width = `${Math.round((100 * prog.done) / prog.total)}%`;
+    $('btn_claim_quest').hidden = !g.questClaimable;
+    card.classList.toggle('done', g.questClaimable);
+  }
+
+  updateEncounters() {
+    const g = this.game;
+    const short = !!g.missing(g.expeditionCosts());
+    for (const e of ENCOUNTERS) {
+      const el = document.querySelector(`[data-target="${e.id}"]`);
+      el.classList.toggle('cleared', g.encountersCleared.has(e.id));
+      el.classList.toggle('short', short);
+      if (g.encountersCleared.has(e.id)) el.querySelector('small').textContent = 'Victory!';
+    }
+  }
+
   updateArrow() {
     const arrow = $('hint-arrow');
     const id = this.game.modal === 'welcome' ? null : this.game.guideTarget();
@@ -369,7 +466,9 @@ class Hud {
       void el.offsetWidth;
       el.classList.add('flash');
     }
-    if (fx.type === 'achievement') {
+    if (fx.type === 'achievement' && fx.achievement_id === 'bronze_age_mastery') {
+      this.toast('\u{1F3C6} Bronze Age Mastery', 'Bronze tools for every hut · a new age begins');
+    } else if (fx.type === 'achievement') {
       this.toast('\u{1F3C6} First achievement unlocked', 'Stone Age Awakening · your tribe enters a new era');
     }
   }
@@ -447,4 +546,9 @@ function showFatal(message) {
   box.innerHTML = `<div class="modal welcome" style="display:block"><h2>Variant unavailable</h2><p></p></div>`;
   box.querySelector('p').textContent = message;
   root.appendChild(box);
+}
+
+function costText(costs) {
+  const icon = { food: '\u{1F35E}', wood: '\u{1FAB5}', stone: '\u{1FAA8}', rp: '\u{1F4DC}' };
+  return Object.entries(costs).filter(([, v]) => v > 0).map(([r, v]) => `${v} ${icon[r]}`).join(' ');
 }

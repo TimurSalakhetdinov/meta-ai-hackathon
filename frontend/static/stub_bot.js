@@ -16,8 +16,9 @@ const MAX_SIM_SEC = 420;
 
 const DEFAULT_POLICY = { follow_tutorial: 0.5, salience_weight: 0.5, prefer_build: 0.5, harvest: 0.8, wait_when_unsure: 0.3 };
 const SALIENCE = { low: 0.05, medium: 0.45, high: 0.9, high_pulse: 1.2 };
-const PRODUCERS = { card_woodcutter_hut: 'woodcutter_hut', card_stone_quarry: 'stone_quarry' };
-const TECH_PRIORITY = ['tech_toolmaking', 'tech_stone_age', 'tech_masonry', 'tech_baskets', 'tech_woodworking'];
+const PRODUCERS = { card_woodcutter_hut: 'woodcutter_hut', card_stone_quarry: 'stone_quarry', card_smelter: 'smelter' };
+const TECH_PRIORITY = ['tech_toolmaking', 'tech_stone_age', 'tech_masonry', 'tech_bronze_age', 'tech_baskets',
+  'tech_woodworking', 'tech_irrigation'];
 
 export class StubBot {
   constructor({ runId, persona, seed, clickAt, ringAt, onThought, onDone }) {
@@ -75,7 +76,7 @@ export class StubBot {
     const rendered = window.__GAME_DEBUG__.getRenderedTargets();
     const targets = rendered.filter((t) => t.visible);
     // Buildings partly hidden behind others still count as seen, not as clickable.
-    const owned = new Set(rendered.filter((t) => t.kind === 'building').map((t) => t.label));
+    const owned = new Set(rendered.filter((t) => t.kind === 'building').map((t) => t.building_type));
     const decision = this.decide(targets, owned);
     const index = this.stepIndex++;
     const correlation_id = `${this.runId}_b${String(index).padStart(3, '0')}`;
@@ -114,6 +115,16 @@ export class StubBot {
 
     const ok = by('btn_advisor_ok');
     if (ok) return { target: ok, thought: 'A welcome message from the elder. Accept it and start playing.' };
+
+    const claim = by('btn_claim_quest');
+    if (claim && r() < 0.5 + p.follow_tutorial * 0.5) return { target: claim, thought: 'The quest card glows. Claim the chapter reward.' };
+
+    // Expedition map open: fight one affordable battle, otherwise leave.
+    if (by('btn_close_expedition')) {
+      const fight = targets.find((t) => t.kind === 'encounter' && t.affordable);
+      if (fight && r() < 0.7) return { target: fight, thought: `${shortLabel(fight)} looks winnable. Attack!` };
+      return { target: by('btn_close_expedition'), thought: 'No battle worth it right now. Back to the village.' };
+    }
 
     // Research modal open: the tech nodes are the only actionable things.
     const techs = targets.filter((t) => t.kind === 'tech' && !t.done);
@@ -183,6 +194,12 @@ export class StubBot {
         if (p.plan && !t.affordable) w *= 0.3;
         if (this.savingFor && !t.highlighted) w *= 0.4;
         options.push({ t, w, why: t.affordable ? 'build' : 'try' });
+      } else if (t.kind === 'worker' && !t.staffed) {
+        options.push({ t, w: 0.6 + p.harvest * 0.6, why: 'staff' });
+      } else if (t.kind === 'upgrade' && t.affordable && !producerOpen) {
+        options.push({ t, w: 0.15 + p.prefer_build * 0.4 + (this.savingFor ? -0.1 : 0), why: 'upgrade' });
+      } else if (t.target_id === 'btn_expedition') {
+        options.push({ t, w: 0.08 + p.salience_weight * 0.25, why: 'expedition' });
       } else if (t.target_id === 'btn_research' && this.researchCooldown <= 0) {
         const w = (0.05 + p.salience_weight * sal * 1.6 + (t.highlighted ? 0.8 * p.follow_tutorial : 0) + (p.plan ? 0.35 : 0))
           * (producerOpen ? 0.4 : 1);
@@ -205,7 +222,8 @@ export class StubBot {
     this.done = true;
     this.running = false;
     clearTimeout(this.timer);
-    this.onThought({ index: this.stepIndex, thought: reason === 'first_achievement' ? 'Stone Age reached. Session complete.' : 'Time limit reached. Ending the session.', target_id: null });
+    const why = { first_achievement: 'Stone Age reached. Session complete.', bronze_age_mastery: 'Bronze Age mastered. Session complete.' };
+    this.onThought({ index: this.stepIndex, thought: why[reason] || 'Time limit reached. Ending the session.', target_id: null });
     this.onDone(reason);
   }
 }
@@ -217,6 +235,9 @@ function optionThought(o) {
     return o.t.computed_salience === 'high_pulse' ? 'The big glowing Research button looks important. Open it.' : 'There is a small scroll icon in the corner. Maybe research?';
   }
   if (o.why === 'try') return `${name} looks good. Try to build it.`;
+  if (o.why === 'staff') return `The ${pretty(o.t.building_type)} has no worker. Send someone back to it.`;
+  if (o.why === 'upgrade') return `${o.t.label} is affordable. Upgrade it.`;
+  if (o.why === 'expedition') return 'Crossed swords on the map. What is out there?';
   return o.t.computed_salience === 'high' ? `${name} has a shiny NEW! ribbon. Build it.` : `Build a ${name}.`;
 }
 

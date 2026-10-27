@@ -1,0 +1,13 @@
+{
+  "patch_id": "patch_003_naive_battles",
+  "status": "proposed",
+  "created_by": "human",
+  "created_at": "2026-10-27T18:00:00Z",
+  "title": "Expedition map during the tutorial (naive rollout)",
+  "rationale": "Feature A/B fixture, written by hand. Unlocks expeditions at onb_02_forager and charges Wood per battle, so a battle can spend the Wood that Basic Toolmaking needs at the handoff.",
+  "target_step": "onb_02_forager",
+  "body": {
+    "unlock_expedition_at_step": "onb_02_forager",
+    "expedition_wood_cost": 20
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "patch_id": "patch_002",
+  "status": "proposed",
+  "created_by": "designer_agent",
+  "created_at": "2026-10-27T18:00:00Z",
+  "title": "Ease the free-play timer wall and modal trap",
+  "rationale": "Seed fixture for a second optimization loop, written by hand. Hypothesis: in free_play players wait on a slow Woodcutter cycle and lose clicks to a Research modal that stays open after an unlock. Shorten the woodcutter cycle, raise tent research output and close the modal on unlock.",
+  "target_step": "free_play",
+  "body": {
+    "woodcutter_cycle_sec": 6.0,
+    "research_tent_rp_per_min": 30.0,
+    "auto_close_research_on_unlock": true
+  }
+}

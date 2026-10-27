@@ -7,7 +7,7 @@
 // Runs that were not played by live Muse Spark (provider_mode != meta) are
 // refused unless ?dev=1 is set, so a stub run is never presented as real.
 
-import { Game } from './game.js';
+import { ERA_LABEL, Game } from './game.js';
 import { IsoRenderer } from './iso_renderer.js';
 import { loadSprites } from './sprites.js';
 
@@ -144,7 +144,7 @@ class Panel {
   drawHud() {
     const g = this.game;
     const r = g.roundedResources();
-    const html = `<span>${esc(g.step_id)}</span><span>${g.era === 'stone_age' ? 'Stone Age' : 'Dawn Age'}</span>
+    const html = `<span>${esc(g.step_id)}</span><span>${ERA_LABEL[g.era]}</span>
       <span>\u{1F35E}${r.food}</span><span>\u{1FAB5}${r.wood}</span><span>\u{1FAA8}${r.stone}</span><span>⭐${g.score}</span>`;
     if (this.hud.innerHTML !== html) this.hud.innerHTML = html;
   }

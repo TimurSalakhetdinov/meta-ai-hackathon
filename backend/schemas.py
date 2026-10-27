@@ -50,11 +50,31 @@ class GameConfig(BaseModel):
     research_stone_age_rp_cost: int = Field(10, ge=0, le=200)
     research_tent_rp_per_min: float = Field(20.0, ge=0.0, le=120.0)
     worker_required_per_building: int = Field(1, ge=0, le=5)
+    granary_wood_cost: int = Field(40, ge=5, le=300)
+    granary_food_cost: int = Field(30, ge=0, le=300)
+    smelter_wood_cost: int = Field(40, ge=5, le=300)
+    smelter_stone_cost: int = Field(20, ge=0, le=300)
+    smelter_stone_yield: int = Field(20, ge=5, le=100)
+    research_irrigation_food_cost: int = Field(40, ge=5, le=300)
+    research_irrigation_stone_cost: int = Field(15, ge=0, le=300)
+    research_tier3_rp_cost: int = Field(15, ge=0, le=200)
+    research_bronze_age_food_cost: int = Field(80, ge=10, le=500)
+    research_bronze_age_wood_cost: int = Field(60, ge=0, le=500)
+    research_bronze_age_stone_cost: int = Field(50, ge=0, le=500)
+    research_bronze_age_rp_cost: int = Field(25, ge=0, le=300)
+    # Each upgrade level costs the base build cost times multiplier ** current level.
+    upgrade_cost_multiplier: float = Field(1.5, ge=1.0, le=5.0)
     # 2. Tutorial steps and locks
     # Optional builds (Woodcutter Hut) stay locked until this step is completed. null = no lock.
     lock_optional_builds_until_step: Optional[StepId] = None
     show_worker_warnings: bool = True
     auto_close_research_on_unlock: bool = False
+    clear_selection_on_harvest: bool = True
+    auto_claim_quest_rewards: bool = False
+    # Expedition map unlocks when this step is entered. null = feature disabled.
+    unlock_expedition_at_step: Optional[StepId] = "free_play"
+    expedition_wood_cost: int = Field(0, ge=0, le=200)
+    expedition_food_cost: int = Field(20, ge=0, le=200)
     # 3. UI salience
     research_button_salience: Salience = "low"
     build_button_scale: float = Field(1.0, ge=0.8, le=1.5)
@@ -64,7 +84,9 @@ class GameConfig(BaseModel):
     forager_cycle_sec: float = Field(4.0, ge=1.0, le=30.0)
     woodcutter_cycle_sec: float = Field(5.0, ge=1.0, le=30.0)
     quarry_cycle_sec: float = Field(6.0, ge=1.0, le=30.0)
+    smelter_cycle_sec: float = Field(8.0, ge=1.0, le=60.0)
     first_achievement_target_score: int = Field(100, ge=50, le=500)
+    bronze_achievement_target_score: int = Field(220, ge=100, le=1000)
 
 
 def _make_patch_model() -> type[BaseModel]:
@@ -98,7 +120,7 @@ class PatchRecord(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    patch_id: str = Field(pattern=r"^patch_[0-9]{3,}$")
+    patch_id: str = Field(pattern=r"^patch_[0-9]{3,}(?:_[a-z0-9]+)*$")
     status: PatchStatus = "proposed"
     created_by: Literal["designer_agent", "human"] = "designer_agent"
     created_at: str
@@ -141,6 +163,8 @@ EventType = Literal[
     "heartbeat",
     "session_end",
     "stuck",
+    "quest_claimed",
+    "battle_won",
 ]
 
 
@@ -190,6 +214,7 @@ class BotStepRecord(BaseModel):
     chosen_mark_id: Optional[int] = None
     target_id: Optional[str] = None
     target_xy: Optional[tuple[float, float]] = None
+    player_mood: Optional[Literal["engaged", "curious", "confused", "frustrated", "bored"]] = "engaged"
 
 
 class BudgetConfig(BaseModel):

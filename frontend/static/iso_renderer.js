@@ -70,7 +70,10 @@ const FALLBACK_STYLE = {
   woodcutter_hut:        { w: 32, d: 30, h: 20, wall: '#8a5e36', roof: '#5f7d39', roofH: 18 },
   stone_quarry:          { w: 36, d: 34, h: 12, wall: '#9b9488', roof: '#77706a', roofH: 10 },
   tribal_monument:       { w: 22, d: 22, h: 52, wall: '#a69c8b', roof: '#c9a43a', roofH: 12 },
+  granary:               { w: 30, d: 30, h: 24, wall: '#c8a464', roof: '#9a6a32', roofH: 20 },
+  smelter:               { w: 32, d: 30, h: 22, wall: '#8d7f72', roof: '#b0602e', roofH: 16 },
 };
+const CHIP = 18;
 
 export class IsoRenderer {
   constructor(canvas, sprites, { seed = 42 } = {}) {
@@ -319,7 +322,7 @@ export class IsoRenderer {
   }
 
   spriteKeyFor(game, b) {
-    if (b.type === 'town_center' && game.era === 'stone_age') return 'town_center_stone_age';
+    if (b.type === 'town_center' && game.era !== 'dawn_age') return 'town_center_stone_age';
     return b.type;
   }
 
@@ -408,9 +411,19 @@ export class IsoRenderer {
 
   // Production timers, ready icons and blocked badges above buildings.
   drawStatus(ctx, game, b) {
-    if (b.status !== 'done' || !b.produces) return;
+    if (b.status !== 'done') return;
+    this.drawBadges(ctx, game, b);
+    if (!b.produces) return;
     const { x, y } = tileToScreen(...b.tile);
     const top = y - 78;
+    if (b.blockedReason && !b.worker && b.blockedReason.startsWith('Unstaffed')) {
+      roundRect(ctx, x - 46, top - 10, 92, 20, 10, 'rgba(214,140,28,0.94)');
+      ctx.fillStyle = '#2b1a05';
+      ctx.font = 'bold 11px Georgia, serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('\u26A0\uFE0F No Worker', x, top + 4);
+      return;
+    }
     if (b.blockedReason) {
       roundRect(ctx, x - 62, top - 10, 124, 20, 10, 'rgba(60,28,20,0.86)');
       ctx.fillStyle = '#ffd9c0';
@@ -446,6 +459,53 @@ export class IsoRenderer {
     ctx.beginPath();
     ctx.arc(x, top, 7, -Math.PI / 2, -Math.PI / 2 + p * Math.PI * 2);
     ctx.stroke();
+  }
+
+  // Level badge plus the small upgrade and worker chips under a building.
+  drawBadges(ctx, game, b) {
+    const { x, y } = tileToScreen(...b.tile);
+    if ((b.level || 1) > 1) {
+      roundRect(ctx, x + 14, y - 62, 34, 16, 8, '#f0c24b');
+      ctx.strokeStyle = '#7a5410';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(x + 14.5, y - 61.5, 33, 15);
+      ctx.fillStyle = '#3d2706';
+      ctx.font = 'bold 10px Georgia, serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`Lv.${b.level}`, x + 31, y - 50);
+    }
+    for (const chip of this.chipsFor(game, b)) {
+      const cx = chip.x + CHIP / 2;
+      const cy = chip.y + CHIP / 2;
+      circle(ctx, cx, cy, CHIP / 2, chip.kind === 'upgrade' ? (chip.affordable ? '#f0c24b' : '#8f7a4a') : (chip.staffed ? '#4f7d3a' : '#d68c1c'));
+      ctx.strokeStyle = 'rgba(30,20,10,0.8)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, CHIP / 2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.font = '11px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#1d1208';
+      ctx.fillText(chip.kind === 'upgrade' ? '\u2B06' : '\u{1F477}', cx, cy + 1);
+      ctx.textBaseline = 'alphabetic';
+    }
+  }
+
+  chipsFor(game, b) {
+    if (b.status !== 'done' || !b.key.startsWith('pad_')) return [];
+    const { x, y } = tileToScreen(...b.tile);
+    const out = [];
+    if (b.produces && game.workersPerBuilding > 0) {
+      out.push({ target_id: `worker_${b.key}`, kind: 'worker', x: x - 34, y: y + 2, w: CHIP, h: CHIP,
+                 staffed: !!b.worker, building_type: b.type });
+    }
+    const up = game.upgradeStatus(b);
+    if (up.available) {
+      out.push({ target_id: `upgrade_${b.key}`, kind: 'upgrade', x: x + 16, y: y + 2, w: CHIP, h: CHIP,
+                 level: up.level, affordable: !!up.affordable, building_type: b.type });
+    }
+    return out;
   }
 
   updateVillagers(game, simDt) {
@@ -559,7 +619,9 @@ export class IsoRenderer {
       const w = big ? 104 : 72;
       const h = big ? 96 : 76;
       out.push({ target_id: `building_${b.key}`, kind: 'building', x: x - w / 2, y: y - h + 14, w, h,
-                 ready: !!b.ready, building_type: b.type });
+                 ready: !!b.ready, building_type: b.type, level: b.level || 1,
+                 staffed: b.produces ? !!b.worker : undefined });
+      out.push(...this.chipsFor(game, b));
     }
     for (const p of PADS) {
       if (game.buildingAt(p.id)) continue;
@@ -576,6 +638,8 @@ export class IsoRenderer {
     const pad = targets.find((t) => t.kind === 'pad'
       && Math.abs(x - (t.x + t.w / 2)) / (TILE_W / 2) + Math.abs(y - (t.y + t.h / 2)) / (TILE_H / 2) <= 1);
     if (pad && game.selectedCard) return pad;
+    const chip = targets.find((t) => (t.kind === 'upgrade' || t.kind === 'worker') && inRect(t, x, y));
+    if (chip) return chip;
     const buildings = targets.filter((t) => t.kind === 'building' && inRect(t, x, y))
       .sort((a, b) => (b.ready - a.ready) || (b.y + b.h) - (a.y + a.h));
     return buildings[0] || pad || null;
@@ -696,9 +760,10 @@ function drawVillager(ctx, v, time) {
   circle(ctx, x, y - 16 - Math.abs(step), 2.8, '#e7b98b');
   ctx.fillStyle = '#4a2f1a';
   ctx.fillRect(x - 2.8, y - 19 - Math.abs(step), 5.6, 1.8);
-  if (v.carrying && v.carry) {
-    const color = { food: '#e0a03a', wood: '#8a5a2b', stone: '#a9a49c' }[v.carry] || '#ddd';
-    roundRect(ctx, x + 2 * v.facing, y - 16 - Math.abs(step), 5, 4, 1, color);
+  if (v.carrying && v.carry && RESOURCE_ICON[v.carry]) {
+    ctx.font = '9px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(RESOURCE_ICON[v.carry], x + 5 * v.facing, y - 15 - Math.abs(step));
   }
 }
 

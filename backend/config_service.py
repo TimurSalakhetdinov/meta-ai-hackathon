@@ -21,7 +21,7 @@ from pydantic import ValidationError
 from .schemas import AuditEntry, GameConfig, GameConfigPatch, PatchRecord
 
 Actor = Literal["designer_agent", "validator", "human"]
-PATCH_ID_RE = re.compile(r"patch_[0-9]{3,}")
+PATCH_ID_RE = re.compile(r"patch_[0-9]{3,}(?:_[a-z0-9]+)*")
 
 # Allowed transitions and who may make them. Only a human approves or rejects.
 TRANSITIONS: dict[tuple[Optional[str], str], set[str]] = {

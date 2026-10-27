@@ -7,26 +7,6 @@
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-    <defs>
-      <symbol id="advisor-face" viewBox="0 0 64 64">
-        <circle cx="32" cy="32" r="31" fill="#6d4a2a"/>
-        <circle cx="32" cy="32" r="28" fill="#c98f5b"/>
-        <path d="M10 22 Q32 6 54 22 L54 26 Q32 14 10 26Z" fill="#5a3a20"/>
-        <rect x="9" y="22" width="46" height="5" rx="2" fill="#b33d2b"/>
-        <circle cx="16" cy="24.5" r="2" fill="#e8c44a"/>
-        <circle cx="48" cy="24.5" r="2" fill="#e8c44a"/>
-        <path d="M50 22 Q60 6 56 0 Q52 10 47 20Z" fill="#f1e2b8" stroke="#8a6a3a" stroke-width="1"/>
-        <ellipse cx="24" cy="34" rx="3" ry="2.4" fill="#2b1a0e"/>
-        <ellipse cx="40" cy="34" rx="3" ry="2.4" fill="#2b1a0e"/>
-        <path d="M20 30 L28 29 M36 29 L44 30" stroke="#5a3a20" stroke-width="2" stroke-linecap="round"/>
-        <path d="M32 35 L30 42 L34 42" fill="none" stroke="#9a6236" stroke-width="1.6"/>
-        <path d="M14 40 Q16 60 32 62 Q48 60 50 40 Q44 48 32 47 Q20 48 14 40Z" fill="#e9e1d3"/>
-        <path d="M25 46 Q32 50 39 46" stroke="#7a4a2a" stroke-width="2" fill="none" stroke-linecap="round"/>
-      </symbol>
-    </defs>
-  </svg>
-
   <div id="app">
     <main id="game-root" aria-label="Settlement">
       <canvas id="world" width="960" height="540"></canvas>
@@ -43,14 +23,23 @@
         </div>
         <button id="btn_speed" class="hud-btn" data-target="btn_speed" title="Game speed">1x</button>
         <button id="btn_inspect" class="hud-btn" data-target="btn_inspect" title="Config inspector">i</button>
+        <button id="btn_mute" class="hud-btn" data-target="btn_mute" title="Sound on/off">&#x1F507;</button>
       </header>
 
       <section id="advisor" aria-live="polite">
-        <svg class="portrait"><use href="#advisor-face"/></svg>
+        <img id="advisor-portrait" class="portrait" src="/static/assets/sprites/advisor_welcome.png" alt="Elder Kaelen">
         <div class="bubble">
+          <div class="speaker">Elder Kaelen</div>
           <div id="step-chip" class="step-chip">Step 1/3</div>
           <p id="advisor-text"></p>
         </div>
+      </section>
+
+      <section id="quest-card" class="quest-card">
+        <div class="q-title" id="quest-title"></div>
+        <ul id="quest-objectives" class="q-objectives"></ul>
+        <div class="q-bar"><div id="quest-fill" class="q-fill"></div></div>
+        <button id="btn_claim_quest" class="gold-btn claim" data-target="btn_claim_quest" title="Claim Reward" hidden>&#x1F381; Claim Reward</button>
       </section>
 
       <footer id="build-bar">
@@ -58,6 +47,9 @@
       </footer>
       <button id="btn_research" data-target="btn_research" class="research sal-low" title="Research">
         <span class="r-ico">&#x1F4DC;</span><span class="r-label">Research</span>
+      </button>
+      <button id="btn_expedition" data-target="btn_expedition" class="expedition" title="Expedition" hidden>
+        <span class="r-ico">&#x2694;&#xFE0F;</span><span class="r-label">Expedition</span>
       </button>
 
       <div id="hint-arrow" class="hint-arrow" hidden></div>
@@ -67,9 +59,9 @@
 
       <div id="welcome-modal" class="modal-backdrop" hidden>
         <div class="modal welcome">
-          <svg class="portrait big"><use href="#advisor-face"/></svg>
+          <img class="portrait big" src="/static/assets/sprites/advisor_welcome.png" alt="Elder Kaelen" width="88" height="88">
           <div>
-            <h2>Elder Oru</h2>
+            <h2>Elder Kaelen <small>&middot; Keeper of Ages</small></h2>
             <p id="welcome-text"></p>
             <button id="btn_advisor_ok" class="gold-btn" data-target="btn_advisor_ok">Let's build!</button>
           </div>
@@ -84,6 +76,17 @@
             <button id="btn_close_research" class="close-btn" data-target="btn_close_research" title="Close">&times;</button>
           </div>
           <div id="tech-tree" class="tech-tree"></div>
+        </div>
+      </div>
+
+      <div id="expedition-modal" class="modal-backdrop" hidden>
+        <div class="modal expedition-modal">
+          <div class="tech-head">
+            <h2>Expedition Map</h2>
+            <span id="expedition-cost" class="tech-rp"></span>
+            <button id="btn_close_expedition" class="close-btn" data-target="btn_close_expedition" title="Close">&times;</button>
+          </div>
+          <div id="encounters" class="encounters"></div>
         </div>
       </div>
 

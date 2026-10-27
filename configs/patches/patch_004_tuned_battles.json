@@ -1,0 +1,14 @@
+{
+  "patch_id": "patch_004_tuned_battles",
+  "status": "proposed",
+  "created_by": "human",
+  "created_at": "2026-10-27T18:00:00Z",
+  "title": "Expedition map after the tutorial (tuned rollout)",
+  "rationale": "Feature A/B fixture, written by hand. Unlocks expeditions only in free_play and charges surplus Food, so battles fill waiting time without touching onboarding Wood.",
+  "target_step": "free_play",
+  "body": {
+    "unlock_expedition_at_step": "free_play",
+    "expedition_wood_cost": 0,
+    "expedition_food_cost": 20
+  }
+}
