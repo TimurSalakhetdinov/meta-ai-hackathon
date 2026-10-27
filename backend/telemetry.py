@@ -126,6 +126,9 @@ def compute_summary(events: list[dict[str, Any]], cfg: AnalysisConfig) -> dict[s
         "bronze_age_mastery": any(e["event_type"] == "achievement"
                                   and e.get("payload", {}).get("achievement_id") == "bronze_age_mastery" for e in events),
         "battles_won": sum(1 for e in events if e["event_type"] == "battle_won"),
+        "feature_uses": sum(1 for e in clicks if e.get("payload", {}).get("feature_used")),
+        "feature_uses_onboarding": sum(1 for e in clicks if e.get("payload", {}).get("feature_used")
+                                       and (e.get("step_id") or "").startswith("onb_")),
         "action_rejected": sum(1 for e in events if e["event_type"] == "action_rejected"),
         "clicks": len(clicks),
         "session_ended": end is not None,

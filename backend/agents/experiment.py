@@ -115,6 +115,8 @@ def session_metrics(summary: dict[str, Any]) -> dict[str, Any]:
         "final_score": summary.get("final_score"),
         "where_stuck": summary.get("where_stuck"),
         "bronze_age_mastery": bool(summary.get("bronze_age_mastery")),
+        "feature_uses": summary.get("feature_uses") or 0,
+        "feature_uses_onboarding": summary.get("feature_uses_onboarding") or 0,
     }
 
 
@@ -192,7 +194,7 @@ class Experiment:
     def __init__(self, *, configs_dir: Path, runs_dir: Path, clients: dict[str, MetaClient],
                  run_type: str = "full_window", worker_pool_size: Optional[int] = None,
                  session_fn: Optional[SessionFn] = None, experiment_id: Optional[str] = None,
-                 speed: int = 4) -> None:
+                 speed: int = 4, summary_name: str = "ab_summary.json") -> None:
         check_homogeneous(clients)
         self.configs_dir, self.runs_dir = Path(configs_dir), Path(runs_dir)
         self.clients = clients
@@ -202,6 +204,8 @@ class Experiment:
         self.session_fn = session_fn
         self.experiment_id = experiment_id or datetime.now(timezone.utc).strftime("exp_%Y%m%d_%H%M%S")
         self.speed = speed
+        # Studio experiments write their own summary so they never replace the closed-loop one.
+        self.summary_name = summary_name
         self.log: list[str] = []
 
     def pairs_from_config(self, seeds: Optional[list[int]] = None,
@@ -266,8 +270,9 @@ class Experiment:
                 "cost_usd": round(sum(r.cost_usd for r in results.values()), 6)}
         ab = build_summary(rows, meta)
         self.runs_dir.mkdir(parents=True, exist_ok=True)
-        (self.runs_dir / "ab_summary.json").write_text(json.dumps(ab, indent=2) + "\n")
-        (self.runs_dir / "voiceover_sheet.txt").write_text(voiceover_sheet(ab))
+        (self.runs_dir / self.summary_name).write_text(json.dumps(ab, indent=2) + "\n")
+        if self.summary_name == "ab_summary.json":
+            (self.runs_dir / "voiceover_sheet.txt").write_text(voiceover_sheet(ab))
         return ab
 
     def _reusable_baseline(self, baseline_from: Optional[Path],

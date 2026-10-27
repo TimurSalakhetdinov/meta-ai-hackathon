@@ -247,6 +247,12 @@ function renderedTargets(game, renderer, config) {
       t.computed_salience = st.affordable ? 'high' : 'low';
     } else if (id === 'btn_research') {
       t.computed_salience = config.research_button_salience;
+    } else if (id === game.featureTarget) {
+      const st = game.featureStatus();
+      t.affordable = !!st.affordable;
+      t.cooldown = st.cooldown ? round1(st.cooldown) : 0;
+      t.computed_salience = game.feature.button_salience;
+      t.is_new = game.feature.button_salience === 'high_pulse' && game.featureUses === 0;
     } else if (id.startsWith('encounter_')) {
       t.cleared = game.encountersCleared.has(id);
       t.affordable = !t.cleared && !game.missing(game.expeditionCosts());
@@ -293,6 +299,7 @@ function kindOf(id) {
   if (id.startsWith('card_')) return 'build_card';
   if (id.startsWith('tech_')) return 'tech';
   if (id.startsWith('encounter_')) return 'encounter';
+  if (id.startsWith('btn_feature_')) return 'feature';
   return 'button';
 }
 
@@ -323,6 +330,7 @@ class Hud {
         <span class="c-cost"></span>
         <span class="c-lock" hidden></span>
       </button>`).join('');
+    if (game.feature) this.buildFeatureCard(game.feature);
     const ex = game.expeditionCosts();
     $('expedition-cost').textContent = `Each battle costs ${costText(ex) || 'nothing'} · win +6 RP, +15 Stone`;
     $('encounters').innerHTML = ENCOUNTERS.map((e) => `
@@ -372,6 +380,7 @@ class Hud {
     $('research-modal').hidden = g.modal !== 'research';
     $('expedition-modal').hidden = g.modal !== 'expedition';
     $('btn_expedition').hidden = !g.expeditionUnlocked();
+    if (g.feature) this.updateFeatureCard();
     this.updateQuest();
     if (g.modal === 'expedition') this.updateEncounters();
     this.updateCards();
@@ -433,6 +442,53 @@ class Hud {
     $('quest-fill').style.width = `${Math.round((100 * prog.done) / prog.total)}%`;
     $('btn_claim_quest').hidden = !g.questClaimable;
     card.classList.toggle('done', g.questClaimable);
+  }
+
+  // PM text reaches the page here, so every field goes in through textContent or a checked URL.
+  buildFeatureCard(f) {
+    const el = document.createElement('button');
+    el.id = 'feature-card';
+    el.className = `feature-card sal-${f.button_salience}`;
+    el.dataset.target = `btn_feature_${f.feature_id}`;
+    el.title = f.title;
+    el.hidden = true;
+    const ico = f.icon_url ? document.createElement('img') : document.createElement('span');
+    ico.className = 'f-ico';
+    if (f.icon_url) { ico.src = f.icon_url; ico.alt = ''; ico.onerror = () => { ico.replaceWith(emojiIcon(f.icon)); }; }
+    else ico.textContent = f.icon;
+    const label = document.createElement('span');
+    label.className = 'f-label';
+    label.textContent = f.title;
+    const cost = document.createElement('span');
+    cost.className = 'f-cost';
+    const ribbon = document.createElement('span');
+    ribbon.className = 'ribbon';
+    ribbon.textContent = 'NEW!';
+    ribbon.hidden = f.button_salience !== 'high_pulse';
+    const cool = document.createElement('span');
+    cool.className = 'f-cool';
+    el.append(ico, label, cost, ribbon, cool);
+    $('game-root').appendChild(el);
+    this.featureEl = el;
+  }
+
+  updateFeatureCard() {
+    const g = this.game;
+    const el = this.featureEl;
+    const st = g.featureStatus();
+    el.hidden = !st.unlocked;
+    if (!st.unlocked) return;
+    const res = g.roundedResources();
+    const sig = JSON.stringify([res, Math.ceil(st.cooldown || 0), g.featureUses]);
+    if (sig === this.featureSig) return;
+    this.featureSig = sig;
+    const costs = g.featureCosts();
+    el.querySelector('.f-cost').textContent = costText(costs) || 'Free';
+    el.querySelector('.f-cost').classList.toggle('short', !!st.missing);
+    el.querySelector('.f-cool').textContent = st.cooldown ? `${Math.ceil(st.cooldown)}s` : '';
+    el.classList.toggle('cooling', !!st.cooldown);
+    el.classList.toggle('unaffordable', !!st.missing);
+    if (g.featureUses > 0) el.querySelector('.ribbon').hidden = true;
   }
 
   updateEncounters() {
@@ -546,6 +602,13 @@ function showFatal(message) {
   box.innerHTML = `<div class="modal welcome" style="display:block"><h2>Variant unavailable</h2><p></p></div>`;
   box.querySelector('p').textContent = message;
   root.appendChild(box);
+}
+
+function emojiIcon(icon) {
+  const span = document.createElement('span');
+  span.className = 'f-ico';
+  span.textContent = icon;
+  return span;
 }
 
 function costText(costs) {

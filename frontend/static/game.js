@@ -12,6 +12,7 @@ export const RESOURCE_LABEL = { food: 'Food', wood: 'Wood', stone: 'Stone', rp: 
 const HEARTBEAT_SEC = 5;
 const MAX_LEVEL = 3;
 const REJECTION_SHOW_SEC = 6;
+const FEATURE_INTRO_SHOW_SEC = 6;
 export const PRODUCER_TYPES = ['forager_hut', 'woodcutter_hut', 'stone_quarry', 'smelter'];
 export const UPGRADABLE_TYPES = ['shelter', 'forager_hut', 'woodcutter_hut', 'stone_quarry', 'smelter', 'granary'];
 const UPGRADE_TECH = { 2: 'tech_toolmaking', 3: 'tech_stone_age' };
@@ -188,6 +189,10 @@ export class Game {
     this.questClaimable = false;
     this.battleScore = 0;
     this.encountersCleared = new Set();
+    this.featureScore = 0;
+    this.featureUses = 0;
+    this.featureReadyAt = 0;
+    this.featureIntro = null;    // { text, t } after a feature click, spoken by the advisor
     this.lastProgressT = 0;
     this.hint = null;            // { target_id, text } once an idle hint fired
     this.nextHeartbeat = HEARTBEAT_SEC;
@@ -255,7 +260,7 @@ export class Game {
       if (b.status === 'done' && BUILDINGS[b.type]) s += Math.round(BUILDINGS[b.type].score * levelFactor(b.level));
     }
     for (const id of this.techs) s += TECHS[id].score;
-    return s + this.battleScore;
+    return s + this.battleScore + this.featureScore;
   }
 
   hasBuilt(type) {
@@ -287,6 +292,27 @@ export class Game {
   expeditionUnlocked() {
     const at = this.config.unlock_expedition_at_step;
     return !!at && this.stepIndex >= STEPS.indexOf(at);
+  }
+
+  get feature() { return this.config.feature_plugin || null; }
+  get featureTarget() { return this.feature ? `btn_feature_${this.feature.feature_id}` : null; }
+
+  featureUnlocked() {
+    const f = this.feature;
+    return !!f && this.stepIndex >= STEPS.indexOf(f.unlock_at_step);
+  }
+
+  featureStatus() {
+    const f = this.feature;
+    if (!f || !this.featureUnlocked()) return { unlocked: false, affordable: false };
+    const cooldown = Math.max(0, this.featureReadyAt - this.clock.t);
+    const missing = this.missing(this.featureCosts());
+    return { unlocked: true, cooldown, missing, affordable: !cooldown && !missing };
+  }
+
+  // Score is not spendable, so a feature can only grant it.
+  featureCosts() {
+    return Object.fromEntries(Object.entries(this.feature?.costs || {}).filter(([r]) => r in this.resources));
   }
 
   expeditionCosts() {
@@ -326,6 +352,7 @@ export class Game {
       case 'modal_blocking_map': return 'Close the Research scroll first, Chief. The map is behind it.';
       case 'card_selection_blocking_harvest': return 'Put down the build card first (tap it again), then collect.';
       case 'locked': return r.lock ? `${r.lock}, Chief.` : 'That is still locked, Chief.';
+      case 'cooldown': return `${this.feature?.title || 'That'} needs a moment to recover, Chief.`;
       case 'requires_prerequisite': return `First we must learn ${TECHS[r.requires]?.label || 'the earlier tech'}.`;
       default:
         if (!res) return null;
@@ -457,6 +484,8 @@ export class Game {
     const rej = this.recentRejection();
     const rejText = rej && this.rejectionText(rej);
     if (rejText) return rejText;
+    const intro = this.featureIntro;
+    if (intro && this.clock.t - intro.t <= FEATURE_INTRO_SHOW_SEC) return intro.text;
     if (this.bronzeAchieved) return ADVISOR_TEXT.bronze;
     if (this.achieved) return ADVISOR_TEXT.achieved;
     return ADVISOR_TEXT[this.step_id];
@@ -580,7 +609,8 @@ export class Game {
     this.clickSeq += 1;
     if (this.stats.first_click_t === null) this.stats.first_click_t = this.clock.t;
     const outcome = this.perform(target_id || 'empty');
-    this.emit('click', { target_id: target_id || 'empty', x: x === null ? null : Math.round(x), y: y === null ? null : Math.round(y), result: outcome.result });
+    this.emit('click', { target_id: target_id || 'empty', x: x === null ? null : Math.round(x), y: y === null ? null : Math.round(y), result: outcome.result,
+                         ...(outcome.feature_used ? { feature_used: outcome.feature_used } : {}) });
     if (outcome.result === 'rejected') {
       this.lastRejection = { target_id, ...outcome.rejection, t: this.clock.t };
       this.emit('action_rejected', { target_id, ...outcome.rejection });
@@ -632,6 +662,10 @@ export class Game {
       return reject('modal_blocking_map', { modal: this.modal });
     }
     if (this.modal) return { result: 'noop' };
+    if (this.featureTarget && target_id === this.featureTarget) {
+      if (!this.featureUnlocked()) return { result: 'noop' };
+      return this.useFeature(reject);
+    }
     if (target_id === 'btn_expedition') {
       if (!this.expeditionUnlocked()) return { result: 'noop' };
       this.modal = 'expedition';
@@ -761,6 +795,38 @@ export class Game {
     return { result: 'advanced' };
   }
 
+  useFeature(reject) {
+    const f = this.feature;
+    const st = this.featureStatus();
+    if (st.cooldown) return reject('cooldown', { feature_id: f.feature_id, cooldown_sec: round3(st.cooldown) });
+    if (st.missing) {
+      return reject(`insufficient_${st.missing.resource}`, { feature_id: f.feature_id,
+        [`${st.missing.resource}_available`]: st.missing.available, [`${st.missing.resource}_required`]: st.missing.required });
+    }
+    const before = this.affordableActions();
+    const saving = Object.keys(f.rewards || {}).some((r) => this.savesTowardGoal(r));
+    this.pay(this.featureCosts(), TOWN_CENTER_TILE);
+    const parts = [];
+    for (const [res, amount] of Object.entries(f.rewards || {})) {
+      if (amount <= 0) continue;
+      if (res === 'score') this.featureScore += amount;
+      else if (res in this.resources) this.resources[res] += amount;
+      else continue;
+      parts.push(`+${amount} ${RESOURCE_LABEL[res] || 'Score'}`);
+    }
+    this.featureUses += 1;
+    this.featureReadyAt = this.clock.t + f.cooldown_sec;
+    this.selectedCard = null;
+    if (f.advisor_intro) this.featureIntro = { text: f.advisor_intro, t: this.clock.t };
+    this.onFx({ type: 'popup', tile: TOWN_CENTER_TILE, text: `${f.title}! ${parts.join('  ')}`.trim(), color: '#ffe08a', lift: 120 });
+    this.onFx({ type: 'sparkle', tile: TOWN_CENTER_TILE, key: 'town_center' });
+    this.onFx({ type: 'sfx', sound: 'unlock' });
+    // Like a harvest, using the feature is progress only if it opens a new option or closes a deficit.
+    const opened = [...this.affordableActions()].some((a) => !before.has(a));
+    return { result: (opened || saving) ? 'advanced' : 'collected',
+             feature_used: { feature_id: f.feature_id, action_type: f.action_type, costs: this.featureCosts(), rewards: f.rewards } };
+  }
+
   harvest(b) {
     const spec = BUILDINGS[b.type];
     const amount = this.yieldOf(b);
@@ -819,6 +885,7 @@ export class Game {
       quest_index: this.questIndex,
       quest_claimable: this.questClaimable,
       battles: this.stats.battles,
+      feature_uses: this.featureUses,
       buildings: this.buildings.filter((b) => b.key.startsWith('pad_'))
         .map((b) => ({ key: b.key, type: b.type, level: b.level || 1, worker: b.worker, status: b.status,
                        blocked_reason: b.blockedReason || null })),

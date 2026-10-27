@@ -145,7 +145,8 @@ class ConfigService:
         return entry
 
     def propose(self, body: dict[str, Any], *, title: str = "", rationale: str = "",
-                target_step: Optional[str] = None, actor: Actor = "designer_agent") -> PatchRecord:
+                target_step: Optional[str] = None, actor: Actor = "designer_agent",
+                baseline_patch_id: Optional[str] = None) -> PatchRecord:
         """Write a new patch file as `proposed`, then run validation (validator actor)."""
         with self._lock:
             existing = [int(p.stem.split("_")[1]) for p in self.patches_dir.glob("patch_*.json")]
@@ -153,6 +154,7 @@ class ConfigService:
             record = PatchRecord(
                 patch_id=patch_id, status="proposed", created_by=actor, created_at=_now_iso(),
                 title=title, rationale=rationale, target_step=target_step, body=body,  # type: ignore[arg-type]
+                baseline_patch_id=baseline_patch_id,
             )
             self._patch_path(patch_id).write_text(record.model_dump_json(indent=2) + "\n")
             self._append_audit(record, None, "proposed", actor, "patch proposed")

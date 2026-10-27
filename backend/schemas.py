@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, create_model
+from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator
 
 StepId = Literal["onb_01_shelter", "onb_02_forager", "onb_03_handoff", "free_play"]
 Salience = Literal["low", "medium", "high_pulse"]
@@ -16,6 +16,40 @@ ProviderMode = Literal["human", "stub", "open_weights", "meta"]
 
 ONBOARDING_STEPS: tuple[str, ...] = ("onb_01_shelter", "onb_02_forager", "onb_03_handoff")
 ALL_STEPS: tuple[str, ...] = (*ONBOARDING_STEPS, "free_play")
+
+
+FEATURE_RESOURCES: tuple[str, ...] = ("wood", "food", "stone", "rp", "score")
+
+
+class FeaturePlugin(BaseModel):
+    """A new feature a PM proposes, carried by a config patch and rendered as one HUD action card."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    feature_id: str = Field(pattern=r"^[a-z0-9_]{2,40}$")
+    title: str = Field(min_length=1, max_length=60)
+    icon: str = "\u2694\ufe0f"
+    # Muse Image emblem under /static/assets/generated/; the emoji icon is the fallback.
+    icon_url: Optional[str] = Field(None, pattern=r"^/static/assets/generated/[a-z0-9_]{2,40}\.png$")
+    visual_prompt: str = ""
+    description: str = ""
+    unlock_at_step: StepId = "free_play"
+    button_salience: Salience = "high_pulse"
+    action_type: Literal["encounter_modal", "instant_trade", "festival_buff"] = "encounter_modal"
+    costs: dict[str, int] = Field(default_factory=dict)
+    rewards: dict[str, int] = Field(default_factory=dict)
+    cooldown_sec: float = Field(12.0, ge=2.0, le=120.0)
+    advisor_intro: str = ""
+
+    @field_validator("costs", "rewards")
+    @classmethod
+    def _known_resources(cls, v: dict[str, int]) -> dict[str, int]:
+        for res, amount in v.items():
+            if res not in FEATURE_RESOURCES:
+                raise ValueError(f"unknown resource {res!r}; use one of {FEATURE_RESOURCES}")
+            if not 0 <= amount <= 500:
+                raise ValueError(f"{res} amount {amount} is outside 0..500")
+        return v
 
 
 class GameConfig(BaseModel):
@@ -87,6 +121,8 @@ class GameConfig(BaseModel):
     smelter_cycle_sec: float = Field(8.0, ge=1.0, le=60.0)
     first_achievement_target_score: int = Field(100, ge=50, le=500)
     bronze_achievement_target_score: int = Field(220, ge=100, le=1000)
+    # One PM feature from the feature studio. null = no feature.
+    feature_plugin: Optional[FeaturePlugin] = None
 
 
 def _make_patch_model() -> type[BaseModel]:
@@ -127,6 +163,8 @@ class PatchRecord(BaseModel):
     title: str = ""
     rationale: str = ""
     target_step: Optional[StepId] = None
+    # Feature studio patches carry the approved patch whose levers they build on.
+    baseline_patch_id: Optional[str] = None
     body: dict[str, Any]
 
 
@@ -251,6 +289,12 @@ class Persona(BaseModel):
 
     persona_id: str
     label: str
+    # Short archetype badge for the studio, e.g. "Rush-Clicker", with its emblem emoji.
+    archetype: str = ""
+    emblem: str = ""
+    subtitle: str = ""
+    # Player-type models the persona draws on (Bartle 1996, BrainHex 2014, Quantic Foundry 2015).
+    grounding: list[str] = Field(default_factory=list)
     description: str
     prompt: str
     stub_policy: dict[str, Any] = Field(default_factory=dict)

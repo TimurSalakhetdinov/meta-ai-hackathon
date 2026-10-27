@@ -14,7 +14,8 @@ const STEP_MS = 420;
 const IDLE_WAIT_MS = 1600;
 const MAX_SIM_SEC = 420;
 
-const DEFAULT_POLICY = { follow_tutorial: 0.5, salience_weight: 0.5, prefer_build: 0.5, harvest: 0.8, wait_when_unsure: 0.3 };
+const DEFAULT_POLICY = { follow_tutorial: 0.5, salience_weight: 0.5, prefer_build: 0.5, harvest: 0.8, wait_when_unsure: 0.3,
+  curiosity: 0.2 };
 const SALIENCE = { low: 0.05, medium: 0.45, high: 0.9, high_pulse: 1.2 };
 const PRODUCERS = { card_woodcutter_hut: 'woodcutter_hut', card_stone_quarry: 'stone_quarry', card_smelter: 'smelter' };
 const TECH_PRIORITY = ['tech_toolmaking', 'tech_stone_age', 'tech_masonry', 'tech_bronze_age', 'tech_baskets',
@@ -42,6 +43,7 @@ export class StubBot {
     // Targets that were shown unaffordable or locked when clicked, with steps left to avoid them.
     this.avoid = new Map();
     this.seenAchievement = 0;
+    this.featureUses = 0;
   }
 
   start() {
@@ -85,6 +87,7 @@ export class StubBot {
       observation_summary: summarize(targets), thought: decision.thought,
       target_id: decision.target?.target_id || null,
       target_xy: decision.target ? center(decision.target) : null,
+      player_mood: decision.mood || moodOf(decision, this),
     };
     this.onThought({ index, thought: decision.thought, target_id: record.target_id });
 
@@ -214,6 +217,13 @@ export class StubBot {
         options.push({ t, w: 0.6 + p.harvest * 0.6, why: 'staff' });
       } else if (t.kind === 'upgrade' && t.affordable && !producerOpen && !this.savingFor) {
         options.push({ t, w: 0.15 + p.prefer_build * 0.4 + (this.savingFor ? -0.1 : 0), why: 'upgrade' });
+      } else if (t.kind === 'feature' && !t.cooldown) {
+        // Shiny new buttons pull on salience; explorers try anything new once; planners and hoarders hold back.
+        let w = 0.05 + p.salience_weight * sal * 1.4 + (this.featureUses === 0 ? p.curiosity * 1.5 : 0);
+        if (!t.affordable) w *= this.avoid.has(t.target_id) ? 0.1 : 0.35 * (1 - p.wait_when_unsure * 0.6);
+        if (p.plan && tutorialActive) w *= 0.1;
+        if (!t.highlighted) w *= 1 - p.wait_when_unsure * 0.8;
+        options.push({ t, w, why: 'feature' });
       } else if (t.target_id === 'btn_expedition') {
         options.push({ t, w: 0.08 + p.salience_weight * 0.25, why: 'expedition' });
       } else if (t.target_id === 'btn_research' && this.researchCooldown <= 0) {
@@ -228,7 +238,11 @@ export class StubBot {
     let roll = r() * total;
     for (const o of options) {
       roll -= o.w;
-      if (roll <= 0) return { target: o.t, thought: optionThought(o) };
+      if (roll <= 0) {
+        const thought = optionThought(o, this);
+        if (o.why === 'feature' && o.t.affordable) this.featureUses += 1;
+        return { target: o.t, thought, mood: o.why === 'feature' ? (o.t.affordable ? 'curious' : 'frustrated') : undefined };
+      }
     }
     return { target: null, thought: ready.length ? 'Let the workers gather a bit longer.' : 'Not sure what to do next. Watch the settlement for a moment.' };
   }
@@ -244,8 +258,24 @@ export class StubBot {
   }
 }
 
-function optionThought(o) {
+function moodOf(decision, bot) {
+  if (!decision.target) return /Not sure/.test(decision.thought) ? 'confused' : 'bored';
+  if (bot.lastRejectedTarget) return 'frustrated';
+  return 'engaged';
+}
+
+function optionThought(o, bot) {
   const name = shortLabel(o.t);
+  if (o.why === 'feature') {
+    const title = o.t.label || name;
+    if (!o.t.affordable) return `${title} looks great, but I am not sure I can afford it. Try anyway.`;
+    if (bot.featureUses === 0) {
+      return o.t.computed_salience === 'high_pulse'
+        ? `Ooo, a glowing ${title} button with a NEW! badge. I have to try it!`
+        : `A new ${title} button. Let me see what it does.`;
+    }
+    return `${title} paid off last time. Use it again.`;
+  }
   if (o.why === 'harvest') return `A harvest icon is bobbing over the ${pretty(o.t.label)}. Collect it.`;
   if (o.why === 'research') {
     return o.t.computed_salience === 'high_pulse' ? 'The big glowing Research button looks important. Open it.' : 'There is a small scroll icon in the corner. Maybe research?';
