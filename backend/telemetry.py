@@ -10,6 +10,7 @@ new derived events, so they can be written incrementally to events.jsonl.
 from __future__ import annotations
 
 import json
+import os
 import re
 import threading
 from pathlib import Path
@@ -155,6 +156,13 @@ def _event_summary(e: dict[str, Any]) -> str:
     return et
 
 
+def _write_atomic(path: Path, text: str) -> None:
+    """Replace the file in one step so lock-free readers never see it half written."""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text)
+    os.replace(tmp, path)
+
+
 class TelemetryStore:
     """File-backed run store: runs/<run_id>/{events.jsonl, bot_steps.jsonl, summary.json, ...}."""
 
@@ -178,7 +186,9 @@ class TelemetryStore:
     def _read_jsonl(path: Path) -> list[dict[str, Any]]:
         if not path.exists():
             return []
-        return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+        # Readers do not take the run lock, so skip a trailing line that is still being written.
+        complete = path.read_text().rpartition("\n")[0]
+        return [json.loads(line) for line in complete.splitlines() if line.strip()]
 
     def read_events(self, run_id: str) -> list[dict[str, Any]]:
         return self._read_jsonl(self.run_dir(run_id) / "events.jsonl")
@@ -214,7 +224,7 @@ class TelemetryStore:
             for ev in derived:
                 fh.write(json.dumps(ev) + "\n")
         summary = compute_summary(existing + new + derived, self.analysis)
-        (d / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+        _write_atomic(d / "summary.json", json.dumps(summary, indent=2) + "\n")
         return len(new) + len(derived)
 
     def _write_run_meta(self, d: Path, ev: dict[str, Any]) -> None:
@@ -224,11 +234,11 @@ class TelemetryStore:
         if self.config_service is not None:
             try:
                 cfg, info = self.config_service.resolve(ev.get("variant_id") or "A", ev.get("patch_id"))
-                (d / "resolved_config.json").write_text(cfg.model_dump_json(indent=2) + "\n")
+                _write_atomic(d / "resolved_config.json", cfg.model_dump_json(indent=2) + "\n")
                 meta["config"] = info
             except Exception as exc:  # recorded, never silently ignored
                 meta["config_error"] = str(exc)
-        (d / "meta.json").write_text(json.dumps(meta, indent=2) + "\n")
+        _write_atomic(d / "meta.json", json.dumps(meta, indent=2) + "\n")
 
     def append_bot_step(self, step: BotStepRecord) -> None:
         d = self.run_dir(step.run_id)
