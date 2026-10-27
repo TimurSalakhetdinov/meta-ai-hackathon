@@ -252,9 +252,9 @@ def _mean(vals: list[Optional[float]]) -> Optional[float]:
 def verdict(ab: dict[str, Any], plugin: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     """Verdict from measured metrics only.
 
-    hurts: B completes onboarding less often than A.
-    positive: onboarding is not worse, playtesters used the feature, and score, Stone Age or stuck improved.
-    mixed: anything else (ignored, or no measurable gain).
+    hurts: B completes the tutorial or reaches Stone Age (the first achievement) less often than A.
+    positive: neither got worse, playtesters used the feature, and score, Stone Age or stuck improved.
+    mixed: anything else (ignored, no measurable gain, or only score or stuck got worse).
     """
     onb = ab["binary"]["onboarding_completed"]
     stone = ab["binary"]["first_achievement"]
@@ -276,12 +276,20 @@ def verdict(ab: dict[str, Any], plugin: Optional[dict[str, Any]] = None) -> dict
     if stuck.get("A") is not None and stuck.get("B") is not None and stuck["B"] < stuck["A"]:
         gains.append(f"stuck events {_num(stuck['A'])} to {_num(stuck['B'])}")
 
-    if b_rate < a_rate:
+    losses = []
+    if score["A"] is not None and score["B"] is not None and score["B"] < score["A"]:
+        losses.append(f"mean score {_num(score['A'])} to {_num(score['B'])}")
+    if stuck.get("A") is not None and stuck.get("B") is not None and stuck["B"] > stuck["A"]:
+        losses.append(f"stuck events {_num(stuck['A'])} to {_num(stuck['B'])}")
+
+    sa, sb = stone["a_rate"] or 0.0, stone["b_rate"] or 0.0
+    if b_rate < a_rate or sb < sa:
         key = "hurts"
         why = (f" {len(early)} of {len(pairs)} playtesters spent resources on it before finishing the tutorial."
                if early else "")
-        takeaway = (f"Unlocking {title} at {step} drops onboarding completion from {_pct(a_rate)} to "
-                    f"{_pct(b_rate)}.{why}")
+        drop = (f"drops onboarding completion from {_pct(a_rate)} to {_pct(b_rate)}" if b_rate < a_rate
+                else f"drops Stone Age from {_pct(sa)} to {_pct(sb)}")
+        takeaway = f"Unlocking {title} at {step} {drop}.{why}"
     elif users and gains:
         key = "positive"
         takeaway = (f"{title} at {step} keeps onboarding at {_pct(b_rate)} and lifts {', '.join(gains)}; "
@@ -289,6 +297,7 @@ def verdict(ab: dict[str, Any], plugin: Optional[dict[str, Any]] = None) -> dict
     else:
         key = "mixed"
         reason = ("no playtester used it" if not users
+                  else f"it lowers {', '.join(losses)}" if losses
                   else "it shows no measurable gain in score, Stone Age or stuck events")
         takeaway = f"{title} does not hurt onboarding ({_pct(a_rate)} to {_pct(b_rate)}), but {reason}."
     return {

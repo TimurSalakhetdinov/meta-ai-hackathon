@@ -211,3 +211,15 @@ def test_replay_prefers_pair_with_different_outcome() -> None:
     assert fs.replay_pair({"pairs": [same, split]}) == {"A": "a2", "B": "b2"}
     assert fs.replay_pair({"pairs": [same]}) == {"A": "a1", "B": "b1"}
     assert fs.replay_pair({"pairs": []}) is None
+
+
+def test_stone_age_drop_hurts_even_when_tutorial_completes() -> None:
+    pair = {"persona_id": "optimizer", "seed": 42,
+            "A": {"run_id": "a", "onboarding_completed": True, "final_score": 145},
+            "B": {"run_id": "b", "onboarding_completed": True, "final_score": 97,
+                  "feature_uses": 3, "feature_uses_onboarding": 3}}
+    ab = {"pairs": [pair], "mean_stuck_events": {"A": 3, "B": 3},
+          "binary": {"onboarding_completed": {"a_rate": 1.0, "b_rate": 1.0},
+                     "first_achievement": {"a_rate": 0.4, "b_rate": 0.0}}}
+    v = fs.verdict(ab, {"title": "Raider Ambush", "unlock_at_step": "onb_02_forager"})
+    assert v["key"] == "hurts" and "drops Stone Age from 40% to 0%" in v["takeaway"]
