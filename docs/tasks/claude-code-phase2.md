@@ -152,3 +152,14 @@ Keep all 36 Phase 1 tests passing and add:
 - `test_worker_pool_and_canary.py`: canary runs first and a failing canary aborts the batch before spawning pool workers; `MAX_BOT_STEPS` is 25 for `onboarding` and 100 for `full_window`.
 - `test_paired_stats.py`: exact McNemar test and paired bootstrap 95% CI on fixture pairs match expected values; `ab_summary.json` and `voiceover_sheet.txt` are generated.
 - `test_e2e_closed_loop_stub.py`: `run-closed-loop --mode stub --seeds 42,43` runs Play A → Analyst (`analysis.json` + `stuck_frame.png`) → Designer proposes patch → Human approval callback → Paired A/B rerun → `ab_summary.json` (where A stalls at `onb_03_handoff` and B completes onboarding & reaches Stone Age).
+
+## Handoff log
+- 2026-10-27 (Claude Code, `claude/phase2-depth-and-infra`): Phase 2 of `docs/tasks/claude-code-phase2.md` is built. 65 tests pass, all offline at $0 Meta spend. Done: three eras, upgrades, quests, expeditions, worker assignment; `backend/meta_client.py` (Set-of-Mark, SAM and Muse adapters behind `provider_mode == "meta"`, cache, cost ledger with per-session, bucket and global caps); async `backend/bot_runner.py`; `backend/agents/` (analyst, designer, experiment); `backend/cli.py`; `runs_demo/` fallback; Dockerfile. Notes for the next tool:
+  - The closed loop uses `run_type=full_window`, because stub B cannot reach the first achievement within 25 onboarding steps.
+  - Stub results (impatient_newcomer, full window): A stalls at `onb_03_handoff` on seeds 42 to 45. B completes onboarding on all four and reaches the Stone Age on 42 and 44 only. The e2e test pins seeds 42 and 44.
+  - The voiceover sheet counts onboarding stuck events only (`onboarding_stuck_events`); free-play stalls after the handoff are reported separately.
+  - The analyst diagnosis is a deterministic stub in stub mode. `reason_json` calls Muse Spark only in meta mode.
+  - Telemetry JSON files are now written atomically: parallel sessions raced `/live` reads against flushes.
+  - `runs_demo/` holds one stub loop without frames (1.7 MB). Its `patch_005` exists only in the demo config copy, not in `configs/patches/`.
+  - Not verified: the Docker build (the daemon was not running) and any live Meta call.
+  - Next: the PM feature studio (`docs/tasks/claude-code-pm-feature-studio.md`), then a first small live run in meta mode.

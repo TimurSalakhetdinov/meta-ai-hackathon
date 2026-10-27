@@ -46,10 +46,14 @@ flowchart LR
 - [x] In-game AI Director dock: Telemetry Pill, live stream, patch diff, Approve/Reject, A/B tab
 - [x] Side-by-side replay of two recorded runs
 - [x] Stub persona bot behind Watch Bot Play (offline placeholder, labelled STUB)
-- [ ] Playtester agents with Muse Spark (computer use)
-- [ ] Analyst: funnel and friction ranking (SAM 3.1 plus Muse Spark)
-- [ ] Designer agent proposing patches
-- [ ] Experiment agent: A/B reruns and report
+- [x] Three eras (Dawn, Stone, Bronze Age), upgrades, quests, expeditions and worker assignment
+- [x] Async Playwright bot runner with Set-of-Mark frames, cost ledger, budget caps and response cache
+- [ ] Playtester agents with Muse Spark (computer use): runner and adapters built, first live run pending
+- [x] Analyst agent: stuck step, stuck frame and think-aloud quotes (stub diagnosis; live SAM 3.1 plus Muse Spark pending)
+- [x] Designer agent staging a validated patch behind the approval gate
+- [x] Experiment agent: canary, worker pool, paired A/B reruns, McNemar and bootstrap report
+- [x] Closed loop from the CLI in stub mode (`python -m backend.cli run-closed-loop`)
+- [x] Committed demo runs in `runs_demo/` and a Dockerfile for a single-port deploy
 - [ ] Validation against human sessions
 - [ ] Demo video
 
@@ -78,6 +82,16 @@ Open these URLs on `http://localhost:8000`:
 Other URL parameters: `seed`, `speed` (1 to 4), `run_id`, `telemetry=0`. Runs are written to `runs/<run_id>/` (`events.jsonl`, `bot_steps.jsonl`, `summary.json`, `resolved_config.json`).
 
 The Meta API key is read only inside the app from `.env` (`META_API_KEY=...`). Do not export it in your shell.
+
+Run the closed loop offline. Stub mode spends no Meta credits, and the prompt waits for your approval:
+
+```bash
+.venv/bin/python -m backend.cli run-closed-loop --mode stub --seeds 42,44
+.venv/bin/python -m backend.cli run-session --variant A --persona impatient_newcomer --seed 42 --mode stub
+.venv/bin/python -m backend.cli analyze --run-id <run_id>
+```
+
+The loop writes `runs/<run_id>/analysis.json`, `stuck_frame.png`, `runs/ab_summary.json` and `runs/voiceover_sheet.txt`. When `runs/` is empty, the server falls back to the read-only demo runs in `runs_demo/`.
 
 Run the tests (unit tests plus headless Playwright end-to-end and layout tests):
 
