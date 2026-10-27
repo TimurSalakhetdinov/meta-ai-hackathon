@@ -7,15 +7,17 @@ input path as a human or the Playwright playtester.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import socket
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Iterator
+from typing import Any, Callable, Iterator, Optional
 
 import httpx
 import pytest
@@ -39,11 +41,14 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
-@pytest.fixture(scope="module")
-def server(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Server]:
-    tmp = tmp_path_factory.mktemp("e2e")
+@contextmanager
+def run_server(tmp: Path, base_overrides: Optional[dict[str, Any]] = None) -> Iterator[Server]:
+    """Start uvicorn on a copy of configs/, optionally with base config overrides."""
     configs = tmp / "configs"
     shutil.copytree(ROOT / "configs", configs, ignore=shutil.ignore_patterns("audit_log.jsonl"))
+    if base_overrides:
+        base_path = configs / "base_config.json"
+        base_path.write_text(json.dumps({**json.loads(base_path.read_text()), **base_overrides}, indent=2))
     runs = tmp / "runs"
     port = _free_port()
     env = {**os.environ, "GAME_CONFIGS_DIR": str(configs), "GAME_RUNS_DIR": str(runs)}
@@ -62,9 +67,17 @@ def server(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Server]:
     else:
         proc.kill()
         raise RuntimeError("uvicorn did not start")
-    yield Server(base, configs, runs)
-    proc.terminate()
-    proc.wait(timeout=5)
+    try:
+        yield Server(base, configs, runs)
+    finally:
+        proc.terminate()
+        proc.wait(timeout=5)
+
+
+@pytest.fixture(scope="module")
+def server(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Server]:
+    with run_server(tmp_path_factory.mktemp("e2e")) as srv:
+        yield srv
 
 
 @pytest.fixture(scope="module")
@@ -134,6 +147,10 @@ class Driver:
                 raise AssertionError(f"condition not reached; state={st}")
             self.harvest_ready()
             self.page.wait_for_timeout(150)
+
+    def events(self, event_type: Optional[str] = None) -> list[dict[str, Any]]:
+        evs = self.page.evaluate("window.__GAME_DEBUG__.events()")
+        return [e for e in evs if event_type is None or e["event_type"] == event_type]
 
     def end_session(self) -> dict[str, Any]:
         return self.page.evaluate("window.__GAME_DEBUG__.endSession('test_end')")

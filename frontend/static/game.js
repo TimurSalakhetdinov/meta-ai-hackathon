@@ -820,7 +820,8 @@ export class Game {
       quest_claimable: this.questClaimable,
       battles: this.stats.battles,
       buildings: this.buildings.filter((b) => b.key.startsWith('pad_'))
-        .map((b) => ({ key: b.key, type: b.type, level: b.level || 1, worker: b.worker, status: b.status })),
+        .map((b) => ({ key: b.key, type: b.type, level: b.level || 1, worker: b.worker, status: b.status,
+                       blocked_reason: b.blockedReason || null })),
       sim_elapsed_sec: round3(this.clock.t),
     };
   }
