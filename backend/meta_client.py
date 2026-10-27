@@ -525,7 +525,7 @@ class MetaClient:
         base = {"run_id": run_id, "provider_mode": self.provider_mode, "model_id": "muse-image",
                 "model_mode": "standard", "bucket": bucket, "images": 1}
         if self.provider_mode != "meta":
-            out_path.write_bytes(_procedural_emblem())
+            out_path.write_bytes(_procedural_emblem(prompt))
             self.ledger.log(base)
             return out_path
         price = self._price("muse-image", "per_image")
@@ -625,7 +625,8 @@ _STUB_MOODS = (
 def stub_to_raw(stub: dict[str, Any], som: SomResult) -> dict[str, Any]:
     """Map the in-page heuristic choice to the same raw shape Muse Spark returns."""
     thought = stub.get("thought") or "Not sure what to do next."
-    mood = next((m for k, m in _STUB_MOODS if k in thought.lower()), "engaged")
+    mood = stub.get("mood") if stub.get("mood") in MOODS else next(
+        (m for k, m in _STUB_MOODS if k in thought.lower()), "engaged")
     target_id = stub.get("target_id")
     mark = next((m for m in som.marks if target_id and m.target_id == target_id), None)
     raw: dict[str, Any] = {
@@ -641,12 +642,37 @@ def stub_to_raw(stub: dict[str, Any], som: SomResult) -> dict[str, Any]:
     return raw
 
 
-def _procedural_emblem() -> bytes:
+_EMBLEM_MOTIFS = (("sword", "swords"), ("shield", "swords"), ("camel", "coin"), ("merchant", "coin"),
+                  ("bonfire", "flame"), ("fire", "flame"), ("crown", "crown"), ("tax", "crown"))
+
+
+def _procedural_emblem(prompt: str = "") -> bytes:
+    """Gold medallion with a motif picked from the prompt; the rim hue is seeded by the prompt text."""
+    text = prompt.lower()
+    motif = next((m for k, m in _EMBLEM_MOTIFS if k in text), "rune")
+    hue = int(hashlib.sha256(text.encode()).hexdigest()[:2], 16)
+    ink, cream = (90, 50, 10, 255), (255, 250, 230, 255)
     img = Image.new("RGBA", (128, 128), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    d.ellipse([4, 4, 124, 124], fill=(255, 196, 0, 255), outline=(90, 50, 10, 255), width=6)
-    d.polygon([(64, 22), (98, 98), (30, 98)], fill=(255, 250, 230, 255), outline=(90, 50, 10, 255))
-    d.ellipse([54, 60, 74, 80], fill=(0, 229, 255, 255))
+    d.ellipse([4, 4, 124, 124], fill=(255, 196, 0, 255), outline=ink, width=6)
+    d.ellipse([16, 16, 112, 112], fill=(120 + hue // 4, 70 + hue // 8, 40, 255), outline=ink, width=3)
+    if motif == "swords":
+        d.line([(36, 36), (92, 92)], fill=cream, width=9)
+        d.line([(92, 36), (36, 92)], fill=cream, width=9)
+        d.line([(28, 80), (48, 100)], fill=ink, width=6)
+        d.line([(100, 80), (80, 100)], fill=ink, width=6)
+    elif motif == "coin":
+        d.ellipse([36, 36, 92, 92], fill=(255, 220, 90, 255), outline=ink, width=4)
+        d.rectangle([58, 46, 70, 82], fill=ink)
+    elif motif == "flame":
+        d.polygon([(64, 26), (90, 76), (78, 98), (50, 98), (38, 76)], fill=(255, 120, 30, 255), outline=ink)
+        d.polygon([(64, 52), (76, 82), (52, 82)], fill=(255, 230, 120, 255))
+    elif motif == "crown":
+        d.polygon([(32, 88), (32, 46), (48, 66), (64, 38), (80, 66), (96, 46), (96, 88)], fill=(255, 220, 90, 255),
+                  outline=ink)
+    else:
+        d.polygon([(64, 22), (98, 98), (30, 98)], fill=cream, outline=ink)
+        d.ellipse([54, 60, 74, 80], fill=(0, 229, 255, 255))
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()

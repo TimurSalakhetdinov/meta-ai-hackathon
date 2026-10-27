@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import json
 import os
+import threading
+import uuid
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Literal, Optional, Union
 
 from fastapi import Body, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
@@ -22,6 +24,8 @@ from .config_service import (
     PatchNotFoundError,
     TransitionError,
 )
+from . import feature_studio
+from .meta_client import MetaClient
 from .schemas import AnalysisConfig, BotStepRecord, GameConfig, Persona, TelemetryEvent
 from .telemetry import TelemetryStore
 
@@ -38,6 +42,24 @@ class ProposeRequest(BaseModel):
 
 class DecisionRequest(BaseModel):
     note: str = ""
+
+
+class FeatureProposeRequest(BaseModel):
+    prompt: str
+    mode: Literal["stub", "meta"] = "stub"
+
+
+class PlaytestRequest(BaseModel):
+    patch_id: str
+    mode: Literal["stub", "meta"] = "stub"
+    personas: Optional[list[str]] = None
+    seeds: Optional[list[int]] = None
+    run_type: Literal["onboarding", "full_window"] = "full_window"
+
+
+class ReworkRequest(BaseModel):
+    patch_id: str
+    mode: Literal["stub", "meta"] = "stub"
 
 
 def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = None) -> FastAPI:
@@ -198,6 +220,72 @@ def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = No
     def personas():
         rows = json.loads((configs_dir / "personas.json").read_text())
         return [Persona.model_validate(r).model_dump() for r in rows]
+
+    # Feature studio ---------------------------------------------------
+    jobs: dict[str, dict[str, Any]] = {}
+    app.state.studio_jobs = jobs
+    # Tests inject a fake session function here so no browser starts.
+    app.state.studio_session_fn = None
+    app.state.generated_dir = Path(os.environ.get("GAME_GENERATED_DIR", STATIC_DIR / "assets" / "generated"))
+
+    def studio_client(mode: str) -> MetaClient:
+        return MetaClient(runs_dir=runs_dir, configs_dir=configs_dir, provider_mode=mode)
+
+    @app.post("/api/feature_studio/propose", status_code=201)
+    def studio_propose(req: FeatureProposeRequest):
+        try:
+            return feature_studio.propose_feature(req.prompt, configs_dir=configs_dir, client=studio_client(req.mode),
+                                                  generated_dir=app.state.generated_dir)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+
+    @app.post("/api/feature_studio/playtest", status_code=202)
+    def studio_playtest(req: PlaytestRequest):
+        record = patch_or_404(req.patch_id)
+        if "feature_plugin" not in record.body:
+            raise HTTPException(400, f"{req.patch_id} carries no feature_plugin")
+        if record.status != "approved":
+            raise HTTPException(403, f"Human approval required: {req.patch_id} is {record.status}")
+        job_id = uuid.uuid4().hex[:12]
+        log: list[str] = []
+        n_pairs = len(req.personas or json.loads((configs_dir / "personas.json").read_text())) * len(req.seeds or [42])
+        job = jobs[job_id] = {"job_id": job_id, "patch_id": req.patch_id, "status": "running", "log": log,
+                              "sessions_total": 2 * n_pairs, "error": None}
+
+        def work() -> None:
+            try:
+                feature_studio.run_playtest(req.patch_id, configs_dir=configs_dir, runs_dir=runs_dir,
+                                            client=studio_client(req.mode), personas=req.personas,
+                                            seeds=req.seeds, run_type=req.run_type,
+                                            session_fn=app.state.studio_session_fn, on_log=log)
+                job["status"] = "done"
+            except Exception as exc:  # surfaced to the studio UI
+                job.update(status="failed", error=str(exc))
+        threading.Thread(target=work, daemon=True).start()
+        return studio_job(job_id)
+
+    @app.get("/api/feature_studio/jobs/{job_id}")
+    def studio_job(job_id: str):
+        job = jobs.get(job_id)
+        if job is None:
+            raise HTTPException(404, f"Unknown job {job_id}")
+        started = sum(1 for line in job["log"] if line.startswith(("start ", "canary ")))
+        return {**{k: v for k, v in job.items() if k != "log"}, "sessions_started": started}
+
+    @app.get("/api/feature_studio/report/{patch_id}")
+    def studio_report(patch_id: str):
+        patch_or_404(patch_id)
+        report = feature_studio.build_report(patch_id, configs_dir=configs_dir, runs_dir=runs_dir,
+                                             read_bot_steps=store.read_bot_steps)
+        if report is None:
+            raise HTTPException(404, f"No playtest has run for {patch_id} yet")
+        return report
+
+    @app.post("/api/feature_studio/rework", status_code=201)
+    def studio_rework(req: ReworkRequest):
+        report = studio_report(req.patch_id)
+        return feature_studio.propose_rework(report["plugin"], report, configs_dir=configs_dir,
+                                             client=studio_client(req.mode))
 
     @app.exception_handler(ValidationError)
     def on_validation_error(_, exc: ValidationError):

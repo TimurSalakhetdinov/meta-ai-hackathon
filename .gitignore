@@ -10,3 +10,4 @@ configs/patches/audit_log.jsonl
 .pytest_cache/
 *.egg-info/
 test-results/
+frontend/static/assets/generated/
