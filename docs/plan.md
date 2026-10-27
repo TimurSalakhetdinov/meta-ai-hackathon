@@ -30,18 +30,39 @@ Weekly limits reset around Nov 1, so there are two full windows during the event
 - Muse Code remains the main tool for agent logic from Oct 29, so the Meta tooling story stays strong.
 
 ## Meta API budget ($150 credits, valid for the 10-day window)
-Code is written with Claude Code, Muse Code and Antigravity, not with API credits. Credits go to running the product.
+Code is written with Claude Code, Muse Code and Antigravity, not with API credits. Credits go to running and testing the product. The 3-minute video is only a small slice; the goal is to spend most credits on real test runs over the full 20-minute window (10 min onboarding + 10 min early play).
 
-| Share | Use |
-|---|---|
-| ~10% | Development and debugging: short runs, cached responses, one persona. Prefer open-weights models (Baseten or Modal credits) for this. |
-| ~50% | Playtester runs: Muse Spark computer use, with screenshots at each step. This is the biggest cost. |
-| ~15% | Analysis: SAM 3.1 on key screenshots only, plus analyst and designer reasoning. |
-| ~25% | Reserve: final runs for the demo video and reruns if something breaks on Nov 3 or 4. |
+### Prices (dev.meta.ai/docs/pricing-rate-limits, checked 2026-10-27)
+| Model | Standard | Contributor mode |
+|---|---|---|
+| Muse Spark 1.3 | $1.25 / 1M input, $0.15 / 1M cached input, $4.25 / 1M output | $0.10 / 1M input, $0.20 / 1M output |
+| SAM 3.1 | $2.50 / 1,000 images | n/a |
+| Muse Voice Transcribe | $0.18 / hour of audio | n/a |
 
-- On day 1, measure the cost of one playtester session and size the A/B runs from it.
+Rate limits are per team: Muse Spark 3,000 RPM and 4M TPM (contributor: 150 RPM, 3M TPM), SAM 3.1 3,000 RPM. Sequential runs never get close.
+
+### Per-session estimate (assumptions, replace with measured values on day 1)
+- One bot step = one SAM call ($0.0025, less with frame-hash cache) + one Muse Spark call (~2,600 input tokens incl. the image, ~800 output tokens incl. reasoning, ~$0.007). About **$0.01 per step**.
+- Image token count is not published by Meta; it is the main uncertainty. Use 2x as a safety margin.
+- Onboarding-only session (`MAX_BOT_STEPS` 25): ~$0.25, up to $0.50 with margin.
+- Full 20-minute window session (~80 steps; raise `MAX_BOT_STEPS` to ~100 for these runs): ~$0.80, up to $1.60 with margin.
+
+### Allocation (testing first)
+| Share | Amount | Use | Roughly buys |
+|---|---|---|---|
+| ~5% | $7 | Development and debugging. Most dev runs on `stub` or open-weights models (Baseten/Modal credits). Meta only for calibration. | 5-10 calibration sessions |
+| ~70% | $105 | Playtester test runs over the full window: several personas x seeds x variants, multiple optimisation loops. | 65-130 full sessions, e.g. 3 personas x 10 seeds x A/B = 60 sessions per loop |
+| ~10% | $15 | Analyst and designer reasoning, SAM on key screenshots, validation. | Hundreds of loops (~$0.05-0.20 each) |
+| ~15% | $23 | Reserve: final recorded runs for the video, reruns on Nov 3-4, transcription for subtitles (~$0.01). | |
+
+### Rules
+- On day 1, run one real full-window session and read actual tokens from `runs/cost_ledger.jsonl`; resize the numbers above.
+- Hard caps in `configs/budget_config.json`: per session $2, per bucket as above, global stop at $140. The client refuses calls past a cap.
+- Re-running a cached seed costs nothing; never re-run uncached sessions just to record video, use `META_CACHE_ONLY=1`.
+- Option (Timur decides): contributor mode makes Muse Spark ~12x cheaper (Meta may use the data; 150 RPM). Safe content-wise for our own original game in a public repo, and it would allow ~1,000+ full sessions.
 - Credits may expire before the live final on Nov 9. Keep recorded or cached runs ready for a live demo.
 
 ## Handoff log
 - 2026-10-26: Repo created (meta-ai-hackathon) with README, AGENTS.md, CLAUDE.md, hackathon docs and this plan. No code yet.
 - 2026-10-27: Added `docs/video-script.md` (180 s script), `docs/architecture.md` (two-day game and bot connection design) and `docs/tasks/claude-code-build-game.md` (build task for Claude Code), after five review rounds with Gemini 4 Argon (`docs/hackathon/argon-review-log.md`). Stack decision: Python backend (FastAPI, Playwright, Pydantic) plus a plain JS game, no Node. Next: Claude Code starts Day 1 of the build task.
+- 2026-10-27: Budget section rewritten from Meta API prices: testing-first allocation (70% playtester runs over the full 20-minute window), per-session estimates, hard caps. Measure real tokens on day 1.
