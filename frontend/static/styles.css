@@ -287,10 +287,10 @@ select.persona { flex: 1; padding: 4px; background: #17130f; color: #eee; border
 .stream .ev { padding: 2px 0; border-bottom: 1px dashed #3a3127; }
 .stream .t { color: #8f8574; }
 .stream .thought { color: #9fe8ff; }
-.stream .mood { font-size: 9.5px; padding: 0 5px; border-radius: 6px; background: #3a3127; color: #e9e2d4; }
-.stream .mood-confused, .stream .mood-frustrated { background: #7a2e22; }
-.stream .mood-bored { background: #4b4b4b; }
-.stream .mood-curious { background: #23566b; }
+.stream .mood, .quote .mood { font-size: 9.5px; padding: 0 5px; border-radius: 6px; background: #3a3127; color: #e9e2d4; }
+.stream .mood-confused, .stream .mood-frustrated, .quote .mood-confused, .quote .mood-frustrated { background: #7a2e22; }
+.stream .mood-bored, .quote .mood-bored { background: #4b4b4b; }
+.stream .mood-curious, .quote .mood-curious { background: #23566b; }
 .stream .rej { color: #ff9b85; }
 .stream .stuck { color: #fff; background: var(--red); padding: 0 4px; border-radius: 3px; }
 .stream .good { color: var(--green); }
@@ -371,3 +371,4 @@ select.persona { flex: 1; padding: 4px; background: #17130f; color: #eee; border
 .encounter.cleared { filter: grayscale(1) brightness(.75); }
 .encounter.short small { color: #c0392b; }
 #btn_mute.on { background: linear-gradient(#d9f7c4, #8fd05f); }
+.quote { font-size: 11px; margin: 4px 0; line-height: 1.35; color: #e9e2d4; }

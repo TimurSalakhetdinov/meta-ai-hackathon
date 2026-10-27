@@ -1,0 +1,124 @@
+{
+  "run_id": "demo_play_A",
+  "analysis_version": "v1",
+  "provider_mode": "stub",
+  "where_stuck": "onb_03_handoff",
+  "stuck_events": 2,
+  "stuck_by_step": {
+    "onb_03_handoff": 2
+  },
+  "onboarding_completed": false,
+  "first_achievement": false,
+  "stuck_bot_step_index": 11,
+  "stuck_frame": "stuck_frame.png",
+  "sam_masks": [
+    {
+      "rank": 1,
+      "target_id": "btn_research",
+      "bbox": [
+        916,
+        498,
+        30,
+        30
+      ],
+      "label": "Research"
+    },
+    {
+      "rank": 2,
+      "target_id": "card_woodcutter_hut",
+      "bbox": [
+        208,
+        454.3,
+        80,
+        76
+      ],
+      "label": "Woodcutter"
+    },
+    {
+      "rank": 3,
+      "target_id": "hud_wood",
+      "bbox": [
+        234,
+        6.5,
+        70,
+        28
+      ],
+      "label": "Wood counter"
+    }
+  ],
+  "diagnosis": "Players stall at onb_03_handoff: low Research salience plus a wood shortfall.",
+  "hypotheses": [
+    {
+      "id": "low_research_salience",
+      "confidence": 0.7,
+      "evidence": "Research button salience is low; the playtester opened research 1 times at onb_03_handoff."
+    },
+    {
+      "id": "wood_shortfall",
+      "confidence": 0.8,
+      "evidence": "5 insufficient_wood rejections at onb_03_handoff; optional Woodcutter Hut was not selected before the required tech."
+    }
+  ],
+  "suggested_levers": [
+    "lock_optional_builds_until_step",
+    "starting_wood",
+    "research_button_salience",
+    "idle_hint_delay_sec"
+  ],
+  "playtester_quotes": [
+    {
+      "bot_step_index": 8,
+      "step_id": "onb_03_handoff",
+      "sim_elapsed_sec": 34.288,
+      "thought": "Woodcutter looks good. Try to build it.",
+      "player_mood": "engaged",
+      "observation_summary": "8 marked regions on screen",
+      "trigger": "before action_rejected (insufficient_wood)"
+    },
+    {
+      "bot_step_index": 10,
+      "step_id": "onb_03_handoff",
+      "sim_elapsed_sec": 41.288,
+      "thought": "Woodcutter looks good. Try to build it.",
+      "player_mood": "engaged",
+      "observation_summary": "8 marked regions on screen",
+      "trigger": "before action_rejected (insufficient_wood)"
+    },
+    {
+      "bot_step_index": 11,
+      "step_id": "onb_03_handoff",
+      "sim_elapsed_sec": 41.821,
+      "thought": "Woodcutter looks good. Try to build it.",
+      "player_mood": "engaged",
+      "observation_summary": "8 marked regions on screen",
+      "trigger": "before action_rejected (insufficient_wood)"
+    },
+    {
+      "bot_step_index": 22,
+      "step_id": "onb_03_handoff",
+      "sim_elapsed_sec": 97.352,
+      "thought": "Try \ud83e\ude93 Basic Toolmaking Stone axes. Woodcutters can chop, unlock even though the cost looks high.",
+      "player_mood": "frustrated",
+      "observation_summary": "8 marked regions on screen",
+      "trigger": "mood frustrated"
+    },
+    {
+      "bot_step_index": 23,
+      "step_id": "onb_03_handoff",
+      "sim_elapsed_sec": 97.885,
+      "thought": "Nothing in the tech tree is affordable yet. Close it and keep building.",
+      "player_mood": "frustrated",
+      "observation_summary": "8 marked regions on screen",
+      "trigger": "mood frustrated"
+    },
+    {
+      "bot_step_index": 24,
+      "step_id": "onb_03_handoff",
+      "sim_elapsed_sec": 98.418,
+      "thought": "Forager Hut looks good. Try to build it.",
+      "player_mood": "engaged",
+      "observation_summary": "8 marked regions on screen",
+      "trigger": "before action_rejected (insufficient_wood)"
+    }
+  ]
+}

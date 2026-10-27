@@ -1,0 +1,8 @@
+Voiceover sheet for experiment demo_ab (filled from runs/ab_summary.json)
+Stuck counts are onboarding steps only (mean per session at 2:23).
+
+[1:50] (15 s, 27 words, 1.80 words/sec, OK)
+At step onb_03_handoff, the bot logs 3 stuck events. The analyst agent pairs SAM 3.1 with Muse Spark and flags low Research salience and a wood shortfall.
+
+[2:23] (17 s, 24 words, 1.41 words/sec, OK)
+The experiment agent reruns the same persona on 2 paired seeds. Stuck events go from 3 to 0, and onboarding completion reaches 100 percent.

@@ -46,6 +46,9 @@ def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = No
     analysis = AnalysisConfig.model_validate_json((configs_dir / "analysis_config.json").read_text())
     configs = ConfigService(configs_dir)
     store = TelemetryStore(runs_dir, analysis, configs)
+    # Committed demo runs, read-only, so a fresh deploy can show results without running bots.
+    demo_dir = Path(os.environ.get("GAME_DEMO_RUNS_DIR", ROOT / "runs_demo"))
+    demo_store = TelemetryStore(demo_dir, analysis, configs)
 
     app = FastAPI(title="Meta Game Onboarding Optimizer", version="0.1.0")
     app.state.configs = configs
@@ -57,14 +60,18 @@ def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = No
         except PatchNotFoundError:
             raise HTTPException(404, f"Unknown patch {patch_id}")
 
-    def run_or_404(run_id: str):
-        try:
-            d = store.run_dir(run_id)
-        except ValueError:
-            raise HTTPException(400, "invalid run_id")
-        if not (d / "events.jsonl").exists():
-            raise HTTPException(404, f"Unknown run {run_id}")
-        return d
+    def locate(run_id: str) -> tuple[TelemetryStore, Path]:
+        for s in (store, demo_store):
+            try:
+                d = s.run_dir(run_id)
+            except ValueError:
+                raise HTTPException(400, "invalid run_id")
+            if (d / "events.jsonl").exists():
+                return s, d
+        raise HTTPException(404, f"Unknown run {run_id}")
+
+    def run_or_404(run_id: str) -> Path:
+        return locate(run_id)[1]
 
     # Config ------------------------------------------------------------
     @app.get("/api/config")
@@ -139,38 +146,53 @@ def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = No
 
     @app.get("/api/runs")
     def list_runs():
-        return store.list_runs()
+        live = store.list_runs()
+        seen = {r.get("run_id") for r in live}
+        demo = [r for r in demo_store.list_runs() if r.get("run_id") not in seen] if demo_dir.exists() else []
+        return live + demo
 
     @app.get("/api/runs/{run_id}/live")
     def run_live(run_id: str, since: int = Query(0, ge=0), bot_since: int = Query(0, ge=0)):
-        run_or_404(run_id)
-        events = store.read_events(run_id)
-        bot_steps = store.read_bot_steps(run_id)
+        src, _ = locate(run_id)
+        events = src.read_events(run_id)
+        bot_steps = src.read_bot_steps(run_id)
         return {"events": events[since:], "next": len(events), "bot_steps": bot_steps[bot_since:],
-                "bot_next": len(bot_steps), "summary": store.summary(run_id)}
+                "bot_next": len(bot_steps), "summary": src.summary(run_id)}
 
     @app.get("/api/runs/{run_id}/recording")
     def run_recording(run_id: str):
         """Everything the replay player needs: meta, resolved config, events, bot steps, summary."""
-        d = run_or_404(run_id)
+        src, d = locate(run_id)
         resolved = d / "resolved_config.json"
-        return {"meta": store.meta(run_id), "summary": store.summary(run_id),
+        return {"meta": src.meta(run_id), "summary": src.summary(run_id),
                 "resolved_config": json.loads(resolved.read_text()) if resolved.exists() else None,
-                "events": store.read_events(run_id), "bot_steps": store.read_bot_steps(run_id)}
+                "events": src.read_events(run_id), "bot_steps": src.read_bot_steps(run_id)}
 
     @app.get("/api/runs/{run_id}/analysis")
     def run_analysis(run_id: str):
         p = run_or_404(run_id) / "analysis.json"
         if not p.exists():
             raise HTTPException(404, "No analyst output for this run yet")
-        return json.loads(p.read_text())
+        out = json.loads(p.read_text())
+        if out.get("stuck_frame"):
+            out["stuck_frame_url"] = f"/api/runs/{run_id}/artifacts/{out['stuck_frame']}"
+        return out
+
+    @app.get("/api/runs/{run_id}/artifacts/{name:path}")
+    def run_artifact(run_id: str, name: str):
+        """PNG artifacts of a run: stuck_frame.png, frames/step_NNN.png, som_masks/step_NNN.png."""
+        d = run_or_404(run_id)
+        f = (d / name).resolve()
+        if d.resolve() not in f.parents or f.suffix != ".png" or not f.exists():
+            raise HTTPException(404, "No such artifact")
+        return FileResponse(f, media_type="image/png")
 
     @app.get("/api/ab_summary")
     def ab_summary():
-        p = runs_dir / "ab_summary.json"
-        if not p.exists():
-            raise HTTPException(404, "No A/B experiment has been run yet")
-        return json.loads(p.read_text())
+        for p in (runs_dir / "ab_summary.json", demo_dir / "ab_summary.json"):
+            if p.exists():
+                return json.loads(p.read_text())
+        raise HTTPException(404, "No A/B experiment has been run yet")
 
     @app.get("/api/personas")
     def personas():

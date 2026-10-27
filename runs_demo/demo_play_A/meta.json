@@ -1,0 +1,21 @@
+{
+  "run_id": "demo_play_A",
+  "variant_id": "A",
+  "patch_id": null,
+  "persona_id": "impatient_newcomer",
+  "seed": 42,
+  "time_scale": 4.0,
+  "provider_mode": "stub",
+  "started_wall_ts_ms": 1793140172774,
+  "analysis_config": {
+    "analysis_version": "v1",
+    "stuck_idle_sim_sec": 30.0,
+    "stuck_rejected_streak": 3,
+    "stuck_abort_per_step": 3
+  },
+  "config": {
+    "variant": "A",
+    "patch_id": null,
+    "base_config_sha256": "61e878205dc62c997fd1e63f7fb5c9e8d18713cba2e3b6c2fc9dac788f40cc0d"
+  }
+}

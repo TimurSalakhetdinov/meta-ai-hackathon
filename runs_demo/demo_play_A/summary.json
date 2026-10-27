@@ -1,0 +1,126 @@
+{
+  "run_id": "demo_play_A",
+  "variant_id": "A",
+  "patch_id": null,
+  "persona_id": "impatient_newcomer",
+  "seed": 42,
+  "time_scale": 4.0,
+  "provider_mode": "stub",
+  "analysis_version": "v1",
+  "time_to_first_action_sec": 0.889,
+  "stuck_events": 2,
+  "stuck_by_step": {
+    "onb_03_handoff": 2
+  },
+  "stuck_abort": false,
+  "where_stuck": "onb_03_handoff",
+  "onboarding_completed": false,
+  "first_achievement": false,
+  "first_achievement_sim_sec": null,
+  "bronze_age_mastery": false,
+  "battles_won": 0,
+  "action_rejected": 5,
+  "clicks": 25,
+  "session_ended": true,
+  "last_step_id": "onb_03_handoff",
+  "sim_elapsed_sec": 99.019,
+  "final_score": 40,
+  "step_log": [
+    {
+      "sim_elapsed_sec": 0.0,
+      "step_id": "onb_01_shelter",
+      "event_type": "session_start",
+      "summary": "session_start"
+    },
+    {
+      "sim_elapsed_sec": 0.0,
+      "step_id": "onb_01_shelter",
+      "event_type": "step_enter",
+      "summary": "step_enter onb_01_shelter"
+    },
+    {
+      "sim_elapsed_sec": 4.022,
+      "step_id": "onb_01_shelter",
+      "event_type": "step_complete",
+      "summary": "step_complete onb_01_shelter"
+    },
+    {
+      "sim_elapsed_sec": 4.022,
+      "step_id": "onb_02_forager",
+      "event_type": "step_enter",
+      "summary": "step_enter onb_02_forager"
+    },
+    {
+      "sim_elapsed_sec": 28.288,
+      "step_id": "onb_02_forager",
+      "event_type": "step_complete",
+      "summary": "step_complete onb_02_forager"
+    },
+    {
+      "sim_elapsed_sec": 28.288,
+      "step_id": "onb_03_handoff",
+      "event_type": "step_enter",
+      "summary": "step_enter onb_03_handoff"
+    },
+    {
+      "sim_elapsed_sec": 34.754,
+      "step_id": "onb_03_handoff",
+      "event_type": "action_rejected",
+      "summary": "card_woodcutter_hut: insufficient_wood"
+    },
+    {
+      "sim_elapsed_sec": 41.754,
+      "step_id": "onb_03_handoff",
+      "event_type": "action_rejected",
+      "summary": "card_woodcutter_hut: insufficient_wood"
+    },
+    {
+      "sim_elapsed_sec": 42.221,
+      "step_id": "onb_03_handoff",
+      "event_type": "action_rejected",
+      "summary": "card_woodcutter_hut: insufficient_wood"
+    },
+    {
+      "sim_elapsed_sec": 42.221,
+      "step_id": "onb_03_handoff",
+      "event_type": "stuck",
+      "summary": "STUCK (rejected_streak)"
+    },
+    {
+      "sim_elapsed_sec": 43.354,
+      "step_id": "onb_03_handoff",
+      "event_type": "hint_shown",
+      "summary": "hint -> btn_research"
+    },
+    {
+      "sim_elapsed_sec": 64.753,
+      "step_id": "onb_03_handoff",
+      "event_type": "hint_shown",
+      "summary": "hint -> btn_research"
+    },
+    {
+      "sim_elapsed_sec": 79.687,
+      "step_id": "onb_03_handoff",
+      "event_type": "stuck",
+      "summary": "STUCK (idle)"
+    },
+    {
+      "sim_elapsed_sec": 97.819,
+      "step_id": "onb_03_handoff",
+      "event_type": "action_rejected",
+      "summary": "tech_toolmaking: insufficient_wood"
+    },
+    {
+      "sim_elapsed_sec": 98.952,
+      "step_id": "onb_03_handoff",
+      "event_type": "action_rejected",
+      "summary": "card_forager_hut: insufficient_wood"
+    },
+    {
+      "sim_elapsed_sec": 99.019,
+      "step_id": "onb_03_handoff",
+      "event_type": "session_end",
+      "summary": "session_end"
+    }
+  ]
+}

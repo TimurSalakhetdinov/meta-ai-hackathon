@@ -250,6 +250,7 @@ class Overlay {
     const diagnosis = analysis?.diagnosis
       ? `<div class="note" style="color:#e9e2d4">${esc(analysis.diagnosis)}</div>`
       : `<div class="note">No analyst diagnosis for this run yet.</div>`;
+    const quotes = (analysis?.playtester_quotes || []).map((q) => `<div class="quote"><span class="mood mood-${esc(q.player_mood || 'engaged')}">${esc(q.player_mood || 'engaged')}</span> “${esc(q.thought)}” <span class="note">step ${esc(q.bot_step_index)} · ${esc(q.trigger)}</span></div>`).join('');
     const rows = Object.entries(patch.body).map(([k, v]) => `<div><span class="k">${esc(k)}</span>: <span class="from">${esc(JSON.stringify(base?.[k]))}</span> → <span class="to">${esc(JSON.stringify(v))}</span></div>`).join('');
     const valid = validation?.valid;
     const decided = ['approved', 'rejected'].includes(patch.status);
@@ -259,6 +260,7 @@ class Overlay {
       <div class="frame-box">${frame}</div>
       <div class="section-h">Diagnosis</div>
       ${diagnosis}
+      ${quotes ? `<div class="section-h">Playtester think-aloud</div>${quotes}` : ''}
       <div class="section-h">${esc(patch.patch_id)} · ${esc(patch.title || '')}</div>
       <div class="note">${esc(patch.rationale || '')}</div>
       <div class="diff">${rows}</div>

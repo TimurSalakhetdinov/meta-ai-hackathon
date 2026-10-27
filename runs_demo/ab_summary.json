@@ -1,0 +1,165 @@
+{
+  "experiment_id": "demo_ab",
+  "provider_mode": "stub",
+  "muse_model_id": "muse-spark-1.3-contributor",
+  "model_mode": "contributor",
+  "run_type": "full_window",
+  "patch_id": "patch_005",
+  "baseline": "variant_A",
+  "baseline_reused_pairs": 0,
+  "worker_pool_size": 5,
+  "cost_usd": 0.0,
+  "created_at": "2026-10-27T22:31:56+00:00",
+  "n_pairs": 2,
+  "pairs": [
+    {
+      "persona_id": "impatient_newcomer",
+      "seed": 42,
+      "A": {
+        "run_id": "demo_ab_A_impatient_newcomer_s42",
+        "onboarding_completed": false,
+        "first_achievement": false,
+        "stalled_at_handoff": true,
+        "time_to_first_action_sec": 0.829,
+        "stuck_events": 3,
+        "onboarding_stuck_events": 3,
+        "final_score": 40,
+        "where_stuck": "onb_03_handoff",
+        "bronze_age_mastery": false
+      },
+      "B": {
+        "run_id": "demo_ab_B_impatient_newcomer_s42",
+        "onboarding_completed": true,
+        "first_achievement": true,
+        "stalled_at_handoff": false,
+        "time_to_first_action_sec": 1.321,
+        "stuck_events": 3,
+        "onboarding_stuck_events": 0,
+        "final_score": 180,
+        "where_stuck": "free_play",
+        "bronze_age_mastery": false
+      },
+      "errors": []
+    },
+    {
+      "persona_id": "impatient_newcomer",
+      "seed": 44,
+      "A": {
+        "run_id": "demo_ab_A_impatient_newcomer_s44",
+        "onboarding_completed": false,
+        "first_achievement": false,
+        "stalled_at_handoff": true,
+        "time_to_first_action_sec": 1.323,
+        "stuck_events": 3,
+        "onboarding_stuck_events": 3,
+        "final_score": 40,
+        "where_stuck": "onb_03_handoff",
+        "bronze_age_mastery": false
+      },
+      "B": {
+        "run_id": "demo_ab_B_impatient_newcomer_s44",
+        "onboarding_completed": true,
+        "first_achievement": true,
+        "stalled_at_handoff": false,
+        "time_to_first_action_sec": 1.324,
+        "stuck_events": 3,
+        "onboarding_stuck_events": 0,
+        "final_score": 183,
+        "where_stuck": "free_play",
+        "bronze_age_mastery": false
+      },
+      "errors": []
+    }
+  ],
+  "binary": {
+    "onboarding_completed": {
+      "n": 2,
+      "a_rate": 0.0,
+      "b_rate": 1.0,
+      "n10_a_only": 0,
+      "n01_b_only": 2,
+      "mcnemar_exact_p": 0.5,
+      "diff_b_minus_a": 1.0,
+      "ci95": [
+        1.0,
+        1.0
+      ]
+    },
+    "first_achievement": {
+      "n": 2,
+      "a_rate": 0.0,
+      "b_rate": 1.0,
+      "n10_a_only": 0,
+      "n01_b_only": 2,
+      "mcnemar_exact_p": 0.5,
+      "diff_b_minus_a": 1.0,
+      "ci95": [
+        1.0,
+        1.0
+      ]
+    },
+    "stalled_at_handoff": {
+      "n": 2,
+      "a_rate": 1.0,
+      "b_rate": 0.0,
+      "n10_a_only": 2,
+      "n01_b_only": 0,
+      "mcnemar_exact_p": 0.5,
+      "diff_b_minus_a": -1.0,
+      "ci95": [
+        -1.0,
+        -1.0
+      ]
+    }
+  },
+  "continuous": {
+    "time_to_first_action_sec": {
+      "n": 2,
+      "median_delta": 0.2465,
+      "ci95": [
+        0.001,
+        0.492
+      ]
+    },
+    "stuck_events": {
+      "n": 2,
+      "median_delta": 0.0,
+      "ci95": [
+        0.0,
+        0.0
+      ]
+    },
+    "onboarding_stuck_events": {
+      "n": 2,
+      "median_delta": -3.0,
+      "ci95": [
+        -3.0,
+        -3.0
+      ]
+    },
+    "final_score": {
+      "n": 2,
+      "median_delta": 141.5,
+      "ci95": [
+        140.0,
+        143.0
+      ]
+    }
+  },
+  "where_stuck": {
+    "A": {
+      "onb_03_handoff": 2
+    },
+    "B": {
+      "free_play": 2
+    }
+  },
+  "mean_stuck_events": {
+    "A": 3.0,
+    "B": 3.0
+  },
+  "mean_onboarding_stuck_events": {
+    "A": 3.0,
+    "B": 0.0
+  }
+}
