@@ -251,8 +251,10 @@ function renderedTargets(game, renderer, config) {
       const st = game.featureStatus();
       t.affordable = !!st.affordable;
       t.cooldown = st.cooldown ? round1(st.cooldown) : 0;
-      t.computed_salience = game.feature.button_salience;
-      t.is_new = game.feature.button_salience === 'high_pulse' && game.featureUses === 0;
+      // The pulse and NEW! ribbon clear after the first use, as badges do in live games.
+      const sal = game.feature.button_salience;
+      t.computed_salience = sal === 'high_pulse' && game.featureUses > 0 ? 'high' : sal;
+      t.is_new = sal === 'high_pulse' && game.featureUses === 0;
     } else if (id.startsWith('encounter_')) {
       t.cleared = game.encountersCleared.has(id);
       t.affordable = !t.cleared && !game.missing(game.expeditionCosts());
@@ -488,7 +490,10 @@ class Hud {
     el.querySelector('.f-cool').textContent = st.cooldown ? `${Math.ceil(st.cooldown)}s` : '';
     el.classList.toggle('cooling', !!st.cooldown);
     el.classList.toggle('unaffordable', !!st.missing);
-    if (g.featureUses > 0) el.querySelector('.ribbon').hidden = true;
+    if (g.featureUses > 0) {
+      el.querySelector('.ribbon').hidden = true;
+      el.classList.replace('sal-high_pulse', 'sal-high');
+    }
   }
 
   updateEncounters() {

@@ -219,7 +219,9 @@ export class StubBot {
         options.push({ t, w: 0.15 + p.prefer_build * 0.4 + (this.savingFor ? -0.1 : 0), why: 'upgrade' });
       } else if (t.kind === 'feature' && !t.cooldown) {
         // Shiny new buttons pull on salience; explorers try anything new once; planners and hoarders hold back.
-        let w = 0.05 + p.salience_weight * sal * 1.4 + (this.featureUses === 0 ? p.curiosity * 1.5 : 0);
+        // After the first try the novelty is gone, so the button competes like any other action.
+        let w = this.featureUses === 0 ? 0.05 + p.salience_weight * sal * 1.4 + p.curiosity * 1.5
+          : 0.05 + p.salience_weight * sal * 0.4;
         if (!t.affordable) w *= this.avoid.has(t.target_id) ? 0.1 : 0.35 * (1 - p.wait_when_unsure * 0.6);
         if (p.plan && tutorialActive) w *= 0.1;
         if (!t.highlighted) w *= 1 - p.wait_when_unsure * 0.8;
