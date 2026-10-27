@@ -39,6 +39,8 @@ export class StubBot {
     this.researchedThisVisit = false;
     this.savingFor = null;
     this.lastRejectedTarget = null;
+    // Targets that were shown unaffordable or locked when clicked, with steps left to avoid them.
+    this.avoid = new Map();
     this.seenAchievement = 0;
   }
 
@@ -73,11 +75,7 @@ export class StubBot {
     if (state.achieved && ++this.seenAchievement > 2) return this.finish('first_achievement');
     if (state.sim_elapsed_sec > MAX_SIM_SEC) return this.finish('bot_time_limit');
 
-    const rendered = window.__GAME_DEBUG__.getRenderedTargets();
-    const targets = rendered.filter((t) => t.visible);
-    // Buildings partly hidden behind others still count as seen, not as clickable.
-    const owned = new Set(rendered.filter((t) => t.kind === 'building').map((t) => t.building_type));
-    const decision = this.decide(targets, owned);
+    const { decision, targets } = this.plan();
     const index = this.stepIndex++;
     const correlation_id = `${this.runId}_b${String(index).padStart(3, '0')}`;
     const record = {
@@ -99,13 +97,27 @@ export class StubBot {
       this.clickAt(x, y);
       this.ringAt(x, y, 'hit');
       window.__BOT_CTX__ = { bot_step_index: null, correlation_id: null };
-      // A target that was shown as unaffordable or locked was a wasted click.
-      this.lastRejectedTarget = !decision.target.affordable || decision.target.locked ? decision.target.target_id : null;
     }
     fetch(`/api/runs/${encodeURIComponent(this.runId)}/bot_steps`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(record),
     }).catch(() => {});
     this.schedule(STEP_MS);
+  }
+
+  // One decision from what is on screen. The Playwright runner calls this
+  // through window.__BOT_HOOKS__.plan() and does the clicking itself.
+  plan() {
+    const rendered = window.__GAME_DEBUG__.getRenderedTargets();
+    const targets = rendered.filter((t) => t.visible);
+    // Buildings partly hidden behind others still count as seen, not as clickable.
+    const owned = new Set(rendered.filter((t) => t.kind === 'building').map((t) => t.building_type));
+    const decision = this.decide(targets, owned);
+    // A target that was shown as unaffordable or locked was a wasted click.
+    const t = decision.target;
+    this.lastRejectedTarget = t && (!t.affordable || t.locked) ? t.target_id : null;
+    for (const [id, n] of this.avoid) if (n <= 1) this.avoid.delete(id); else this.avoid.set(id, n - 1);
+    if (this.lastRejectedTarget) this.avoid.set(this.lastRejectedTarget, 6);
+    return { decision, targets };
   }
 
   decide(targets, owned = new Set()) {
@@ -156,7 +168,8 @@ export class StubBot {
         const pick = tempting[0];
         return { target: pick, thought: `Try ${shortLabel(pick)} even though the cost looks high.` };
       }
-      this.researchCooldown = 6;
+      this.researchCooldown = 4;
+      if (open.length) this.savingFor = open[0].target_id;
       return { target: by('btn_close_research'), thought: 'Nothing in the tech tree is affordable yet. Close it and keep building.', closedEmpty: true };
     }
 
@@ -171,7 +184,9 @@ export class StubBot {
     }
 
     // Tutorial guidance (arrow / highlighted target).
-    const guided = targets.find((t) => t.highlighted && t.kind !== 'pad');
+    // A highlighted card for a building already placed means "wait for it", not "build another".
+    const guided = targets.find((t) => t.highlighted && t.kind !== 'pad'
+      && !(t.kind === 'build_card' && owned.has(t.target_id.slice(5))));
     if (guided && r() < p.follow_tutorial) {
       return { target: guided, thought: `The advisor's arrow points at ${shortLabel(guided)}. Follow it.` };
     }
@@ -189,14 +204,15 @@ export class StubBot {
       if (t.kind === 'build_card' && !t.locked) {
         let w = 0.2 + p.prefer_build * 0.6 + p.salience_weight * sal + (t.highlighted ? 0.6 : 0);
         if (missingProducer(t)) w *= 4;
-        else if (producerOpen) w *= 0.2;
-        if (!t.affordable) w *= t.target_id === this.lastRejectedTarget ? 0.15 : 0.35 * (1 - p.wait_when_unsure * 0.6);
+        else if (producerOpen) w *= 0.05;
+        if (!t.affordable) w *= this.avoid.has(t.target_id) ? 0.1 : 0.35 * (1 - p.wait_when_unsure * 0.6);
         if (p.plan && !t.affordable) w *= 0.3;
-        if (this.savingFor && !t.highlighted) w *= 0.4;
+        // Saving for a tech: only a missing producer is still worth the spend.
+        if (this.savingFor && !t.highlighted && !missingProducer(t)) w *= p.plan ? 0.1 : 0.3;
         options.push({ t, w, why: t.affordable ? 'build' : 'try' });
       } else if (t.kind === 'worker' && !t.staffed) {
         options.push({ t, w: 0.6 + p.harvest * 0.6, why: 'staff' });
-      } else if (t.kind === 'upgrade' && t.affordable && !producerOpen) {
+      } else if (t.kind === 'upgrade' && t.affordable && !producerOpen && !this.savingFor) {
         options.push({ t, w: 0.15 + p.prefer_build * 0.4 + (this.savingFor ? -0.1 : 0), why: 'upgrade' });
       } else if (t.target_id === 'btn_expedition') {
         options.push({ t, w: 0.08 + p.salience_weight * 0.25, why: 'expedition' });

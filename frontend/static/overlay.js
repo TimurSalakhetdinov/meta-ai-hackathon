@@ -133,6 +133,27 @@ class Overlay {
     select.disabled = botMode;
     document.getElementById('bot-btn').addEventListener('click', () => this.toggleBot());
 
+    if (p.externalBot && this.game) {
+      select.disabled = true;
+      document.getElementById('bot-btn').disabled = true;
+      document.getElementById('bot-note').textContent = 'Driven by the Playwright playtester runner.';
+      document.getElementById('stub-banner').hidden = this.ctx.provider === 'meta';
+      const persona = this.personas.find((x) => x.persona_id === p.persona) || null;
+      const policy = new StubBot({ runId: this.ctx.runId, persona, seed: p.seed });
+      window.__BOT_HOOKS__ = {
+        plan: () => {
+          const { decision } = policy.plan();
+          const t = decision.target;
+          return { thought: decision.thought, target_id: t ? t.target_id : null,
+                   xy: t ? [t.x + t.w / 2, t.y + t.h / 2] : null };
+        },
+        ring: ringAt,
+        thought: ({ index, thought, target_id, mood }) => this.addStream(
+          `<span class="t">#${index}</span>${mood ? ` <span class="mood mood-${esc(mood)}">${esc(mood)}</span>` : ''}`
+          + ` <span class="thought">\u{1F4AD} ${esc(thought)}</span>${target_id ? ` <span class="t">→ ${esc(target_id)}</span>` : ''}`),
+      };
+    }
+
     if (botMode && this.game) {
       document.getElementById('stub-banner').hidden = false;
       const persona = this.personas.find((x) => x.persona_id === select.value) || null;

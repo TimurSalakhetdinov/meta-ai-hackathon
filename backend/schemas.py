@@ -228,6 +228,12 @@ class BudgetConfig(BaseModel):
     sam_model_id: str = "sam-3.1"
     worker_pool_size: int = Field(5, ge=1, le=8)
     muse_cache_in_experiments: bool = False
+    prompt_version: str = "playtester_v1"
+    # Pre-call estimate charged against the caps; the real token count settles it afterwards.
+    muse_est_input_tokens: int = Field(2600, ge=1)
+    muse_max_output_tokens: int = Field(800, ge=1)
+    # Per model id: input_per_1m / output_per_1m (tokens) or per_image. null = price unknown.
+    pricing_usd: dict[str, Any] = Field(default_factory=dict)
 
 
 class ExperimentConfig(BaseModel):
