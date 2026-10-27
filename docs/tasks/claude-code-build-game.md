@@ -83,7 +83,9 @@ By the end of Oct 29, the repo contains a **visually impressive, high-craft 2.5D
 ### Day 1 (Oct 27–28): Backend Config/Telemetry + 2.5D Isometric Engine + F2P Strategy HUD
 1. Project setup: `pyproject.toml` (`fastapi`, `uvicorn`, `pydantic>=2`, `playwright`, `pillow`, `python-dotenv`, `pytest`, `httpx`), directory layout (`backend/`, `frontend/static/`, `frontend/static/assets/sprites/`, `configs/`, `scripts/`, `tests/`), `runs/` in `.gitignore`.
 2. `backend/schemas.py`, `backend/config_service.py`, `backend/telemetry.py`, and `backend/app.py` with all config/patch/approval/event endpoints and `configs/*.json` fixtures.
-3. `scripts/cutout_sprites.py`: utility using Pillow (flood-fill / chroma-key corner background removal + alpha feathering) to turn solid-background isometric PNGs into clean transparent sprites in `frontend/static/assets/sprites/`.
+3. `scripts/cutout_sprites.py`: utility using Pillow (2x2 quadrant slicing + flood-fill / chroma-key corner background removal + alpha feathering) to slice the two pre-generated isometric sheets already in the repo into 8 transparent PNG sprites in `frontend/static/assets/sprites/`:
+   - `frontend/static/assets/sprites/preview_settlement_style.jpg` → top-left `town_center.png`, top-right `shelter.png`, bottom-left `forager_hut.png`, bottom-right `research_tent.png`.
+   - `frontend/static/assets/sprites/preview_settlement_style_2.jpg` → top-left `woodcutter_hut.png`, top-right `stone_quarry.png`, bottom-left `tribal_monument.png`, bottom-right `town_center_stone_age.png`.
 4. `frontend/static/clock.js`, `sprites.js`, and `iso_renderer.js`: 12x12 isometric diamond map, water shoreline animation, terrain props, roads, 8 building pads, hybrid sprite + multi-layered procedural isometric building renderer, scaffolding construction animation, walking villagers, chimney smoke, and floating resource popups.
 5. `frontend/static/index.html` and `styles.css`: `1280x540` layout (`960x540` `#game-root` + `320x540` `#right-dock`), stone/gold/parchment F2P strategy HUD, Advisor portrait dialog, and Build Bar with `research_button_salience` styles (`low`, `medium`, `high_pulse`).
 
