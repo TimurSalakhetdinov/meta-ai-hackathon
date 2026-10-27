@@ -220,6 +220,8 @@ def test_stone_age_drop_hurts_even_when_tutorial_completes() -> None:
                   "feature_uses": 3, "feature_uses_onboarding": 3}}
     ab = {"pairs": [pair], "mean_stuck_events": {"A": 3, "B": 3},
           "binary": {"onboarding_completed": {"a_rate": 1.0, "b_rate": 1.0},
-                     "first_achievement": {"a_rate": 0.4, "b_rate": 0.0}}}
+                     "first_achievement": {"n": 5, "a_rate": 0.4, "b_rate": 0.0, "n10_a_only": 2,
+                                           "mcnemar_exact_p": 0.5}}}
     v = fs.verdict(ab, {"title": "Raider Ambush", "unlock_at_step": "onb_02_forager"})
     assert v["key"] == "hurts" and "drops Stone Age from 40% to 0%" in v["takeaway"]
+    assert "2 of 5 pairs lost it (McNemar p = 0.50, not significant, run more seeds)" in v["takeaway"]

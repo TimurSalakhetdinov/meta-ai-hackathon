@@ -289,7 +289,7 @@ def verdict(ab: dict[str, Any], plugin: Optional[dict[str, Any]] = None) -> dict
                if early else "")
         drop = (f"drops onboarding completion from {_pct(a_rate)} to {_pct(b_rate)}" if b_rate < a_rate
                 else f"drops Stone Age from {_pct(sa)} to {_pct(sb)}")
-        takeaway = f"Unlocking {title} at {step} {drop}.{why}"
+        takeaway = f"Unlocking {title} at {step} {drop}.{why}{_evidence(onb if b_rate < a_rate else stone)}"
     elif users and gains:
         key = "positive"
         takeaway = (f"{title} at {step} keeps onboarding at {_pct(b_rate)} and lifts {', '.join(gains)}; "
@@ -310,6 +310,16 @@ def verdict(ab: dict[str, Any], plugin: Optional[dict[str, Any]] = None) -> dict
         },
         "feature_uses": uses, "feature_users": users, "early_users": len(early),
     }
+
+
+def _evidence(stat: dict[str, Any]) -> str:
+    """Small paired samples swing on one persona, so the takeaway says how strong the evidence is."""
+    p = stat.get("mcnemar_exact_p")
+    if p is None:
+        return ""
+    lost = stat.get("n10_a_only", 0)
+    note = "significant" if p < 0.05 else "not significant, run more seeds"
+    return f" Evidence: {lost} of {stat.get('n', 0)} pairs lost it (McNemar p = {p:.2f}, {note})."
 
 
 def persona_quotes(ab: dict[str, Any], read_bot_steps: Any, feature_target: Optional[str]) -> list[dict[str, Any]]:
