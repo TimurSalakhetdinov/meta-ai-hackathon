@@ -55,6 +55,13 @@ Rate limits are per team: Muse Spark 3,000 RPM and 4M TPM (contributor: 150 RPM,
 | ~10% | $15 | Analyst and designer reasoning, SAM on key screenshots, validation. | Hundreds of loops (~$0.05-0.20 each) |
 | ~15% | $23 | Reserve: final recorded runs for the video, reruns on Nov 3-4, transcription for subtitles (~$0.01). | |
 
+### Run design: many short runs, not one long one
+- Every test is a batch of independent sessions (persona x seed x variant), each started from a fresh game state. Repetition is what makes A/B differences meaningful; one pair is a demo, not evidence.
+- Stage-gated, like a real funnel: (1) onboarding-only sessions (`MAX_BOT_STEPS` ~25) run in large batches because they are cheap (~$0.25-0.50); (2) only sessions that finish onboarding continue into early play (up to the 20-minute mark); (3) a session stops early on churn signals (`stuck_abort`), which is the main data point and saves credits.
+- Checkpoints: save the game state after onboarding so early-play tests can restart from it many times without replaying onboarding (cheaper and isolates the second 10 minutes).
+- Per optimisation loop: baseline batch on A, analyst and designer propose a patch, human approves, the same personas and seeds rerun on B, paired comparison reported with N.
+- Rough sizing at standard prices: one loop = 3 personas x 10 seeds x 2 variants on onboarding (~$15-30) plus early-play reruns from checkpoints for the finishers (~$20-40). The $105 bucket covers about 2-4 loops; contributor mode would cover far more.
+
 ### Rules
 - On day 1, run one real full-window session and read actual tokens from `runs/cost_ledger.jsonl`; resize the numbers above.
 - Hard caps in `configs/budget_config.json`: per session $2, per bucket as above, global stop at $140. The client refuses calls past a cap.
@@ -66,3 +73,4 @@ Rate limits are per team: Muse Spark 3,000 RPM and 4M TPM (contributor: 150 RPM,
 - 2026-10-26: Repo created (meta-ai-hackathon) with README, AGENTS.md, CLAUDE.md, hackathon docs and this plan. No code yet.
 - 2026-10-27: Added `docs/video-script.md` (180 s script), `docs/architecture.md` (two-day game and bot connection design) and `docs/tasks/claude-code-build-game.md` (build task for Claude Code), after five review rounds with Gemini 4 Argon (`docs/hackathon/argon-review-log.md`). Stack decision: Python backend (FastAPI, Playwright, Pydantic) plus a plain JS game, no Node. Next: Claude Code starts Day 1 of the build task.
 - 2026-10-27: Budget section rewritten from Meta API prices: testing-first allocation (70% playtester runs over the full 20-minute window), per-session estimates, hard caps. Measure real tokens on day 1.
+- 2026-10-27: Added run design: many short stage-gated sessions with checkpoints and early stop instead of single 20-minute runs.
