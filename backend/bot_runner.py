@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import socket
 import threading
 import time
@@ -30,6 +31,18 @@ VIEWPORT = {"width": 1280, "height": 540}
 IDLE_TIMEOUT_MS = 2500
 # Sim seconds a "wait" decision lets pass before the next look.
 WAIT_SIM_SEC = 4.0
+# Rendered targets plus HUD boxes the analyst highlights (the wood counter is not clickable).
+TARGETS_JS = """() => {
+  const out = window.__GAME_DEBUG__.getRenderedTargets();
+  const root = document.getElementById('game-root').getBoundingClientRect();
+  const el = document.getElementById('res-wood');
+  if (el) {
+    const r = el.getBoundingClientRect();
+    out.push({target_id: 'hud_wood', kind: 'hud', x: r.left - root.left, y: r.top - root.top, w: r.width,
+              h: r.height, visible: true, clickable: false, computed_salience: 'low', label: 'Wood counter'});
+  }
+  return out;
+}"""
 
 
 @dataclass
@@ -107,7 +120,9 @@ class BotRunner:
                         step_entered_at, last_step_id = state["sim_elapsed_sec"], state["step_id"]
                     png = await page.screenshot(clip=FRAME_CLIP)
                     (frames / f"step_{i:03d}.png").write_bytes(png)
-                    targets = await page.evaluate("window.__GAME_DEBUG__.getRenderedTargets()")
+                    targets = await page.evaluate(TARGETS_JS)
+                    (frames / f"step_{i:03d}.json").write_text(json.dumps(
+                        {"step_id": state["step_id"], "sim_elapsed_sec": state["sim_elapsed_sec"], "targets": targets}))
                     som = self.client.segment_and_mark(png, targets, run_id=spec.run_id, step_index=i)
                     stub = await page.evaluate("window.__BOT_HOOKS__.plan()") \
                         if self.client.provider_mode == "stub" else None
@@ -222,8 +237,6 @@ def local_server(configs_dir: Path, runs_dir: Path) -> Iterator[str]:
 
 
 def load_personas(configs_dir: Path) -> dict[str, Persona]:
-    import json
-
     rows = json.loads((Path(configs_dir) / "personas.json").read_text())
     return {r["persona_id"]: Persona.model_validate(r) for r in rows}
 

@@ -485,6 +485,37 @@ class MetaClient:
             "completion_tokens": int(usage.get("completion_tokens", 0)),
         }
 
+    def reason_json(self, system: str, user: str, *, stub_result: dict[str, Any], run_id: str = "agents",
+                    bucket: str = "analysis") -> dict[str, Any]:
+        """Text-only Muse Spark JSON reasoning for the analyst, designer and feature studio.
+
+        Stub mode returns `stub_result` unchanged. Live results are cached by prompt.
+        """
+        if self.provider_mode == "stub":
+            self.ledger.log({"run_id": run_id, "provider_mode": "stub", "model_id": self.muse_model_id,
+                             "model_mode": self.model_mode, "bucket": bucket})
+            return stub_result
+        key = hashlib.sha256(json.dumps([self.muse_model_id, system, user]).encode()).hexdigest()
+        cache = self.muse_cache_dir / f"reason_{key}.json"
+        base = {"run_id": run_id, "provider_mode": self.provider_mode, "model_id": self.muse_model_id,
+                "model_mode": self.model_mode, "bucket": bucket}
+        if cache.exists():
+            self.ledger.log({**base, "cache_hit": True})
+            return json.loads(cache.read_text())
+        if self.cache_only:
+            raise CacheMissError(f"Muse reasoning {key[:12]} not cached (META_CACHE_ONLY=1)")
+        est = self.muse_cost(self.budget.muse_est_input_tokens, self.budget.muse_max_output_tokens)
+        self.ledger.charge({**base, "estimated_cost_usd": est, "entry_type": "reservation"},
+                           use_reserve=self.use_reserve)
+        text, usage = self._call_muse_api([{"role": "system", "content": system},
+                                           {"role": "user", "content": user}])
+        self.ledger.log({**base, **usage, "estimated_cost_usd": self.muse_cost(
+            usage["prompt_tokens"], usage["completion_tokens"]) - est, "entry_type": "settlement"})
+        result = parse_decision_json(text)
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(json.dumps(result))
+        return result
+
     # ------------------------------------------------------- Muse Image
     def generate_ui_emblem(self, prompt: str, out_path: Path, bucket: str = "reserve",
                            run_id: str = "designer") -> Path:
