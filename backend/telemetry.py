@@ -20,7 +20,9 @@ from .schemas import AnalysisConfig, BotStepRecord, TelemetryEvent
 RUN_ID_RE = re.compile(r"[A-Za-z0-9_\-]{1,120}")
 
 # Click results that count towards the rejected streak. "ui" clicks (opening a
-# panel, selecting a build card) neither count nor reset the streak.
+# panel, selecting a build card) and "collected" clicks (a harvest that made no
+# new build or research affordable) neither count nor reset the streak, and are
+# not progress. The game reports a harvest that opens a new option as "advanced".
 UNPRODUCTIVE_RESULTS = {"rejected", "noop"}
 RUN_META_KEYS = ("run_id", "variant_id", "patch_id", "persona_id", "seed", "time_scale", "provider_mode")
 
