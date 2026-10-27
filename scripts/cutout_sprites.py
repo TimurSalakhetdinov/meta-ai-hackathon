@@ -31,6 +31,7 @@ SHEETS: dict[str, list[str]] = {
         "tribal_monument",
         "town_center_stone_age",
     ],
+    "preview_settlement_style_3.jpg": ["smelter", "granary", "advisor_welcome", "advisor_hint"],
 }
 
 MIN_LUM = 125        # darker pixels are outlines or building, never background
