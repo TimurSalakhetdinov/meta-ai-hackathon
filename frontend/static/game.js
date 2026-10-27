@@ -507,6 +507,7 @@ export class Game {
     }
     this.onFx({ type: 'popup', tile: TOWN_CENTER_TILE, text: `${TECHS[id].label}!`, color: '#a8e6ff', lift: 110 });
     this.onFx({ type: 'tech', tech: id });
+    if (this.config.auto_close_research_on_unlock) this.modal = null;
     return { result: 'advanced' };
   }
 

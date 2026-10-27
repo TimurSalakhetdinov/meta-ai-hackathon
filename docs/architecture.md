@@ -175,6 +175,7 @@ class GameConfig(BaseModel):
     # 2. Tutorial steps and locks
     lock_optional_builds_until_step: Optional[StepId] = None
     show_worker_warnings: bool = True
+    auto_close_research_on_unlock: bool = False
     # 3. UI salience
     research_button_salience: Literal["low", "medium", "high_pulse"] = "low"
     build_button_scale: float = Field(1.0, ge=0.8, le=1.5)

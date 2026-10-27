@@ -27,6 +27,7 @@
   "worker_required_per_building": 1,
   "lock_optional_builds_until_step": null,
   "show_worker_warnings": true,
+  "auto_close_research_on_unlock": false,
   "research_button_salience": "low",
   "build_button_scale": 1.0,
   "idle_hint_delay_sec": 15.0,
