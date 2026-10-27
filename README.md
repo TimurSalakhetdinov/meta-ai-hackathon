@@ -36,6 +36,7 @@ flowchart LR
 |---|---|
 | Muse Spark | Persona playtesters (computer use), session reasoning, fix proposals |
 | SAM 3.1 | Segmenting UI elements and game state in screenshots |
+| Muse Image | High-salience Variant B UI emblem generation (closed-loop Designer fix) & isometric asset/portrait upgrades |
 
 ## Status
 

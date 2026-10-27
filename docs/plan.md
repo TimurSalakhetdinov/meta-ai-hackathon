@@ -66,7 +66,7 @@ Rate limits are per team: Muse Spark 3,000 RPM and 4M TPM (contributor: 150 RPM,
 | ~5% | $7 | Development and debugging. Most dev runs on `stub` or open-weights models (Baseten/Modal credits). Meta for the day-1 calibration and canaries. | Day-1 calibration (~$2) plus 15+ canary/debug full sessions |
 | ~70% | $105 | Playtester experiment runs: onboarding loops and full-window loops on the 3 personas x 8 seeds matrix, final end-to-end validation. | ~300-500 full sessions, i.e. ~12-20 full-window variant batches of 24, or ~70 onboarding batches |
 | ~10% | $15 | Analyst and designer reasoning, SAM on key screenshots, validation. | Hundreds of loops |
-| ~15% | $23 | Reserve: final recorded runs for the video, reruns on Nov 3-4, standard-mode spot checks, transcription for subtitles (~$0.01). | |
+| ~15% | $23 | Reserve: final recorded runs for the video, reruns on Nov 3-4, standard-mode spot checks, transcription for subtitles (~$0.01), and **Muse Image** (~$1-3) for (1) logged sprite/portrait/tech-icon upgrades and (2) Designer Agent generating a high-salience Variant B Research emblem behind the Human Approval Gate. | |
 
 If we switch back to standard mode, the same $105 buys roughly a quarter as many sessions (~65-130 full sessions).
 
@@ -110,6 +110,7 @@ Many short, independent sessions, not one long run. One pair is a demo, not evid
 - Hard caps in `configs/budget_config.json`: per session $2, per bucket as above, global stop at $140. The client refuses calls past a cap.
 - Never re-run uncached sessions just to record video; use `META_CACHE_ONLY=1`.
 - Credits may expire before the live final on Nov 9. Keep recorded or cached runs ready for a live demo.
+- **Public judge hosting ($0 cost & $0 Meta API drain):** Run the heavy 24-session A/B Playwright + Meta API batches locally on Mac, commit the winning cached run artifacts into `runs_demo/`, and deploy the FastAPI app in `META_CACHE_ONLY=1` mode to Hugging Face Spaces (Docker, 2 vCPU / 16 GB RAM free) or Modal / Cloud Run. Judges can play Variant A and B, click `[▶ Watch Bot Play]`, inspect SAM 3.1 masks & Muse Spark thoughts, click `[Approve Patch]`, and watch the side-by-side A/B replay at zero runtime API cost.
 
 ## Handoff log
 - 2026-10-26: Repo created (meta-ai-hackathon) with README, AGENTS.md, CLAUDE.md, hackathon docs and this plan. No code yet.
@@ -123,8 +124,9 @@ Many short, independent sessions, not one long run. One pair is a demo, not evid
   - Config fields added beyond the spec: `research_toolmaking_wood_cost`, `research_masonry_wood_cost`, `research_stone_age_*_cost`, `lock_optional_builds_until_step` (locks optional builds while `stepIndex <= ` that step).
   - The Woodcutter Hut produces only after Basic Toolmaking. This makes the A stall a true deadlock.
   - Optional builds get the NEW! ribbon and high salience only from `onb_03_handoff` on.
-  - Click results are `advanced`, `collected`, `rejected`, `noop` and `ui`. A harvest is `advanced` only when it makes a new build or tech affordable, otherwise `collected` (not progress).
+  - Click results are `advanced`, `collected`, `rejected`, `noop` and `ui`. A harvest is `advanced` when it makes a new build/tech affordable or saves up a resource needed for the current step's goal (`savesTowardGoal`), otherwise `collected` (so gathering food at the `onb_03_handoff` wood dead end still does not reset the stuck timer).
   - No worker assignment toggle yet: each producer takes a fixed number of workers.
   - Expected console 404s: `/analysis` and `/api/ab_summary` until the analyst and experiment agents write them.
   - `stub_bot.js` is a placeholder for the Muse Spark playtester. It reads only `getRenderedTargets()` and logs `provider_mode: stub`. Replay refuses stub runs without `&dev=1`.
   - Next: Playwright runner with Muse Spark (`--mode meta`), analyst writing `runs/<id>/analysis.json`, experiment agent writing `runs/ab_summary.json`.
+- 2026-10-27 (Gemini 4 Argon review & merge): Reviewed `claude/build-game` milestone diff (`581e202..c80f9cb`). Added `savesTowardGoal()` in `frontend/static/game.js` so saving up resources across multiple harvests in `free_play` counts as `advanced` (preventing false `free_play` idle stuck events on winning Variant B runs while keeping food harvests at the `onb_03_handoff` wood dead end as `collected`). Documented the two **Muse Image** workflows (logged asset/portrait polish + closed-loop Variant B high-salience UI emblem generation) and the `$0` judge hosting strategy (`runs_demo/` + `META_CACHE_ONLY=1` on Hugging Face Spaces / Modal). Merged `claude/build-game` to `main`.

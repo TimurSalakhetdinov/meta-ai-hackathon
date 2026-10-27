@@ -225,6 +225,28 @@ export class Game {
     return out;
   }
 
+  // True when harvesting `res` actively reduces a deficit toward the current step's goal.
+  // At onb_03_handoff the goal is tech_toolmaking (wood only), so gathering food at the
+  // wood dead end returns false and does not reset the stuck idle timer.
+  savesTowardGoal(res) {
+    if (!res) return false;
+    if (this.step_id === 'onb_03_handoff') {
+      const need = TECHS.tech_toolmaking.costs(this.config)[res] || 0;
+      return Math.floor(this.resources[res] + 1e-9) < need;
+    }
+    if (this.step_id === 'free_play') {
+      for (const id of TECH_ORDER) {
+        const st = this.techStatus(id);
+        if (st.available && !st.done && (st.costs?.[res] || 0) > Math.floor(this.resources[res] + 1e-9)) return true;
+      }
+      for (const type of ['stone_quarry', 'tribal_monument']) {
+        const st = this.cardStatus(type);
+        if (!st.locked && (st.costs?.[res] || 0) > Math.floor(this.resources[res] + 1e-9)) return true;
+      }
+    }
+    return false;
+  }
+
   missing(costs) {
     for (const [res, amount] of Object.entries(costs)) {
       if (amount > 0 && Math.floor(this.resources[res] + 1e-9) < amount) {
@@ -422,12 +444,13 @@ export class Game {
       const b = this.buildings.find((x) => `building_${x.key}` === target_id);
       if (!b || !b.ready) return { result: 'noop' };
       const before = this.affordableActions();
+      const saving = this.savesTowardGoal(BUILDINGS[b.type]?.produces);
       this.harvest(b);
-      // Collecting counts as progress only when it opens up a new build or
-      // research. A player who keeps gathering food at a wood dead end is
-      // still stalled, so that must not reset the idle timer.
+      // Collecting counts as progress when it opens up a new build/research or
+      // reduces a deficit toward the current step's goal. A player who keeps
+      // gathering food at the onb_03_handoff wood dead end is still stalled.
       const opened = [...this.affordableActions()].some((a) => !before.has(a));
-      return { result: opened ? 'advanced' : 'collected' };
+      return { result: (opened || saving) ? 'advanced' : 'collected' };
     }
     if (target_id === 'btn_deselect' && this.selectedCard) {
       this.selectedCard = null;
