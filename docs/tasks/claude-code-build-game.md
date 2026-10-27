@@ -1,4 +1,4 @@
-# Task for Claude Code: build the game foundation and bot connection layer (Oct 27–29)
+# Task for Claude Code: build the 2.5D isometric strategy game, config/telemetry backend, and AI Director UI (Oct 27–29)
 
 ## Read first
 1. `AGENTS.md` (rules and hard constraints), then `docs/plan.md` (work split, budget, Handoff log).
@@ -7,78 +7,121 @@
 4. `docs/hackathon/rules-summary.md`: judging and anti-projects.
 
 ## Goal
-By the end of Oct 29, the repo contains a playable, original browser city-builder with config-driven onboarding, a validated patch system with a human approval gate, raw-event telemetry with unbiased metrics, and a Python + Playwright bot that plays through SAM 3.1 marks and Muse Spark decisions. The full loop (play → diagnose → propose → approve → rerun) runs end to end on stubs, with tests, so Muse Code can take over the agent logic on Oct 29.
+By the end of Oct 29, the repo contains a **visually impressive, high-craft 2.5D isometric historical city-builder** in the browser (*Dawn Age → Stone Age*) with genuine F2P strategy depth (20-minute window compressed by simulation speed), a Pydantic-validated config & patch system with a human approval gate, raw-event telemetry with unbiased `stuck` metrics, the in-game **AI Director** side dock, and clean bot hooks (`window.__GAME_STATE__`, `window.__GAME_DEBUG__.getRenderedTargets()`) so Muse Code can wire up the Playwright + SAM 3.1 + Muse Spark agents starting Oct 29.
 
 ## Scope
-**In**
-- FastAPI backend serving the API and the static game (`uvicorn backend.app:app`).
-- Plain JS ES modules + HTML5 Canvas + CSS game in `frontend/static/` (no Node, npm or bundler).
-- Onboarding steps `onb_01_shelter`, `onb_02_forager`, `onb_03_handoff`, then `free_play` to a `first_achievement`. Buildings: Shelter, Forager Hut, optional Woodcutter Hut, Research (Basic Toolmaking).
-- Pydantic schemas: `GameConfig`, `GameConfigPatch`, `AnalysisConfig`, `TelemetryEvent`, `BotStepRecord`, `BudgetConfig` (incl. `muse_model_id`, `worker_pool_size`), `ExperimentConfig` (seeds, personas, run type, `MAX_BOT_STEPS` per run type).
-- Config service: merge (`exclude_unset`, explicit null kept), validation, patch lifecycle, approval gate, `audit_log.jsonl`.
-- `configs/base_config.json` with the planted handoff friction and `configs/patches/patch_001.json` (status `proposed`) as a fixture.
-- Telemetry sink: raw events, derived `stuck` via `AnalysisConfig`, `summary.json` metrics (`where_stuck`, `time_to_first_action_sec`, `stuck_events`, `onboarding_completed`).
-- Right dock (x 960–1280): Telemetry Pill and AI Director panel (Live, Analyst/Designer with Approve/Reject, A/B summary). Not a separate dashboard.
-- Bot runner: fresh `BrowserContext` and fresh bot memory per session, 1280x540 viewport, `device_scale_factor=1`, 960x540 clip capture, idle barrier, cyan click ring, Playwright video and per-step frames, `window.__BOT_CTX__` correlation ids.
-- Meta client: SAM 3.1 set-of-mark, Muse Spark structured decision with a configurable model id (default `muse-spark-1.3-contributor`), disk cache (SAM always on, Muse Spark off in experiment mode), cost ledger with budget buckets and model id/mode per line, provider switch `stub | open_weights | meta`, `META_CACHE_ONLY=1`.
-- Agent stubs `backend/agents/{analyst,designer,experiment}.py` with typed interfaces and deterministic outputs; the experiment runner with canary + parallel worker pool and paired statistics is real code, not a stub.
-- Experiment matrix defaults: 3 personas (`first_time_casual`, `impatient_newcomer`, `optimizer`) x 8 seeds (`42`-`49`); run types `onboarding` (`MAX_BOT_STEPS` 25) and `full_window` (`MAX_BOT_STEPS` 100).
-- Replay route `/?replay_a=&replay_b=&speed=4` from artifacts.
-- CLI `python -m backend.cli` with `run-session`, `run-closed-loop`, `replay`.
-- Tests, README run instructions, Handoff log entry.
 
-**Out (do not build now)**
-- Real analyst, designer and experiment reasoning (Muse Code, from Oct 29).
-- Persona prompt tuning beyond simple starter prompts for the three personas.
-- **Stretch only:** golden checkpoints per `(persona, seed)` for early-play patches (architecture section 7). Build only if Day 2 is done early.
-- Units, combat, pathfinding, isometric art, sound.
-- Any dashboard app or Streamlit.
-- The demo video itself.
+### In (Oct 27–29, Claude Code)
+1. **FastAPI Backend (`backend/app.py`, `backend/schemas.py`, `backend/config_service.py`, `backend/telemetry.py`):**
+   - Serves the API and static frontend from one process (`uvicorn backend.app:app`).
+   - Pydantic v2 schemas: `GameConfig`, `GameConfigPatch`, `AnalysisConfig`, `TelemetryEvent`, `BotStepRecord`, `BudgetConfig`, `ExperimentConfig`.
+   - Config service: loads `configs/base_config.json`, merges flat patches (`exclude_unset=True`, explicit `null` preserved), enforces the human approval gate (`proposed -> validated -> approved/rejected`), writes `configs/patches/audit_log.jsonl`, and serves `GET /api/config?variant=&patch_id=` (returns `403` on unapproved patches).
+   - Fixtures: `configs/base_config.json` (with the planted `onb_03_handoff` wood/salience friction), `configs/patches/patch_001.json` (status `validated` or `proposed`), `configs/analysis_config.json`, `configs/budget_config.json`, `configs/experiment_config.json`, `configs/personas.json`.
+   - Telemetry sink (`POST /api/events`, `GET /api/runs/{run_id}/live`): appends raw events to `runs/<run_id>/events.jsonl`, derives `stuck` events using fixed `AnalysisConfig` thresholds, and writes `runs/<run_id>/summary.json` (`where_stuck`, `time_to_first_action_sec`, `stuck_events`, `onboarding_completed`, `first_achievement`).
 
-## Milestones
+2. **2.5D Isometric Engine & Visual Polish (`frontend/static/iso_renderer.js`, `sprites.js`, `scripts/cutout_sprites.py`):**
+   - Fixed `1280x540` page layout (`device_scale_factor=1`): `#game-root` (`0–960 px`) and `#right-dock` (`960–1280 px`).
+   - **12x12 Isometric Diamond Grid** (`tileW = 64, tileH = 32`) rendered with painter's algorithm depth sorting:
+     - Animated water shoreline ripples along the south-west edge, seeded grass variations, north forest clusters, east stone outcrops, and dirt paths radiating from the central **Town Center** to **8 fixed buildable pads**.
+   - **Hybrid Sprite + Procedural Isometric Renderer:**
+     - `sprites.js` automatically loads transparent isometric PNG sprites from `frontend/static/assets/sprites/` (generated via Gemini Pro / Antigravity at `$0` Meta API cost and background-stripped via `scripts/cutout_sprites.py`).
+     - For any sprite not yet on disk, `iso_renderer.js` draws rich multi-layered isometric buildings (stone foundations, timber framing, pitched thatched/slate roofs, soft drop shadows, era upgrades) so the game looks polished immediately.
+   - **Juicy F2P Visual Feedback:**
+     - **Construction animation:** Placing a building displays wooden scaffolding, rising dust particles, and an isometric progress bar for `build_time_sec`, finishing with a scale bounce.
+     - **Living settlement:** Ambient villagers walking along roads between the Town Center and active production buildings; chimney smoke drifting from Shelters; gentle tree sway.
+     - **Production & Harvest:** Radial/bar progress timers over production buildings, bobbing ready icons (`🍞`, `🪵`, `🪨`, `📜`), and floating `+15 Food` / `-20 Wood` text popups on click.
 
-### Day 1 (Oct 27–28): game, config, telemetry, dock
-1. Project skeleton: `pyproject.toml` (fastapi, uvicorn, pydantic>=2, playwright, pillow, python-dotenv, pytest, httpx), `backend/`, `frontend/static/`, `configs/`, `tests/`, `runs/` in `.gitignore`.
-2. `backend/schemas.py` with all models from architecture sections 4–8; `configs/budget_config.json` (buckets, per-session cap $2, global stop $140, `muse_model_id`, `worker_pool_size` 5) and `configs/experiment_config.json` (seeds `42`-`49`, three personas, `MAX_BOT_STEPS` per run type).
-3. `backend/config_service.py` + endpoints: `GET /api/config?variant=&patch_id=`, `GET /api/patches`, `POST /api/patches` (creates `proposed`, validates), `POST /api/patches/{id}/approve`, `POST /api/patches/{id}/reject`. Unapproved patch on a config or experiment request → 403.
-4. Game: `clock.js` (mulberry32, sim clock with `speed`), `game.js` (pads, resources, advisor steps, build bar, Research, achievement, honours all four lever groups, idle flag, click sequence, `__GAME_DEBUG__.getRenderedTargets()`), `main.js` (URL params, config load, event posting with `__BOT_CTX__` ids).
-5. `backend/telemetry.py` + `POST /api/events`: append to `runs/<run_id>/events.jsonl`, derive `stuck`, write `summary.json`, stream the step log to the dock (SSE or polling).
-6. `overlay.js`: Telemetry Pill and AI Director in `#right-dock`; patch diff, validation badge, Approve/Reject buttons wired to the API; yellow stub banner when `provider_mode != meta`.
+3. **Rich Strategy Gameplay (`frontend/static/game.js`, `tech_tree.js`, `clock.js`):**
+   - **Deterministic Clock & PRNG (`clock.js`):** `mulberry32(seed)` from `?seed=` and simulation clock advancing by `realDelta * speed` (`?speed=1..4`).
+   - **Onboarding Flow → Free Play → Era Upgrade:**
+     - `onb_01_shelter`: Advisor greets the player and highlights Pad 1 to build a **Shelter**.
+     - `onb_02_forager`: Advisor guides building a **Forager Hut** on Pad 2 and collecting the first Food harvest.
+     - `onb_03_handoff`: Handoff to free play — objective is to open **Research** and unlock **Basic Toolmaking** (`tech_toolmaking`). In Baseline A (`lock_optional_builds_until_step: null`, `research_button_salience: "low"`), the optional **Woodcutter Hut** is bright and unlocked while the Research button is small and muted; building the Woodcutter Hut first drains Wood from `40 -> 10` (below the `30` Wood needed for *Basic Toolmaking*), causing `action_rejected` (`insufficient_wood`) and stalling progression.
+     - `free_play` → `first_achievement`: Full early-game strategy loop culminating in researching **Stone Age Awakening** (`tech_stone_age`) and reaching `first_achievement_target_score`.
+   - **4 Resources + Population/Worker Mechanic:**
+     - Resources: **Food**, **Wood**, **Stone**, **Research Points (RP)**.
+     - **Workers / Population:** Starting workers = `starting_workers` (`2`). Each **Shelter** adds `+shelter_pop_gain` (`+2`) max workers. Production buildings (**Forager Hut**, **Woodcutter Hut**, **Stone Quarry**, **Research Academy**) require `1` available worker to operate; players can click a building to toggle worker assignment or build another Shelter when capped.
+   - **7 Building Types:**
+     1. `town_center` (pre-built central landmark; upgrades visually in *Stone Age*)
+     2. `shelter` (costs Wood; adds Population + score)
+     3. `forager_hut` (costs Wood; produces Food every `forager_cycle_sec`)
+     4. `woodcutter_hut` (optional early build; costs `optional_woodcutter_cost` Wood; produces Wood every `woodcutter_cycle_sec`)
+     5. `research_tent` (unlocks/opens Tech Tree and generates passive RP)
+     6. `stone_quarry` (unlocked by *Masonry*; costs Wood + Food; produces Stone every `quarry_cycle_sec`)
+     7. `tribal_monument` (unlocked by *Basic Toolmaking*; costs Wood + Stone; grants major score boost)
+   - **Visual Tech Tree Modal (`tech_tree.js`):**
+     - Interactive 5-node dependency graph modal:
+       1. `tech_toolmaking` (**Basic Toolmaking** — costs `research_toolmaking_wood_cost` Wood; completes `onb_03_handoff`, unlocks `tribal_monument` & Tier-2 techs)
+       2. `tech_woodworking` (**Woodworking** — costs Food; +50% Woodcutter yield)
+       3. `tech_baskets` (**Foraging Baskets** — costs Food; +50% Forager yield)
+       4. `tech_masonry` (**Masonry** — costs Wood; unlocks `stone_quarry`)
+       5. `tech_stone_age` (**Stone Age Awakening** — requires *Basic Toolmaking* + *Masonry*, costs Food + Stone; triggers **Stone Age** Era banner, upgrades Town Center visual, and grants +50 settlement score)
 
-**Day 1 done when:** manual play of `?variant=A&seed=42` with the optional hut at the handoff produces `action_rejected` and a derived `stuck`; Approve in the AI Director moves `patch_001` to `approved`; `?variant=B&patch_id=patch_001` locks optional builds and pulses Research; an unapproved patch gets 403.
+4. **F2P Strategy Chrome, In-Game Right Dock (`overlay.js`), Replay (`replay.js`), and Bot Hooks:**
+   - **Game HUD (`#game-root`):** Ornate stone/gold/parchment top bar (Era Banner, Food, Wood, Stone, RP, Free/Total Workers, Score, Speed badge `1x/2x/4x`, Config Inspector toggle `[i]`), Advisor character card with portrait and speech bubble, and bottom Build Bar with ≥16 px spacing between interactive cards for clean SAM 3.1 segmentation.
+   - **Right Dock (`#right-dock`, `320x540`, never overlaps `#game-root`):**
+     - **Telemetry Pill** (top): Current `step_id`, `Time to 1st action`, onboarding checklist (`[✓] Shelter`, `[✓] Forager`, `[ ] Research`), and `stuck_events` counter.
+     - **AI Director Panel** (collapsible below the Pill):
+       - *Live Tab*: Persona selector (`impatient_newcomer`, `first_time_casual`, `optimizer`), **`[▶ Watch Bot Play]` / `[⏸ Pause Bot]`** button (drives the game live right in the browser with the glowing cyan click ring and step-by-step thoughts using the variant-blind persona policy on Day 1–2, and connects to live Playwright/Muse Spark in `--mode meta`), seed badge, and live joined stream of game events & bot thoughts/actions.
+       - *Analyst & Designer Tab*: Stuck frame viewer with SAM outline overlay support, diagnosis summary, `patch_001.json` diff viewer, `Schema: VALID (Pydantic)` badge, and interactive **`[Approve Patch]`** / **`[Reject]`** buttons wired to `POST /api/patches/{id}/approve` and `/reject`.
+       - *A/B Summary Tab*: Paired comparison card (`where_stuck`, `time_to_first_action_sec`, `stuck_events`, `onboarding_completed`).
+   - **Replay Route (`replay.js`):** `/?replay_a=<run>&replay_b=<run>&speed=4` side-by-side synchronized playback from recorded run folders, freezing A with a red `STALLED AT onb_03_handoff` badge while B reaches `First achievement unlocked`.
+   - **Bot Synchronisation Hooks:**
+     - `window.__GAME_STATE__`: `{ ready, idle, active_animations, last_click_seq, step_id, era, resources, workers_free, workers_total, score, modal_open }` so Playwright waits for a stable frame before capturing.
+     - `window.__BOT_CTX__`: `{ bot_step_index, correlation_id }` attached to every emitted telemetry event.
+     - `window.__GAME_DEBUG__.getRenderedTargets()`: returns `{ target_id, kind, x, y, w, h, visible, locked, affordable, computed_salience }[]` in `#game-root` pixel coordinates for tests and variant-blind stub runs.
 
-### Day 2 (Oct 28–29): bot, Meta client, stubs, loop, tests
-7. `backend/meta_client.py`: provider switch, SAM 3.1 call + mark filtering (area filter, top K) + set-of-mark rendering + centroid click targets, Muse Spark call with JSON output, model id from `muse_model_id` (default `muse-spark-1.3-contributor`, standard `muse-spark-1.3` by one config change), caches keyed as in architecture section 8 with the Muse Spark cache disabled in experiment mode (SAM cache always on), `cost_ledger.jsonl` with `model_id` and `model_mode` per line and a lock so caps hold under parallel workers, buckets from `configs/budget_config.json`, `BudgetCapExceededError`, `META_CACHE_ONLY`. Key loaded from `.env` inside the app only. If the exact Meta API endpoints or SDK are unclear, put them behind one adapter function with a clear TODO and keep stub mode working; do not guess at billing-heavy calls in loops.
-8. `backend/bot_runner.py`: new `BrowserContext` and new bot memory for every session; loop and stop conditions (`MAX_BOT_STEPS` by run type: 25 `onboarding`, 100 `full_window`; `stuck_abort`; success), dock-intersection assertion, `bot_steps.jsonl`, frames, `som_masks/`, Playwright video.
-9. Stub policy: variant-blind, reads `getRenderedTargets()`, salience score with seeded tie-breaks.
-10. Agent stubs and `experiment.py`: paired `(persona, seed)` runner with one canary session, then an asyncio worker pool (`worker_pool_size`, default 5; 1 = sequential), refuses mixed provider modes or model ids, reuses an approved baseline instead of rerunning it. Writes `runs/ab_summary.json` with per-pair outcomes and paired statistics (exact McNemar + 95% CI for binary metrics; `N`, `median_delta` and paired bootstrap 95% CI for continuous metrics; stdlib, or add numpy to `pyproject.toml`; no heavy stats dependency), and `runs/voiceover_sheet.txt`.
-11. `replay.js` split-screen on one timeline; refuses non-`meta` runs unless `?dev=1`.
-12. `backend/cli.py` `run-closed-loop`: play A → analyst stub → designer stub creates `patch_001` (`proposed` → `validated`) → **asks a person to approve in the terminal or the AI Director** (never auto-approves; tests use an explicit test-only approval helper) → paired A/B → summary.
-13. README "Getting started", README Status checklist, Handoff log entry in `docs/plan.md`.
+### Out for Oct 27–29 (Moved to Oct 29+ in Muse Code)
+- `backend/meta_client.py` (live SAM 3.1 and Muse Spark API calls, caching, cost ledger).
+- `backend/bot_runner.py` (full Playwright computer-use loop) and `backend/agents/{analyst,designer,experiment}.py` (multi-agent reasoning and parallel worker pools).
+- The 3-minute demo video recording.
 
-**Day 2 done when:** `python -m backend.cli run-closed-loop --mode stub --seeds 42,43` completes and writes `ab_summary.json` (A stalls at `onb_03_handoff`, B reaches `first_achievement`); the default stub experiment (3 personas x 8 seeds, canary then 5 workers) completes and `ab_summary.json` contains N = 24 pairs and the paired statistics; one live smoke run `--mode meta --seed 42` (only if Timur has set up `.env`) writes real `som_masks/`, logs cost with model id `muse-spark-1.3-contributor`, and costs nothing on a `META_CACHE_ONLY=1` replay; `pytest` passes.
+---
+
+## Two-Day Milestones for Claude Code
+
+### Day 1 (Oct 27–28): Backend Config/Telemetry + 2.5D Isometric Engine + F2P Strategy HUD
+1. Project setup: `pyproject.toml` (`fastapi`, `uvicorn`, `pydantic>=2`, `playwright`, `pillow`, `python-dotenv`, `pytest`, `httpx`), directory layout (`backend/`, `frontend/static/`, `frontend/static/assets/sprites/`, `configs/`, `scripts/`, `tests/`), `runs/` in `.gitignore`.
+2. `backend/schemas.py`, `backend/config_service.py`, `backend/telemetry.py`, and `backend/app.py` with all config/patch/approval/event endpoints and `configs/*.json` fixtures.
+3. `scripts/cutout_sprites.py`: utility using Pillow (flood-fill / chroma-key corner background removal + alpha feathering) to turn solid-background isometric PNGs into clean transparent sprites in `frontend/static/assets/sprites/`.
+4. `frontend/static/clock.js`, `sprites.js`, and `iso_renderer.js`: 12x12 isometric diamond map, water shoreline animation, terrain props, roads, 8 building pads, hybrid sprite + multi-layered procedural isometric building renderer, scaffolding construction animation, walking villagers, chimney smoke, and floating resource popups.
+5. `frontend/static/index.html` and `styles.css`: `1280x540` layout (`960x540` `#game-root` + `320x540` `#right-dock`), stone/gold/parchment F2P strategy HUD, Advisor portrait dialog, and Build Bar with `research_button_salience` styles (`low`, `medium`, `high_pulse`).
+
+**Day 1 acceptance check:** Starting `uvicorn backend.app:app` and opening `http://localhost:8000/?variant=A&seed=42` renders the 2.5D isometric settlement with animated water, trees, roads, Town Center, walking villagers, and F2P HUD; clicking pads places scaffolding that builds into isometric structures; `GET /api/config` and `POST /api/patches/{id}/approve` work with audit logging.
+
+### Day 2 (Oct 28–29): Full Gameplay Loop, Tech Tree, AI Director Dock, Replay & Tests
+6. `frontend/static/game.js` and `tech_tree.js`:
+   - Full state machine for `onb_01_shelter` → `onb_02_forager` → `onb_03_handoff` → `free_play` → `first_achievement`.
+   - All 4 resources (Food, Wood, Stone, RP), Population/Worker assignment (`shelter` adds workers; production huts require a free worker), all 7 buildings, and the 5-node visual Tech Tree modal (`tech_toolmaking`, `tech_woodworking`, `tech_baskets`, `tech_masonry`, `tech_stone_age`).
+   - Config Inspector overlay (`[i]` button or `?inspect_config=1`) highlighting `starting_wood`, `lock_optional_builds_until_step`, `research_button_salience`, `idle_hint_delay_sec` over the live game (for 0:18–0:30 of the video script).
+   - `window.__GAME_STATE__`, `window.__BOT_CTX__`, and `window.__GAME_DEBUG__.getRenderedTargets()`.
+7. `frontend/static/overlay.js` and `replay.js`:
+   - Telemetry Pill and AI Director tabs in `#right-dock`, live event log polling/SSE, interactive `[Approve Patch]` / `[Reject]` buttons for `patch_001`, and side-by-side `/?replay_a=&replay_b=&speed=4` view.
+8. Tests (`tests/`) and documentation (`README.md` setup instructions, Handoff log in `docs/plan.md` and at the bottom of this file).
+
+**Day 2 acceptance check:**
+- Playing `?variant=A&seed=42` and clicking the unlocked Woodcutter Hut at `onb_03_handoff` drains wood, logs `action_rejected` (`insufficient_wood`) when attempting Research, and triggers a derived `stuck` event in `runs/<run_id>/events.jsonl`.
+- Clicking `[Approve Patch]` on `patch_001` in the AI Director transitions it `validated -> approved` in `audit_log.jsonl`.
+- Playing `?variant=B&patch_id=patch_001&seed=42` locks optional builds until `onb_03_handoff`, pulses the Research button (`high_pulse`), opens the 5-node Tech Tree, researches *Basic Toolmaking* → *Masonry* → *Stone Age Awakening*, upgrades the Era banner to **Stone Age**, and unlocks `first_achievement`.
+- All `pytest` tests pass.
+
+---
 
 ## Acceptance tests (`tests/`)
-- `test_config_merge_and_validation.py`: omitted keys unchanged, explicit null kept, unknown keys rejected, ranges enforced.
-- `test_human_approval_gate.py`: config/experiment with an unapproved patch → 403 / `ApprovalRequiredError`; audit log records every transition with the actor.
-- `test_unbiased_metrics.py`: changing `idle_hint_delay_sec` does not change `stuck_events` for the same event trace.
-- `test_metrics.py`: `time_to_first_action_sec`, `where_stuck`, `onboarding_completed` on fixture traces.
-- `test_stub_bot_divergence.py`: the variant-blind stub stalls on A and completes B on the same seed (Playwright, headless).
-- `test_cache_and_budget.py`: cache hit logs zero cost; bucket overflow raises `BudgetCapExceededError`; reserve needs the flag; caps hold with parallel workers.
-- `test_experiment_cache_isolation.py`: two experiment-mode sessions with an identical start (same persona, seed, frame) do not share a Muse Spark cache hit (both log `muse_cache_hit=false`), while the SAM cache may hit.
-- `test_model_config.py`: default model id is `muse-spark-1.3-contributor` with `model_mode=contributor` in the ledger; setting `muse_model_id` to `muse-spark-1.3` switches to `standard`; an experiment refuses mixed model ids.
-- `test_fresh_session_state.py`: each session gets a new `BrowserContext` (no `localStorage` carry-over) and empty bot memory.
-- `test_worker_pool.py`: canary runs first and a failing canary aborts the batch; with `worker_pool_size=5` all 24 stub sessions complete; `MAX_BOT_STEPS` is 25 for `onboarding` and 100 for `full_window`.
-- `test_paired_stats.py`: McNemar and paired bootstrap CI on fixture pairs give the expected values; `ab_summary.json` reports N.
-- `test_bot_clip_isolation.py`: no `#right-dock` element intersects the 960x540 clip.
-- `test_e2e_closed_loop_stub.py`: full loop on stubs produces `ab_summary.json`.
+- `test_config_merge_and_validation.py`: omitted keys unchanged, explicit `null` kept, unknown keys rejected, field ranges enforced.
+- `test_human_approval_gate.py`: requesting `GET /api/config?variant=B&patch_id=patch_001` before approval returns `403`; approving via `POST /api/patches/patch_001/approve` succeeds and records the transition in `audit_log.jsonl`.
+- `test_unbiased_metrics.py`: changing `idle_hint_delay_sec` does not change `stuck_events` for the same raw event trace.
+- `test_metrics.py`: `time_to_first_action_sec`, `where_stuck`, `onboarding_completed`, `first_achievement` on fixture traces.
+- `test_bot_clip_isolation.py`: Playwright test asserting `#right-dock` bounding box has `x >= 960` (zero intersection with `{x:0, y:0, width:960, height:540}`) and `window.__GAME_DEBUG__.getRenderedTargets()` returns valid coordinates inside `0..960 x 0..540` with ≥16 px separation between HUD buttons.
+- `test_game_variants_playwright.py`: headless Playwright test running the baseline failure path on Variant A (`action_rejected` + `stuck` at `onb_03_handoff`) and the full progression path on approved Variant B (`onb_01_shelter` → `onb_02_forager` → `onb_03_handoff` → Tech Tree → *Stone Age* `first_achievement`).
 
 ## Constraints (from AGENTS.md, non-negotiable)
-- **No secrets in code, logs or commits.** Read the key from `.env` inside the app. Never export `META_API_KEY` in the shell, never print it.
-- **No InnoGames material** (data, code, configs, screenshots, art). Original code and assets only.
-- **Budget:** default to `stub`; no live Meta calls in tests or loops without the budget guard; at most one live smoke run in this phase (the day-1 calibration of 3 full sessions in `docs/plan.md` is Timur's call, not part of this task). Parallel live batches only after a passing canary.
-- **Human approval gate:** nothing applies or runs a patch without `approved` status set by a person.
-- **No dashboard or Streamlit** as a feature; all loop UI lives in the in-game right dock.
-- **No invented numbers** in docs or UI; metrics only from run logs.
-- Work on a `claude/<task>` branch, small commits, keep the demo path runnable, merge to `main` only when the loop runs end to end. Update the Handoff log at the end of each session.
-- The repo will be public: clean commits and docs.
+- **No secrets in code, logs or commits.** Never export `META_API_KEY` in the shell, never print it.
+- **No InnoGames material** (data, code, configs, screenshots, art, or game titles). Original code and assets only.
+- **Human approval gate:** nothing applies a patch without `approved` status set by a human action.
+- **No standalone dashboard or Streamlit;** all loop UI lives in `#right-dock`.
+- **No invented numbers** in docs or UI; metrics come strictly from `runs/` logs.
+- Work on a `claude/<task>` branch, make clean commits, and update the Handoff log below at the end of each session.
+
+## Handoff log
+- 2026-10-27: Task re-scoped with Gemini 4 Argon to focus Claude Code's two days (Oct 27–29) on building a high-craft 2.5D isometric strategy game (*Dawn Age → Stone Age*) with 7 buildings, 4 resources + population/workers, a 5-node visual Tech Tree, F2P UI chrome, FastAPI config/patch/approval backend, unbiased telemetry, and `#right-dock` AI Director UI. Ready for Claude Code to start Day 1.

@@ -6,17 +6,22 @@ Reviewed with Gemini 4 Argon over five rounds (see [`hackathon/argon-review-log.
 
 ## 1. Goals and non-goals
 
-**Goals by the end of Oct 29**
-1. A playable, original, config-driven city-builder covering three onboarding steps (`onb_01_shelter`, `onb_02_forager`, `onb_03_handoff`) and early free play up to a first achievement.
-2. A validated config system: immutable base config plus patches, with a human approval gate.
-3. Deterministic runs: seeded randomness and a simulation clock with a speed factor.
-4. Telemetry: raw game events and bot decisions as JSONL, with metrics computed by a fixed, versioned analysis rule.
-5. A Python + Playwright bot loop using SAM 3.1 marks and Muse Spark decisions (with cache, budget guard and a stub mode).
-6. The whole loop (play → diagnose → propose → approve → rerun) running end to end on stubs, with tests.
+**Goals by the end of Oct 29 (Claude Code 2-day Game-First Sprint)**
+1. A high-craft, original, config-driven **2.5D isometric historical city-builder** covering three guided onboarding steps (`onb_01_shelter`, `onb_02_forager`, `onb_03_handoff`) and rich early free play (`free_play`: population/worker management, 4 resources, 7 building types, a 5-node visual Tech Tree modal, and an Era Upgrade from *Dawn Age* to *Stone Age* for `first_achievement`).
+2. Hybrid visual pipeline: isometric diamond grid (`12x12` tiles) with animated water shorelines, terrain props, walking villagers, scaffolding-to-building construction stages, floating resource popups, F2P strategy UI chrome (stone/gold/parchment HUD, Advisor portrait modal, Build carousel, Tech Tree modal), loading transparent PNG sprites (`frontend/static/assets/sprites/`, generated via Gemini Pro / Antigravity at `$0` Meta API cost) with rich procedural isometric Canvas/SVG fallback.
+3. A validated config system (`backend/config_service.py`): immutable base config plus flat patches, with a human approval gate and audit log.
+4. Deterministic runs: seeded randomness (`mulberry32`) and a simulation clock with a speed factor (`?speed=1..4`).
+5. Telemetry (`backend/telemetry.py`): raw game events as JSONL, with unbiased `stuck` and summary metrics computed by a fixed, versioned `AnalysisConfig`.
+6. In-game `#right-dock` (Telemetry Pill, AI Director with human Approve/Reject gate, and side-by-side Replay view) plus clean bot hooks (`window.__GAME_STATE__`, `window.__GAME_DEBUG__.getRenderedTargets()`, `window.__BOT_CTX__`) ready for the Oct 29+ Playwright + SAM 3.1 + Muse Spark pipeline.
+
+**Goals for Oct 29 – Nov 4 (Muse Code + Antigravity)**
+- Python + Playwright bot loop (`backend/bot_runner.py`) and Meta client (`backend/meta_client.py`) using SAM 3.1 marks and Muse Spark decisions (with cache, budget guard and a stub mode).
+- Persona playtesters (`first_time_casual`, `impatient_newcomer`, `optimizer`), Analyst, Designer, and Experiment agents (`backend/agents/`) running the full closed loop.
 
 **Non-goals**
 - No standalone dashboard and no Streamlit (anti-projects). Everything shows in the in-game right column.
-- No units, pathfinding, combat or isometric camera. Fixed building pads on a 2D canvas.
+- No 3D modeling / Blender pipeline: 2.5D isometric sprites + layered Canvas/DOM polish gives a strategy F2P look in a two-day window.
+- No combat or complex unit pathfinding (ambient villagers walk along fixed road/pad waypoints for visual life).
 - No runtime code changes. Runtime changes are schema-validated JSON patches only.
 - No automatic patch deployment. Every patch stops at the human approval gate.
 - No InnoGames data, code, configs or screenshots. Original code and assets only.
@@ -51,7 +56,7 @@ flowchart LR
 | Component | Location | Responsibility |
 |---|---|---|
 | Game frontend | `frontend/static/` | Settlement canvas, resource bar, advisor, build bar, Research panel, first achievement. Emits raw events. Exposes `window.__GAME_STATE__` (idle flag, click sequence) and, for stub/debug only, `window.__GAME_DEBUG__.getRenderedTargets()`. |
-| Right dock | `frontend/static/overlay.js` | **Telemetry Pill** (top: step id, time to first action, onboarding checklist) and **AI Director** panel (tabs: Live bot, Analyst and Designer with approval gate, A/B summary). Lives outside the game area. |
+| Right dock | `frontend/static/overlay.js` | **Telemetry Pill** (top: step id, time to first action, onboarding checklist) and **AI Director** panel (tabs: Live bot with `[▶ Watch Bot Play]` button and persona selector, Analyst and Designer with approval gate, A/B summary). Lives outside the game area. |
 | Replay player | `frontend/static/replay.js` | `/?replay_a=<run>&replay_b=<run>&speed=4`: side-by-side playback from recorded artifacts on one timeline, no API calls. Refuses runs whose `provider_mode` is not `meta` unless `?dev=1`. |
 | Config & patch service | `backend/config_service.py` | Loads `configs/base_config.json`, applies patches, validates with Pydantic, enforces the approval gate, writes the audit log. |
 | Telemetry sink | `backend/telemetry.py` | Appends events to `runs/<run_id>/events.jsonl`, derives `stuck` with `AnalysisConfig`, writes `summary.json`. |
@@ -77,10 +82,14 @@ configs/
     patch_001.json        # patch body + metadata + status
     audit_log.jsonl       # append-only lifecycle transitions
 frontend/static/
-  index.html  styles.css  main.js  clock.js  game.js  overlay.js  replay.js
+  index.html  styles.css  main.js  clock.js  iso_renderer.js  sprites.js
+  game.js  tech_tree.js  overlay.js  replay.js
+  assets/sprites/           # transparent isometric PNGs (buildings, terrain, advisor, icons)
+scripts/
+  cutout_sprites.py         # removes solid backgrounds from generated isometric PNGs
 backend/
   app.py  schemas.py  config_service.py  telemetry.py
-  bot_runner.py  meta_client.py  cli.py
+  bot_runner.py  meta_client.py  cli.py      # built Oct 29+ in Muse Code
   agents/  analyst.py  designer.py  experiment.py
 tests/
 runs/                     # gitignored; selected demo runs copied to runs_demo/ if needed
@@ -90,10 +99,52 @@ runs/                     # gitignored; selected demo runs copied to runs_demo/ 
   .cache/  cost_ledger.jsonl  ab_summary.json  voiceover_sheet.txt
 ```
 
+## 3b. 2.5D Isometric Engine & F2P Strategy Gameplay (`frontend/static/`)
+
+To achieve a high-craft historical F2P strategy game look (*Dawn Age → Stone Age*) in a 2-day sprint without 3D modeling:
+
+### Visual & Rendering Architecture (`iso_renderer.js`, `sprites.js`)
+- **Isometric Diamond Grid (`12x12` tiles):** Standard 2:1 isometric projection (`tileW = 64, tileH = 32`) centered in the `960x540` `#game-root` viewport.
+- **Layered Painter's Algorithm:**
+  1. **Terrain & Water Layer:** Lush grass tiles with subtle seeded color variation, river/coastline along the south-west edge with animated shoreline water ripples, forest clusters on the north edge, stone outcrops on the east edge, and cobbled/dirt road tiles connecting building pads to the central **Town Center**.
+  2. **Buildable Pads (8 fixed isometric footprints):** Clearly outlined isometric plots with warm hover/tutorial highlights so SAM 3.1 segments each pad cleanly without camera panning.
+  3. **Hybrid Sprite + Procedural Isometric Renderer:** `sprites.js` loads transparent PNG sprites from `frontend/static/assets/sprites/` (generated via Gemini Pro / Antigravity at `$0` Meta API cost and background-stripped via `scripts/cutout_sprites.py`). If any sprite is not yet on disk, `iso_renderer.js` renders a detailed multi-layered isometric structure (stone foundations, timber walls, pitched roofs, drop shadows, animated details) so the game always looks complete and sharp.
+  4. **Juicy Construction & Living World:**
+     - **Construction stages:** Placing a building spawns wooden scaffolding, rising dust particles, and an isometric progress bar for `build_time_sec`, finishing with a scale-bounce animation.
+     - **Living settlement:** Ambient villagers walk along dirt roads between the Town Center and active production buildings; chimney smoke rises from Shelters; trees sway gently.
+     - **Harvest & Feedback:** Production buildings show a radial/bar progress indicator and a bobbing collect icon (`🍞`, `🪵`, `🪨`, `📜`) when ready, plus floating `+20 Food` / `-30 Wood` combat-text popups on click.
+  5. **F2P Strategy Chrome (DOM over Canvas, spaced ≥16 px for SAM 3.1):**
+     - **Top Resource & Era HUD:** Ornate stone-and-gold bar showing **Era Banner** (*Dawn Age* → *Stone Age*), **Food**, **Wood**, **Stone**, **Research Points (RP)**, **Population (`Workers Free / Total`)**, and **Settlement Score**.
+     - **Advisor Portrait Modal:** Character portrait card (top-left) with speech bubble, active quest step, and contextual hint glow when `idle_hint_delay_sec` expires.
+     - **Bottom Build & Action Bar:** Illustrated building cards with resource cost badges, lock states, and the **Research / Tech Tree** button (whose visual style responds to `research_button_salience`: `"low"` = small muted icon-only button in the corner; `"medium"` = standard labeled card; `"high_pulse"` = large gold-bordered pulsing button with badge).
+     - **Visual Tech Tree Modal (`tech_tree.js`):** Connected node graph showing 5 technologies across two tiers:
+       1. `tech_toolmaking` (**Basic Toolmaking** — required to finish `onb_03_handoff`, unlocks Storehouse/Monument & +25% gathering).
+       2. `tech_woodworking` (**Woodworking** — reduces wood building costs by 20% and boosts Woodcutter output).
+       3. `tech_baskets` (**Foraging Baskets** — boosts Forager Hut output by +50%).
+       4. `tech_masonry` (**Masonry** — unlocks **Stone Quarry** and stone construction).
+       5. `tech_stone_age` (**Stone Age Awakening** — upgrades the settlement from *Dawn Age* to *Stone Age*, upgrades the Town Center visual, and grants a major score bonus toward `first_achievement`).
+
+### Gameplay Loop & Strategic Depth (20-Minute Window)
+- **4 Resources + Population/Workers:**
+  - **Food**, **Wood**, **Stone**, **Research Points (RP)**.
+  - **Population / Worker Assignment:** Each **Shelter** increases max population (`+2 workers`). Production buildings (**Forager Hut**, **Woodcutter Hut**, **Stone Quarry**, **Research Academy**) require `1 free worker` to operate (configurable via `worker_required_per_building`). Players/personas can build extra Shelters or toggle workers between buildings if they hit a population cap.
+- **7 Building Types:**
+  1. `town_center`: Pre-built central landmark (upgrades visually upon reaching *Stone Age*).
+  2. `shelter`: Costs Wood; provides `+2` Population and passive settlement score.
+  3. `forager_hut`: Costs Wood; produces Food every `forager_cycle_sec` (auto-harvests or click-to-harvest).
+  4. `woodcutter_hut`: Costs Wood (`optional_woodcutter_cost`) + Food; produces Wood every `woodcutter_cycle_sec`.
+  5. `research_tent`: Built or unlocked during onboarding; generates Research Points (RP) and opens the Tech Tree.
+  6. `stone_quarry`: Unlocked by *Masonry*; costs Wood + Food; produces Stone.
+  7. `tribal_monument`: Unlocked by *Basic Toolmaking*; costs Wood + Food + Stone; awards high settlement score toward `first_achievement`.
+- **Why all 3 personas behave differently over the 20-minute window:**
+  - `impatient_newcomer` (rush-clicker) clicks bright affordable build cards immediately — falling into the baseline wood trap at `onb_03_handoff` by building `woodcutter_hut` before researching *Basic Toolmaking*, or later over-building production huts without enough `shelter` population.
+  - `first_time_casual` follows the Advisor carefully, succeeds when UI salience and hints are clear, but hesitates when `research_button_salience = "low"` or when worker/stone dependencies are unclear in `free_play`.
+  - `optimizer` balances Shelter population, Wood/Food/Stone production cycles, and Tech Tree multipliers to reach *Stone Age Awakening* and `first_achievement_target_score` fastest.
+
 ## 4. Config schema and edit flow
 
 ### Schema
-A flat JSON object, so the keys in the video read exactly as in the code. Fields are grouped into four lever groups only. Defaults are design values for the baseline.
+A flat JSON object, so the keys in the video read exactly as in the code. All 12 core keys from [`video-script.md`](video-script.md) are top-level fields with additional early-play economy and population levers having safe defaults.
 
 ```python
 StepId = Literal["onb_01_shelter", "onb_02_forager", "onb_03_handoff", "free_play"]
@@ -103,18 +154,36 @@ class GameConfig(BaseModel):
     # 1. Economy
     starting_wood: int = Field(60, ge=0, le=500)
     starting_food: int = Field(40, ge=0, le=500)
+    starting_stone: int = Field(0, ge=0, le=500)
+    starting_workers: int = Field(2, ge=1, le=20)
     shelter_wood_cost: int = Field(20, ge=5, le=200)
+    shelter_pop_gain: int = Field(2, ge=1, le=10)
     forager_wood_cost: int = Field(20, ge=5, le=200)
+    forager_food_yield: int = Field(15, ge=5, le=100)
     optional_woodcutter_cost: int = Field(30, ge=5, le=200)
+    woodcutter_wood_yield: int = Field(15, ge=5, le=100)
+    quarry_wood_cost: int = Field(35, ge=5, le=200)
+    quarry_stone_yield: int = Field(15, ge=5, le=100)
+    monument_wood_cost: int = Field(40, ge=5, le=300)
+    monument_stone_cost: int = Field(25, ge=0, le=300)
     research_toolmaking_wood_cost: int = Field(30, ge=5, le=200)
+    research_woodworking_food_cost: int = Field(25, ge=5, le=200)
+    research_baskets_food_cost: int = Field(25, ge=5, le=200)
+    research_masonry_wood_cost: int = Field(35, ge=5, le=200)
+    research_stone_age_food_cost: int = Field(50, ge=10, le=300)
+    research_stone_age_stone_cost: int = Field(20, ge=0, le=300)
     # 2. Tutorial steps and locks
     lock_optional_builds_until_step: Optional[StepId] = None
+    show_worker_warnings: bool = True
     # 3. UI salience
     research_button_salience: Literal["low", "medium", "high_pulse"] = "low"
     build_button_scale: float = Field(1.0, ge=0.8, le=1.5)
     # 4. Pacing
     idle_hint_delay_sec: float = Field(15.0, ge=1.0, le=60.0)
+    build_time_sec: float = Field(2.0, ge=0.5, le=15.0)
     forager_cycle_sec: float = Field(4.0, ge=1.0, le=30.0)
+    woodcutter_cycle_sec: float = Field(5.0, ge=1.0, le=30.0)
+    quarry_cycle_sec: int | float = Field(6.0, ge=1.0, le=30.0)
     first_achievement_target_score: int = Field(100, ge=50, le=500)
 
 class GameConfigPatch(BaseModel):   # same fields, all optional, extra="forbid"
@@ -216,19 +285,26 @@ The runner clicks the centroid of the chosen mask (or `fallback_xy`), draws the 
 
 ## 9. Milestones
 
-| Day | Build | Acceptance check |
+| Phase | Build | Acceptance check |
 |---|---|---|
-| **Day 1 (Oct 27–28)** | FastAPI app and static serving; `schemas.py` (GameConfig, GameConfigPatch, AnalysisConfig, TelemetryEvent, BotStepRecord); config service with approval gate and audit log; the game with three onboarding steps, optional Woodcutter Hut, Research, first achievement; seeded clock; raw events; derived stuck; right dock with Telemetry Pill and AI Director (approval gate UI). | Manually playing `?variant=A&seed=42` and building the optional hut at the handoff yields `action_rejected` and a derived `stuck` in `events.jsonl`. Approving `patch_001` in the AI Director moves it `validated → approved`; `?variant=B&patch_id=patch_001` locks optional builds and pulses Research. Unapproved patch returns 403. |
-| **Day 2 (Oct 28–29)** | Bot runner (clip capture, set-of-mark loop, click ring, idle barrier, video and frames, fresh context per session); Meta client (configurable model id, cache with experiment mode, buckets, ledger, provider switch, cache-only mode); experiment runner (canary + worker pool, paired stats); agent stubs; replay route; CLI `run-closed-loop`; tests; README run instructions; handoff note in `docs/plan.md`. | `python -m backend.cli run-closed-loop --mode stub --seeds 42,43` runs play A → diagnose → propose `patch_001` → human approve (CLI prompt) → paired A/B rerun (canary, then worker pool) and writes `ab_summary.json` with paired statistics. The default stub experiment over 3 personas x 8 seeds also completes. One live smoke run (`--mode meta --seed 42`) writes real `som_masks/`, logs cost, and replays at zero cost from cache. `pytest` passes. |
+| **Day 1 (Oct 27–28, Claude Code)** | FastAPI app and static serving; `schemas.py`; `config_service.py` with approval gate and `audit_log.jsonl`; **2.5D Isometric Engine (`iso_renderer.js`, `sprites.js`)** with `12x12` diamond grid, animated water shoreline, roads, 8 building pads, hybrid PNG sprite loader + detailed procedural isometric fallback, scaffolding construction animation, walking villagers, floating resource popups; F2P Strategy HUD (Stone/Gold resource bar, Era Banner, Advisor portrait modal, Build carousel); `scripts/cutout_sprites.py`. | Game renders the 2.5D isometric settlement at `1280x540` (`#game-root` `960x540` + `#right-dock` `320x540`); buildings animate from scaffolding to completion; villagers walk along roads; config endpoint serves `base_config.json` and rejects unapproved patches with 403. |
+| **Day 2 (Oct 28–29, Claude Code)** | Full gameplay progression (`game.js`, `tech_tree.js`): 3 onboarding steps (`onb_01_shelter`, `onb_02_forager`, `onb_03_handoff`) + rich `free_play` (4 resources, Population/Worker assignment, 7 buildings, 5-tech visual Tech Tree modal, Era upgrade *Dawn Age → Stone Age*, `first_achievement`); `clock.js` (`mulberry32`, `?speed=1..4`); `telemetry.py` (`events.jsonl`, unbiased `stuck` derivation via `AnalysisConfig`, `summary.json`); `#right-dock` (`overlay.js`: Telemetry Pill, AI Director with Approve/Reject UI, config inspector); `replay.js` side-by-side player; bot hooks (`window.__GAME_STATE__`, `window.__GAME_DEBUG__.getRenderedTargets()`); backend & Playwright smoke tests. | Manually playing `?variant=A&seed=42` and building the optional Woodcutter Hut at `onb_03_handoff` yields `action_rejected` and a derived `stuck` in `events.jsonl`. Approving `patch_001` in the AI Director moves it `validated → approved`; `?variant=B&patch_id=patch_001` locks optional builds, pulses Research, opens the 5-node Tech Tree, and reaches *Stone Age* (`first_achievement`). `pytest` passes. |
+| **Oct 29 – Nov 4 (Muse Code + Antigravity)** | `bot_runner.py` (Playwright clip capture, set-of-mark loop, click ring, idle barrier, video/frames, fresh context); `meta_client.py` (SAM 3.1, Muse Spark contributor/standard switch, cache, budget ledger); `agents/{analyst,designer,experiment}.py` (real Muse Spark reasoning, canary + worker pool, McNemar & paired bootstrap stats in `ab_summary.json`); CLI `run-closed-loop`; live experiment batches and 3-minute demo video. | `python -m backend.cli run-closed-loop` runs play A → diagnose → propose patch → human approve → paired A/B rerun across 3 personas x 8 seeds and writes `ab_summary.json` and `voiceover_sheet.txt`. |
 
-**Tests (Day 2):** config merge and validation (explicit null, extra keys rejected, ranges); approval gate (403 on unapproved); unbiased metrics (changing `idle_hint_delay_sec` does not change `stuck_events` for the same event trace); stub divergence (the variant-blind stub stalls on A and completes B on the same seed); cache and budget buckets; no Muse cache hit shared between experiment sessions; model id default and switch; paired statistics; fresh context per session; dock does not intersect the bot clip; end-to-end closed loop on stubs.
+**Tests for the 2-Day Game Sprint (Oct 27–29):**
+- `test_config_merge_and_validation.py`: omitted keys unchanged, explicit null kept, unknown keys rejected, ranges enforced.
+- `test_human_approval_gate.py`: config request with an unapproved patch → 403 / `ApprovalRequiredError`; audit log records every transition with the actor.
+- `test_unbiased_metrics.py`: changing `idle_hint_delay_sec` does not change `stuck_events` for the same event trace.
+- `test_metrics.py`: `time_to_first_action_sec`, `where_stuck`, `onboarding_completed` on fixture traces.
+- `test_bot_clip_isolation.py`: no `#right-dock` element intersects the `960x540` game clip; `window.__GAME_DEBUG__.getRenderedTargets()` returns valid screen bounding boxes for all visible buildings, pads, HUD buttons, and Tech Tree nodes.
+- `test_game_variants_playwright.py`: headless Playwright test verifying that Variant A allows early optional builds and stalls when wood is spent before Research, while Variant B (`patch_001` approved) locks optional builds until `onb_03_handoff`, sets `high_pulse` on Research, unlocks the Tech Tree, and reaches `first_achievement`.
 
 ## 10. Risks and scope cuts
 
 | Area | Risk | Cut or fallback |
 |---|---|---|
-| Art and animation | Hours lost on sprites and animation | Five fixed pads on a simple original background, CSS glow for construction, floating `+Wood` text. |
-| Content depth | 20 minutes of real content is too much | Three onboarding steps plus a few free-play steps to the first achievement, compressed by `speed`. |
+| Isometric art & sprites | Spending Meta API credits or hours in 3D tools | Zero Blender, zero Meta API cost: generate 2.5D isometric PNG sprites via Gemini Pro / Antigravity image generator + `scripts/cutout_sprites.py`, backed by a rich multi-layered procedural isometric renderer in `iso_renderer.js`. |
+| Content depth | Shallow 3-click toy feels fake to judges | 7 buildings, 4 resources + population/worker assignment, 5-node visual Tech Tree modal, and Era Upgrade (*Dawn Age → Stone Age*) compressed cleanly by `?speed=1..4`. |
 | Baseline does not stall live | Muse Spark reads "Research" and clicks it | Icon-only, small, low-contrast Research in the baseline; bright optional hut tile; check live early. |
 | SAM noise or merges | Too many tiny masks or merged icons | Area filter, top K marks, 16 px spacing and borders, click mask centroids, cache by frame hash. |
 | Latency and rate limits | Slow batches; contributor mode is limited to 150 RPM | Canary first, pool of ~5 workers (stays under 150 RPM), back off on 429. Never record the first uncached run; record with `META_CACHE_ONLY=1`. |

@@ -4,27 +4,32 @@ Deadline: **Wed Nov 4, 9:00 PM ET (Thu Nov 5, 03:00 Berlin)**. Target a finished
 
 ## Work split between coding tools
 
-### Claude Code, Oct 26 to 29: foundations
-Claude Code access ends on Oct 29, so this phase covers the hard, structural parts.
-- [ ] Browser game with config-driven onboarding (tutorial steps, hints, pacing, difficulty) and structured event logging.
-- [ ] Meta Model API client with response caching, token and cost logging, and a hard budget cap.
-- [ ] Playtester agent skeleton: a computer-use loop (screenshot, decide, act) driving the game through Playwright.
-- [ ] Data schema for sessions, events and screenshots.
-- [ ] One end-to-end run of the loop on stubs (play, diagnose, propose, approve, rerun).
-- [ ] Tests, a clean structure, and this plan updated with a handoff note, so Muse Code can continue.
+### Claude Code, Oct 27 to 29: the game, config/telemetry contracts, and in-game AI Director UI
+Claude Code access ends on Oct 29, so these two days are dedicated to building a genuinely impressive, high-craft browser strategy game plus the exact config, telemetry, and UI contracts that the agents will plug into from Oct 29.
+- [ ] **Polished 2.5D isometric historical city-builder** in the browser (HTML5 Canvas + ES modules + F2P strategy UI chrome): 12x12 isometric diamond grid, terrain & shoreline animation, hybrid sprite loader (loads transparent isometric PNG sprites generated via Gemini Pro / Antigravity at $0 Meta API cost, with rich procedural isometric fallback), scaffolding-to-building animations, walking villagers, and floating resource popups.
+- [ ] **Real F2P strategy gameplay depth (20-minute window):**
+  - 3 onboarding steps (`onb_01_shelter`, `onb_02_forager`, `onb_03_handoff`) flowing into `free_play` and an Era Upgrade (`Dawn Age` → `Stone Age`) for `first_achievement`.
+  - 4 resources (Food, Wood, Stone, Research Points) + **Population & Worker assignment** (Shelters add population; production buildings require available workers).
+  - 7 buildings (Town Center, Shelter, Forager Hut, Woodcutter Hut, Stone Quarry, Research Academy, Tribal Monument) and a **visual Tech Tree modal with 5 technologies** (*Basic Toolmaking*, *Woodworking*, *Foraging Baskets*, *Masonry*, *Stone Age Awakening*).
+- [ ] **Config & patch service (FastAPI + Pydantic):** immutable `base_config.json` with planted onboarding & early-play friction, flat `GameConfigPatch` validation, human approval gate (`proposed -> validated -> approved/rejected`), and `audit_log.jsonl`.
+- [ ] **Telemetry & determinism:** seeded PRNG (`mulberry32`), simulation clock (`?speed=1..4`), raw event logging (`events.jsonl`), unbiased Python-side `stuck` derivation (`AnalysisConfig`), and `summary.json`.
+- [ ] **In-game right dock (`#right-dock`) & replay view:** Telemetry Pill, AI Director panel (Live trace, Analyst/Designer with human Approve/Reject buttons, A/B summary), and side-by-side replay player (`/?replay_a=&replay_b=`).
+- [ ] **Bot-ready DOM/Canvas hooks (`window.__GAME_STATE__`, `window.__GAME_DEBUG__`)** and tests for config, approval gate, and telemetry, plus a clean handoff note for Muse Code.
 
-### Muse Code, Oct 29 to Nov 4: agents, demo, polish
-Building the agent logic in Muse Code also shows our use of Meta tooling.
-- [ ] Persona playtesters and their prompts: the three experiment personas `first_time_casual`, `impatient_newcomer` (rush-clicker) and `optimizer` (see Run protocol below).
-- [ ] Analyst agent: SAM 3.1 on key screenshots, an onboarding funnel, and ranked friction points.
-- [ ] Designer agent: concrete config patches, plus the human approval gate (CLI or a simple web UI, not Streamlit).
-- [ ] Experiment agent: A/B reruns on the old and new configs, and a report on whether the fix helped.
-- [ ] Validation against our own human play sessions.
-- [ ] README with setup and run instructions, the "Status" checklist, and the 3-minute demo video.
+### Muse Code, Oct 29 to Nov 4: bot runner, Meta API client, agents, experiments, demo
+Building the computer-use loop and multi-agent pipeline in Muse Code highlights Meta tooling.
+- [ ] **Meta Model API client (`backend/meta_client.py`):** SAM 3.1 set-of-mark segmentation, Muse Spark (`muse-spark-1.3-contributor` default) structured decisions, disk caching, token/cost ledger, and hard budget caps.
+- [ ] **Playtester bot runner (`backend/bot_runner.py`):** Playwright computer-use loop (960x540 clip capture, SAM marks, Muse Spark decision, cyan click ring, video/frame recording) plus variant-blind stub mode.
+- [ ] **Persona playtesters and prompts:** `first_time_casual`, `impatient_newcomer` (rush-clicker) and `optimizer` (see Run protocol below).
+- [ ] **Analyst agent:** SAM 3.1 on key screenshots, onboarding + early-play funnel, and ranked friction points.
+- [ ] **Designer agent:** concrete config patches routed through the human approval gate in the AI Director dock or CLI.
+- [ ] **Experiment agent:** canary + parallel worker pool A/B reruns on old and new configs, paired statistical report (`ab_summary.json`), and `voiceover_sheet.txt`.
+- [ ] Validation against human play sessions, README setup instructions, and the 3-minute demo video.
 
-### Antigravity (Gemini 4 Argon, Gemini 3.8 Flash, Claude Opus 5.5 / Sonnet 5.5): whole event
+### Antigravity (Gemini 4 Argon, Gemini 3.8 Flash, Claude Opus 5.5 / Sonnet 5.5, Image Generator): whole event
 Weekly limits reset around Nov 1, so there are two full windows during the event.
-- **Gemini 4 Argon**: architecture decisions, hard debugging, and a review pass on each milestone (play loop, analyst, A/B). Also a second opinion on prompts and on the demo storyline.
+- **Asset generation ($0 Meta budget):** Use Antigravity's image generation (Gemini Pro subscription) + a Python background-removal script to produce consistent 2.5D isometric building sprites, terrain props, and advisor portraits for the game.
+- **Gemini 4 Argon**: architecture decisions, hard debugging, and a review pass on each milestone (game foundation, play loop, analyst, A/B).
 - **Claude Opus / Sonnet 5.5**: continues Claude-style work after Claude Code access ends on Oct 29, for refactors and fixes in code Claude Code wrote.
 - **Gemini 3.8 Flash**: routine edits, tests, docs and README polish, to save the stronger models' limits.
 - Muse Code remains the main tool for agent logic from Oct 29, so the Meta tooling story stays strong.
@@ -112,3 +117,4 @@ Many short, independent sessions, not one long run. One pair is a demo, not evid
 - 2026-10-27: Budget section rewritten from Meta API prices: testing-first allocation (70% playtester runs over the full 20-minute window), per-session estimates, hard caps. Measure real tokens on day 1.
 - 2026-10-27: Added run design: many short stage-gated sessions with checkpoints and early stop instead of single 20-minute runs.
 - 2026-10-27: Run protocol updated after a Gemini 4 Argon review: contributor mode as default (`muse-spark-1.3-contributor`, switchable), 3 personas x 8 seeds paired matrix, onboarding vs early-play patch types with golden checkpoints only for early-play, canary plus ~5 parallel workers, Muse Spark cache off in experiments, McNemar and paired bootstrap reporting, costs re-estimated (~$0.20 per full session).
+- 2026-10-27: Re-scoped the Oct 27–29 Claude Code sprint to focus on building a high-craft 2.5D isometric historical city-builder (12x12 isometric grid, hybrid PNG sprite + procedural isometric renderer, 7 buildings, 4 resources + population/worker assignment, 5-node visual Tech Tree, Era upgrade Dawn Age → Stone Age) plus the FastAPI config/patch service, telemetry sink, and `#right-dock` AI Director UI. Isometric sprites generated via Gemini Pro / Antigravity (`$0` Meta API credits). Playwright bot runner, Meta API client, and agents move to Oct 29+ (Muse Code).
