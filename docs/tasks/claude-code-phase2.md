@@ -61,8 +61,14 @@ Ensure all 5 classic city-builder first-20-minute friction bugs are controlled b
 5. **Post-Tutorial Pacing / Timer Wall (`free_play`, minutes 10–20):**
    - `woodcutter_cycle_sec: float = 10.0` (in `base_config.json`), `quarry_cycle_sec: float = 6.0`, `research_tent_rp_per_min: float = 20.0`. Add a second fixture patch `configs/patches/patch_002.json` (status `proposed`, targeting `free_play` pacing and `auto_close_research_on_unlock: true`) for testing multi-loop optimization.
 
-### 4. Visual & Audio Polish (`frontend/static/`)
-- **Advisor Portraits:** Render `advisor_welcome.png` (or `advisor_hint.png` when `game.hint` or `game.lastRejection` is active) inside the Advisor HUD card, with an SVG fallback if the PNG is absent.
+### 4. Character-Driven Narrator & Helper ("Elder Kaelen, Keeper of Ages") + Visual/Audio Polish (`frontend/static/`)
+- **Expressive Narrator & Onboarding Guide (`advisor_welcome.png` & `advisor_hint.png`):**
+  - Give the onboarding narrator a clear identity, name badge (**Elder Kaelen · Keeper of Ages**), and prominent character portrait (sliced from `preview_settlement_style_3.jpg` into `advisor_welcome.png` and `advisor_hint.png`).
+  - **Two presentation modes working together:**
+    1. **Story Cut-In Modal (`modal === 'welcome'` and Era celebration banners):** Shows Kaelen's large portrait (`88x88` px) alongside the ornate speech parchment and action button (`btn_advisor_ok`).
+    2. **Persistent Top-Left Narrator Medallion + Speech Bubble:** Always visible in `#game-root`, dynamically switching expressions and dialogue:
+       - **Welcoming / Proud (`advisor_welcome.png`):** Shown during normal step guidance (`onb_01_shelter`, `onb_02_forager`, `onb_03_handoff`, `free_play`) and when a building, tech, or Era upgrade completes.
+       - **Urgent / Pointing (`advisor_hint.png`):** Automatically switches to the pointing portrait with a warm amber speech bubble highlight whenever `game.hint` fires (after `idle_hint_delay_sec`) OR when `action_rejected` occurs (e.g., *"Chief, we spent our Wood on the Woodcutter Hut! We need 30 Wood for Basic Toolmaking!"* or *"We need a free Worker! Build a Shelter or tap a hut to reassign one."*).
 - **Resource-Carrying Villagers:** In `iso_renderer.js`, villagers walking from an active producer back toward the Town Center draw a tiny floating resource icon (`🍞`, `🪵`, `🪨`) above their shoulder.
 - **Procedural Web Audio SFX (`frontend/static/audio.js`):** Zero-dependency Web Audio API synthesizer (subtle wood tap on UI click, construction thud on building placement, pleasant marimba chime on harvest, warm chord fanfare on tech/era unlock, soft low tone on `action_rejected`) with a `[🔊 / 🔇]` mute toggle button in the top HUD (`btn_mute`, default muted when `?bot=1` or headless).
 
