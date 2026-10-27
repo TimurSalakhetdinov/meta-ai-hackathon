@@ -24,7 +24,12 @@ Read `docs/hackathon/rules-summary.md` first. The full page text is in `docs/hac
 - The repo will become public, so keep commits and docs clean and professional.
 
 ## Work split and plan
-See `docs/plan.md` for who builds what, the timeline and the Meta API budget. Update its "Handoff log" section at the end of each working session.
+See `docs/plan.md` for who builds what, the timeline and the Meta API budget.
+
+## Design docs
+- `docs/architecture.md`: game, config and patch flow, telemetry, bot interface, cost control, milestones.
+- `docs/video-script.md`: the 180-second demo script. Names in code must match it.
+- `docs/tasks/claude-code-build-game.md`: the build task for the game foundation (Oct 27–29). Update its "Handoff log" section at the end of each working session.
 
 ## Working with several coding tools
 Claude Code, Antigravity (Gemini / Claude models) and Muse Code all work in this repo. Git is the only shared memory between them.
