@@ -362,6 +362,9 @@ class Overlay {
     this.renderGuild();
     this.feature = await this.latestFeature();
     this.renderDecree();
+    if (this.feature && !this.feature.baseline_patch_id) {
+      document.getElementById('forge-note').textContent = 'Tip: approve patch_001 in the Council Report first so the feature stacks on the clean onboarding baseline.';
+    }
   }
 
   renderGuild() {
@@ -539,13 +542,17 @@ class Overlay {
         <button class="game-btn bronze" id="rework-btn" ${report.key === 'positive' ? 'disabled' : ''}>⚒️ Forge Feature Rework</button>
         <button class="game-btn iron" id="replay-btn" ${report.replay ? '' : 'disabled'}>\u{1F3AC} Watch Split Replay</button>
       </div>
-      <div class="note" id="rework-note"></div>`;
+      <div class="note" id="rework-note"></div>
+      <details class="onboarding-details"><summary class="section-h">Onboarding Baseline &amp; Loop (patch_001)</summary>
+        <div id="report-loop"></div><div class="section-h">Onboarding fix A/B</div><div id="report-ab"></div></details>`;
     el.querySelector('#rework-btn').addEventListener('click', () => this.rework(report.patch_id));
     el.querySelector('#replay-btn').addEventListener('click', () => {
       // Stub runs need dev=1, and the replay then labels them STUB / DEV MODE.
       const dev = report.provider_mode === 'meta' ? '' : '&dev=1';
       location.href = `/?replay_a=${encodeURIComponent(report.replay.A)}&replay_b=${encodeURIComponent(report.replay.B)}${dev}`;
     });
+    await this.renderAnalyst();
+    await this.renderAb();
   }
 
   async rework(patchId) {

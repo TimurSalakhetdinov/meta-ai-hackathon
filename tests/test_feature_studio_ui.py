@@ -60,6 +60,12 @@ def studio_url(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
         thread.join(timeout=5)
 
 
+def _expected_404(response: Any) -> bool:
+    """The onboarding section reports a missing run analysis or A/B summary as a note, not an error."""
+    url = response.url.split("?")[0]
+    return response.status == 404 and (url.endswith("/analysis") or url.endswith("/api/ab_summary"))
+
+
 @pytest.fixture(scope="module")
 def page(studio_url: str) -> Iterator[Any]:
     sync_api = pytest.importorskip("playwright.sync_api")
@@ -68,7 +74,11 @@ def page(studio_url: str) -> Iterator[Any]:
         pg = browser.new_page(viewport={"width": 1400, "height": 800})
         pg.errors = []
         pg.on("pageerror", lambda e: pg.errors.append(f"pageerror: {e}"))
-        pg.on("console", lambda m: m.type == "error" and pg.errors.append(f"console: {m.text}"))
+        # Resource failures are checked per URL below; the console line does not say which one.
+        pg.on("console", lambda m: m.type == "error" and not m.text.startswith("Failed to load resource")
+              and pg.errors.append(f"console: {m.text}"))
+        pg.on("response", lambda r: r.status >= 400 and not _expected_404(r)
+              and pg.errors.append(f"http {r.status}: {r.url}"))
         pg.goto(f"{studio_url}/?variant=A&seed=42")
         pg.wait_for_function("window.__GAME_STATE__ && window.__GAME_STATE__.ready")
         yield pg

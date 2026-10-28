@@ -282,16 +282,44 @@ function moodOf(decision, bot) {
   return 'engaged';
 }
 
+// First-use and repeat-use think-aloud lines per persona, grounded in each player type.
+const FEATURE_LINES = {
+  impatient_newcomer: [
+    (t) => `Ooo, a glowing ${t} button with a NEW! badge. I have to try it!`,
+    (t) => `${t} is back off cooldown. Mash it again for fast loot!`,
+  ],
+  curious_explorer: [
+    (t) => `Wait, what does ${t} do? Let me test this mechanic right now.`,
+    (t) => `Let's trigger ${t} one more time to see how the rewards scale.`,
+  ],
+  optimizer: [
+    (t) => `${t} converts surplus Food into Stone and RP for the Stone Age push. Optimal trade.`,
+    (t) => `Running ${t} again shaves a full cycle off the Stone Age tech requirement.`,
+  ],
+  first_time_casual: [
+    (t) => `The tutorial is finished, so it should be safe to try ${t} for the village.`,
+    (t) => `${t} helped the settlement grow. Let's send another party.`,
+  ],
+  cautious_hoarder: [
+    (t) => `I have a safe food buffer now, and ${t} refunds more than it costs.`,
+    (t) => `Stockpiles are healthy. One more safe ${t} run to top up Stone.`,
+  ],
+};
+
 function optionThought(o, bot) {
   const name = shortLabel(o.t);
   if (o.why === 'feature') {
     const title = o.t.label || name;
     if (!o.t.affordable) return `${title} looks great, but I am not sure I can afford it. Try anyway.`;
+    // Each player type voices its own reaction; unknown personas keep the generic lines.
+    const lines = FEATURE_LINES[bot.persona?.persona_id];
     if (bot.featureUses === 0) {
+      if (lines) return lines[0](title);
       return o.t.computed_salience === 'high_pulse'
         ? `Ooo, a glowing ${title} button with a NEW! badge. I have to try it!`
         : `A new ${title} button. Let me see what it does.`;
     }
+    if (lines) return lines[1](title);
     return `${title} paid off last time. Use it again.`;
   }
   if (o.why === 'harvest') return `A harvest icon is bobbing over the ${pretty(o.t.label)}. Collect it.`;

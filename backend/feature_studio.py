@@ -372,6 +372,9 @@ def stub_rework(plugin: dict[str, Any], report: dict[str, Any]) -> dict[str, Any
         if plugin.get("unlock_at_step") != "free_play":
             notes.append(f"move unlock_at_step from {plugin.get('unlock_at_step')} to free_play")
             new["unlock_at_step"] = "free_play"
+            if plugin.get("button_salience") == "high_pulse":
+                new["button_salience"] = "medium"
+                notes.append("tone down button_salience from high_pulse to medium")
         # Stone Age needs Masonry (35 Wood), then 50 Food, 20 Stone and 10 RP. Wood is the Masonry
         # bottleneck, so pay a little food, which the Forager refills fastest and the reward refunds.
         old_costs = plugin.get("costs") or {}
