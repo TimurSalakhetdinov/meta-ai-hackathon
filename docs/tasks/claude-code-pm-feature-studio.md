@@ -6,14 +6,14 @@ Instead, the product is an **Agentic Feature Prototyping & Playtesting Studio fo
 - **Baseline A is a clean, working F2P historical strategy game** (where players/personas smoothly complete onboarding `onb_01_shelter -> onb_02_forager -> onb_03_handoff` and progress into `free_play`).
 - **The Problem We Solve:** A Game Product Manager (PM) or Game Designer has ideas for **new features** (e.g., *"Add a Raider Ambush Battle in Step 2"*, *"Add a Wandering Wood Merchant"*, *"Add a Royal Tax Collector"*, *"Add a Harvest Festival Boost"*). Normally, testing whether a feature idea **improves or hurts early retention** takes weeks of engineering and live A/B traffic.
 - **The Agentic Closed Loop:**
-  1. **Ideate (PM Feature Chat in `#right-dock`):** The PM types any new feature idea in plain English into a clean chat input on the game screen — **no preset chips or canned buttons**, because real new feature ideas come from open-ended text input.
+  1. **Ideate (PM Feature Chat in `#right-dock`):** The PM types any new feature idea in plain English into a clean chat input on the game screen - **no preset chips or canned buttons**, because real new feature ideas come from open-ended text input.
   2. **Prototype (`FeaturePlugin` + `GameConfigPatch` + Human Approval Gate):** The Feature Architect Agent (Muse Spark when live; smart natural-language feature parser in offline/stub mode) synthesizes a structured `FeaturePlugin` + config patch (and optional **Muse Image** button emblem) directly from the PM's text, previews the diff, and waits for the PM to click **`[✔ Approve & Inject Feature into Variant B]`**.
   3. **Playtest (Select Persona Bots & Run A/B):** The PM selects which persona bots should test the new feature and runs them against the new feature variant.
-  4. **Diagnose (Executive Playtest Report — `Ship It / Rework Needed / Hurts Onboarding`):**
+  4. **Diagnose (Executive Playtest Report - `Ship It / Rework Needed / Hurts Onboarding`):**
      - **Verdict Badge:**
-       - `❌ HURTS ONBOARDING — DO NOT SHIP AS-IS` (e.g., unlocking a flashy *Raider Ambush Battle* during `onb_02_forager` that costs `25 Wood` distracts `impatient_newcomer` and drains the wood needed for *Basic Toolmaking*, dropping onboarding completion from `100% -> 17%`!).
-       - `⚠️ MIXED IMPACT — REWORK RECOMMENDED` (e.g., feature is ignored because salience is too low or cost is unbalanced).
-       - `✅ POSITIVE IMPACT — SHIP IT` (e.g., unlocking the *Raider Ambush Battle* at `free_play` costing `20 Food` for `+6 RP & +15 Stone` keeps onboarding at `100%`, eliminates free-play timer dead-air, and boosts Stone Age progression!).
+       - `❌ HURTS ONBOARDING - DO NOT SHIP AS-IS` (e.g., unlocking a flashy *Raider Ambush Battle* during `onb_02_forager` that costs `25 Wood` distracts `impatient_newcomer` and drains the wood needed for *Basic Toolmaking*, dropping onboarding completion from `100% -> 17%`!).
+       - `⚠️ MIXED IMPACT - REWORK RECOMMENDED` (e.g., feature is ignored because salience is too low or cost is unbalanced).
+       - `✅ POSITIVE IMPACT - SHIP IT` (e.g., unlocking the *Raider Ambush Battle* at `free_play` costing `20 Food` for `+6 RP & +15 Stone` keeps onboarding at `100%`, eliminates free-play timer dead-air, and boosts Stone Age progression!).
      - **What Playtesters Thought (Think-Aloud Quotes & Moods):** First-person quotes from each persona (`thought` + `player_mood: engaged | curious | confused | frustrated | bored`), e.g.:
        - 🏃 *Impatient Newcomer (`frustrated`):* *"Ooo, a glowing Raider Battle button! I clicked it in Step 2, spent 25 Wood fighting raiders, and now I only have 15 Wood left and can't afford Basic Toolmaking!"*
        - 🌱 *First-Time Casual (`confused`):* *"Elder Kaelen told me to gather berries, why is a battle icon flashing at me? I got sidetracked."*
@@ -21,7 +21,7 @@ Instead, the product is an **Agentic Feature Prototyping & Playtesting Studio fo
      - **Where They Got Stuck:** SAM 3.1 visual segmentation snapshot + A vs. B funnel metrics.
   5. **Rework & Verify (Designer Agent → Variant C):**
      - When a feature verdict is `❌ HURTS ONBOARDING` or `⚠️ MIXED IMPACT`, the Designer Agent proposes a concrete **Feature Rework Patch** (e.g., *"Move `unlock_at_step` from `onb_02_forager` to `free_play` and change cost from `25 Wood` to `20 Food`"*).
-     - The PM clicks **`[✔ Approve Rework & Retest]`**, and the A/B rerun verifies that the reworked feature turns into `✅ POSITIVE IMPACT — SHIP IT`.
+     - The PM clicks **`[✔ Approve Rework & Retest]`**, and the A/B rerun verifies that the reworked feature turns into `✅ POSITIVE IMPACT - SHIP IT`.
 
 ## Hard Budget Rule for This Build Phase (`$0.00` Meta API Spend)
 - **Do NOT make any live Meta API calls during this build and test phase.**
@@ -76,15 +76,15 @@ In `frontend/static/game.js` & `main.js`:
 ### 3. Five Literature-Backed Playtester Personas (`configs/personas.json`)
 Expand `configs/personas.json` to **5 playtester personas** grounded in published game studies and UX research (**Bartle's Player Taxonomy, 1996**; **BrainHex, Nacke et al., 2014**; **Quantic Foundry Gamer Motivation Model, Yee, 2015**). Keep the first 3 IDs identical so existing tests stay 100% compatible:
 
-1. `impatient_newcomer` — **Rush-Clicker (Action / Impulse · BrainHex *Daredevil*)**:
+1. `impatient_newcomer` - **Rush-Clicker (Action / Impulse · BrainHex *Daredevil*)**:
    - Skips tutorial text, clicks high-salience pulsing buttons (`⚔️`, `NEW!`), hates idle timers. Catches shiny-button distractions and premature resource drains.
-2. `first_time_casual` — **Story-Guided Newcomer (Immersion · Bartle *Roleplayer* / Quantic *Story*)**:
+2. `first_time_casual` - **Story-Guided Newcomer (Immersion · Bartle *Roleplayer* / Quantic *Story*)**:
    - Follows Elder Kaelen's dialogue and arrows carefully, but gets confused when arrows vanish or modals block the map. Catches low button salience and modal traps.
-3. `optimizer` — **Min-Max Strategist (Mastery · Bartle *Achiever* / Quantic *Strategy*)**:
+3. `optimizer` - **Min-Max Strategist (Mastery · Bartle *Achiever* / Quantic *Strategy*)**:
    - Calculates resource/worker ROI, upgrades production early, and ignores features with bad payoff. Catches unbalanced feature economies and worker bottlenecks.
-4. `curious_explorer` — **Feature Tinkerer (Discovery · Bartle *Explorer* / Quantic *Discovery*)**:
+4. `curious_explorer` - **Feature Tinkerer (Discovery · Bartle *Explorer* / Quantic *Discovery*)**:
    - Immediately tests any newly unlocked feature button, modal, or map node out of curiosity (`curious`), even mid-quest. Catches side-features that accidentally derail tutorial progression when explored once.
-5. `cautious_hoarder` — **Resource Turtle (Security / Completion · Quantic *Completion* / F2P *Hoarder*)**:
+5. `cautious_hoarder` - **Resource Turtle (Security / Completion · Quantic *Completion* / F2P *Hoarder*)**:
    - Over-harvests (`harvest: 0.95`, `wait_when_unsure: 0.7`) and hesitates to spend scarce Wood/Stone on unfamiliar buttons unless guided. Catches features with unclear value propositions or high perceived risk.
 
 ### 4. In-World F2P Strategy Design for the Game Manager Menu (`#right-dock` in `styles.css` & `overlay.js`)
@@ -95,19 +95,19 @@ Expand `configs/personas.json` to **5 playtester personas** grounded in publishe
   - **Parchment Scroll Input (No Presets):** The free-text feature input is styled like an **illuminated parchment scroll** (warm cream/parchment background `#f4ead2`, dark ink serif text, subtle inner shadow, gold corner accents) with a bevelled emerald-and-gold game button (**`✦ Forge Feature Variant`**).
   - **Feature Decree Card & Approval Gate:** Styled like an in-game **Royal Decree / Building Scroll** showing the feature's icon medallion, title, unlock era/step, resource cost/reward badges (using the game's `🍞 🪵 🪨 📜` badges), a gold `✔ Validated` seal, and bevelled game buttons (**`✔ Approve Decree`** / **`✖ Dismiss`**).
   - **5-Persona Guild Medallion Selector (No raw HTML checkboxes):** Render the 5 literature-backed personas as **clickable in-game character/guild cards** with gold-rimmed active states, archetype emblem (`⚡ Rush-Clicker`, `📖 Story-Guided`, `⚖️ Strategist`, `🧭 Tinkerer`, `🛡️ Hoarder`), and literature subtitle (*Bartle Explorer*, *Quantic Mastery*), followed by a prominent gold-and-amber **`▶ Summon Playtesters`** button.
-- **Tab 2: `🏛️ Council Report` — Concise 1-Page Executive Scroll (Fits on One Screen, Zero Clutter):**
+- **Tab 2: `🏛️ Council Report` - Concise 1-Page Executive Scroll (Fits on One Screen, Zero Clutter):**
    The report must be a tight, well-written **single-page parchment & stone campaign card** (no long scrolling walls of text) with 4 compact blocks:
-   - **Block 1 — Embossed Verdict Seal + 1-Sentence Takeaway:**
-     - Game-styled crest banner: `✅ POSITIVE IMPACT — SHIP IT` (emerald & gold) | `⚠️ MIXED IMPACT — REWORK RECOMMENDED` (amber & bronze) | `❌ HURTS ONBOARDING — DO NOT SHIP AS-IS` (crimson & iron).
+   - **Block 1 - Embossed Verdict Seal + 1-Sentence Takeaway:**
+     - Game-styled crest banner: `✅ POSITIVE IMPACT - SHIP IT` (emerald & gold) | `⚠️ MIXED IMPACT - REWORK RECOMMENDED` (amber & bronze) | `❌ HURTS ONBOARDING - DO NOT SHIP AS-IS` (crimson & iron).
      - One crisp sentence explaining why (e.g., *"Unlocking Raider Battle in Step 2 drains starter Wood and drops onboarding completion from 100% to 20%."*).
-   - **Block 2 — 3-Metric Stone Plaque Strip (1 compact row):**
+   - **Block 2 - 3-Metric Stone Plaque Strip (1 compact row):**
      - Three carved stone stat plaques: `Onboarding`: `A → B` | `Stuck Events`: `A → B` | `Stone Age / Score`: `A → B`.
-   - **Block 3 — Persona Think-Aloud Scroll Quotes (1 short quote + mood badge per tested persona):**
+   - **Block 3 - Persona Think-Aloud Scroll Quotes (1 short quote + mood badge per tested persona):**
      - Styled like mini speech scrolls with persona emblem and mood pill:
      - e.g. `⚡ Rush-Clicker [😤 frustrated]:` *"Clicked the pulsing Battle button in Step 2, spent 25 Wood, and couldn't afford Toolmaking."*
      - e.g. `📖 Story-Guided [🤔 confused]:` *"Got sidetracked by the battle icon before finishing the Forager quest."*
      - e.g. `⚖️ Strategist [🔥 engaged]:` *"Strong RP reward, but needs to unlock after Toolmaking."*
-   - **Block 4 — Bottom Bevelled Action Row:**
+   - **Block 4 - Bottom Bevelled Action Row:**
      - **`[⚒️ Forge Feature Rework]`** (stages the Designer Agent's reworked config behind the Human Approval Gate) + **`[🎬 Watch Split Replay]`**.
 3. **Tab 3: `Live Stream`:**
    - Existing live event & Think-Aloud stream + `[▶ Watch Bot Play]`.
@@ -122,3 +122,9 @@ Expand `configs/personas.json` to **5 playtester personas** grounded in publishe
   - The NEW! pulse clears after the first use, so stub bots no longer spam the feature button.
   - Real stub playtest (5 personas, seed 42, full window): Raider Ambush at step 2 and its free-play rework both read HURTS. Each time one of five personas lost Stone Age (40% to 20%, McNemar p = 1.00). That is noise at n = 5; the clean HURTS then POSITIVE story is shown only by the unit test with a deterministic fake session.
   - Next: run more seeds before trusting a studio verdict, then a first small live run in meta mode.
+- 2026-10-28 (Claude Code, `claude/pm-feature-studio`): The real stub playtest (5 personas, seed 42, full window, $0) now tells the HURTS then POSITIVE story without a fake session.
+  - A cost named without a number ("costs wood") defaults to 55 Wood for an early feature and 25 Wood in free play. On top of `patch_001` (120 Wood), Shelter, Forager Hut and the feature leave 25 Wood, below the 30 that Toolmaking needs.
+  - Stub bot: in steps 2 and 3, a pulsing NEW! feature can pull a distractible persona away from the tutorial arrow. Distractibility is `salience_weight * (1 - follow_tutorial)` or `curiosity`, whichever is higher; planners never take it. In free play before Stone Age, bots use an affordable feature up to twice.
+  - The designer rework moves the feature to free play, costs 10 Food and rewards 25 Food, 15 Stone, 6 RP and 25 score, with a 15 s cooldown. A 15 Wood cost was tried first and still read HURTS (Stone Age 40% to 0%): Stone Age needs Masonry (35 Wood), so wood is not a surplus in free play.
+  - Result: naive Raider Ambush at step 2 is HURTS (onboarding 100% to 60%, Stone Age 40% to 0%, McNemar p = 0.50). The rework is POSITIVE (onboarding 100% to 100%, Stone Age 40% to 40%, score 145 to 212).
+  - Known issue: n = 5 at one seed, and the bot rules above were tuned with this scenario in mind. Run more seeds before treating a verdict as evidence.
