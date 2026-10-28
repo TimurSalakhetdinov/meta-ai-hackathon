@@ -11,3 +11,6 @@ configs/patches/audit_log.jsonl
 *.egg-info/
 test-results/
 frontend/static/assets/generated/
+
+# Local agent handover notes
+docs/HANDOFF.md
