@@ -45,8 +45,9 @@ class DecisionRequest(BaseModel):
 
 
 class FeatureProposeRequest(BaseModel):
-    prompt: str
+    prompt: str = ""
     mode: Literal["stub", "meta"] = "stub"
+    preset_id: Optional[str] = None
 
 
 class PlaytestRequest(BaseModel):
@@ -235,9 +236,22 @@ def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = No
     def studio_propose(req: FeatureProposeRequest):
         try:
             return feature_studio.propose_feature(req.prompt, configs_dir=configs_dir, client=studio_client(req.mode),
-                                                  generated_dir=app.state.generated_dir)
+                                                  generated_dir=app.state.generated_dir, preset_id=req.preset_id)
         except ValueError as exc:
             raise HTTPException(400, str(exc))
+
+    @app.get("/api/feature_studio/presets")
+    def studio_presets():
+        """Prebuilt feature ideas for the Game Manager menu, with the plugin fields a card shows."""
+        return [{**{k: p[k] for k in ("preset_id", "label", "icon", "summary", "prompt", "recorded_from")},
+                 **{k: p["plugin"][k] for k in ("unlock_at_step", "costs", "rewards")}}
+                for p in feature_studio.load_presets(configs_dir)]
+
+    @app.get("/api/feature_studio/status")
+    def studio_status():
+        """Whether a custom idea goes to live Muse Spark or the offline stub designer."""
+        client = studio_client("stub")
+        return {"meta_ready": bool(os.environ.get("META_API_KEY")), "muse_model_id": client.muse_model_id}
 
     @app.post("/api/feature_studio/playtest", status_code=202)
     def studio_playtest(req: PlaytestRequest):
@@ -269,8 +283,15 @@ def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = No
         job = jobs.get(job_id)
         if job is None:
             raise HTTPException(404, f"Unknown job {job_id}")
-        started = sum(1 for line in job["log"] if line.startswith(("start ", "canary ")))
-        return {**{k: v for k, v in job.items() if k != "log"}, "sessions_started": started}
+        started = [line.split(" ", 1)[1] for line in job["log"] if line.startswith(("start ", "canary "))]
+        done = {line.split(" ", 1)[1] for line in job["log"] if line.startswith("done ")}
+        sessions = []
+        for run_id in started:
+            last = (studio_bot_steps(run_id) or [{}])[-1] if run_id in done else {}
+            sessions.append({"run_id": run_id, "state": "done" if run_id in done else "playing",
+                             "thought": last.get("thought"), "mood": last.get("player_mood")})
+        return {**{k: v for k, v in job.items() if k != "log"}, "sessions_started": len(started),
+                "sessions": sessions}
 
     def studio_bot_steps(run_id: str) -> list[dict[str, Any]]:
         """Think-aloud lines, live first, then the committed demo bundle."""

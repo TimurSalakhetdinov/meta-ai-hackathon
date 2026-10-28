@@ -240,6 +240,7 @@ class Experiment:
             canary_pair, canary_arm, canary_spec = jobs[0]
             self.log.append(f"canary {canary_spec.run_id}")
             canary = await run_spec(canary_spec, canary_arm)
+            self.log.append(f"done {canary_spec.run_id}")
             if result_failed(canary):
                 raise CanaryFailedError(f"canary {canary_spec.run_id} failed: {canary.stop_reason} {canary.error}")
             results[(canary_pair, canary_arm)] = canary
@@ -250,6 +251,7 @@ class Experiment:
                 async with sem:
                     self.log.append(f"start {spec.run_id}")
                     results[(pair, arm)] = await run_spec(spec, arm)
+                    self.log.append(f"done {spec.run_id}")
 
             await asyncio.gather(*(worker(*job) for job in jobs[1:]))
 

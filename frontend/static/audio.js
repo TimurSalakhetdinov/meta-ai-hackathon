@@ -2,9 +2,9 @@
 //
 // Features:
 // 1. Dual-Engine Background Music System (`setMusicTheme('valley' | 'battle')`):
-//    - Primary: Plays seamless stereo soundtracks from `/static/assets/audio/valley_theme.wav`
-//      and `/static/assets/audio/battle_theme.wav`.
-//    - Fallback & Procedural Layer: Fully autonomous Web Audio physical modeling step sequencer
+//    - Primary: Decodes `/static/assets/audio/valley_theme.wav` and `battle_theme.wav` into
+//      Web Audio buffers with a crossfaded loop point and plays them gaplessly.
+//    - Fallback (only when the wavs fail to load): Fully autonomous Web Audio physical modeling step sequencer
 //      (plucked lyre/harp, breathy pan-flute, warm string pad, waterfall ambience for 'valley';
 //       driving Taiko war drums, rim clicks, 16th-note staccato strings & brass stabs for 'battle').
 //    - Smooth 0.85s crossfading between themes.
@@ -39,6 +39,10 @@ export class Sfx {
     this.musicTimer = null;
     this.audioFilesAvailable = false;
     this.audioElements = { valley: null, battle: null };
+    // Decoded soundtrack loops played gaplessly through Web Audio.
+    this.musicBuffers = { valley: null, battle: null };
+    this.musicSources = { valley: null, battle: null };
+    this.musicLoad = 'idle'; // 'idle' | 'loading' | 'ready' | 'failed'
 
     // Procedural Sequencer Timers
     this.nextValleyBeatTime = 0;
@@ -101,8 +105,8 @@ export class Sfx {
     // Build 2-second shared white noise buffer for procedural transient layers
     this._buildNoiseBuffer();
 
-    // Prepare audio track elements for wav playback
-    this._initAudioElements();
+    // Decode the soundtrack wavs into gapless, crossfaded loop buffers
+    this._loadMusicBuffers();
 
     // Auto-start background music on first user initialization if not muted
     if (!this.muted && !this.musicRunning) {
@@ -124,34 +128,68 @@ export class Sfx {
     this.noiseBuffer = buffer;
   }
 
-  _initAudioElements() {
-    if (typeof window === 'undefined' || typeof window.Audio !== 'function') return;
+  _loadMusicBuffers() {
+    if (this.musicLoad !== 'idle' || typeof fetch !== 'function') return;
+    this.musicLoad = 'loading';
+    const load = (theme) => fetch(AUDIO_BASE + `${theme}_theme.wav`)
+      .then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+      .then((data) => new Promise((ok, fail) => this.ctx.decodeAudioData(data, ok, fail)))
+      .then((buf) => { this.musicBuffers[theme] = this._seamlessLoop(buf, 2.0); });
+    Promise.all([load('valley'), load('battle')])
+      .then(() => {
+        this.musicLoad = 'ready';
+        if (this.musicRunning) this._startMusicSources();
+      })
+      .catch(() => {
+        this.musicLoad = 'failed';
+        if (this.musicRunning) this._startValleyWaterfall();
+      });
+  }
 
-    try {
-      const vAudio = new window.Audio();
-      vAudio.src = AUDIO_BASE + 'valley_theme.wav';
-      vAudio.loop = true;
-      vAudio.volume = this.muted ? 0 : (this.musicTheme === 'valley' ? 0.70 : 0.0);
+  // MusicGen clips fade in and out and do not loop cleanly. Fold the last
+  // `fadeSec` of the clip over its start with an equal-power crossfade, so the
+  // loop point is continuous and there is no dip or click every cycle.
+  _seamlessLoop(buf, fadeSec) {
+    const fade = Math.min(Math.floor(fadeSec * buf.sampleRate), Math.floor(buf.length / 4));
+    const len = buf.length - fade;
+    const out = this.ctx.createBuffer(buf.numberOfChannels, len, buf.sampleRate);
+    for (let c = 0; c < buf.numberOfChannels; c++) {
+      const src = buf.getChannelData(c);
+      const dst = out.getChannelData(c);
+      dst.set(src.subarray(0, len));
+      for (let i = 0; i < fade; i++) {
+        const k = i / fade;
+        dst[i] = src[i] * Math.sin(k * Math.PI / 2) + src[len + i] * Math.cos(k * Math.PI / 2);
+      }
+    }
+    return out;
+  }
 
-      const bAudio = new window.Audio();
-      bAudio.src = AUDIO_BASE + 'battle_theme.wav';
-      bAudio.loop = true;
-      bAudio.volume = this.muted ? 0 : (this.musicTheme === 'battle' ? 0.70 : 0.0);
+  _startMusicSources() {
+    if (!this.ctx) return;
+    for (const theme of ['valley', 'battle']) {
+      if (this.musicSources[theme] || !this.musicBuffers[theme]) continue;
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.musicBuffers[theme];
+      src.loop = true;
+      src.connect(theme === 'valley' ? this.valleyGain : this.battleGain);
+      src.start();
+      this.musicSources[theme] = src;
+    }
+  }
 
-      vAudio.addEventListener('canplaythrough', () => { this.audioFilesAvailable = true; }, { once: true });
-      bAudio.addEventListener('canplaythrough', () => { this.audioFilesAvailable = true; }, { once: true });
-
-      vAudio.addEventListener('error', () => { this.audioFilesAvailable = false; });
-      bAudio.addEventListener('error', () => { this.audioFilesAvailable = false; });
-
-      this.audioElements = { valley: vAudio, battle: bAudio };
-    } catch (e) {
-      this.audioFilesAvailable = false;
+  _stopMusicSources() {
+    for (const theme of ['valley', 'battle']) {
+      try { this.musicSources[theme]?.stop(); } catch (e) { /* already stopped */ }
+      this.musicSources[theme] = null;
     }
   }
 
   toggle() {
     this.muted = !this.muted;
+    // Unmuting is a user gesture: create or resume the AudioContext here, since
+    // a context made earlier outside a gesture stays suspended in Chrome/Safari.
+    if (!this.muted) this._init();
     if (this.ctx && this.masterGain) {
       const t = this.ctx.currentTime;
       this.masterGain.gain.cancelScheduledValues(t);
@@ -177,6 +215,7 @@ export class Sfx {
     if (!this.muted && !this.musicRunning) {
       this.startMusic();
     }
+    if (!this.muted) this.play('click');
     return this.muted;
   }
 
@@ -255,6 +294,7 @@ export class Sfx {
     if (!ctx) return;
 
     this.musicRunning = true;
+    this._startMusicSources();
 
     // Start Audio Element playback if available
     const activeEl = this.musicTheme === 'valley' ? this.audioElements.valley : this.audioElements.battle;
@@ -272,7 +312,7 @@ export class Sfx {
     this.nextBattleStepTime = now;
     this.battleStep = 0;
 
-    this._startValleyWaterfall();
+    if (this.musicLoad === 'failed') this._startValleyWaterfall();
 
     // Lookahead loop scheduler (runs every 60ms)
     const scheduleLoop = () => {
@@ -289,6 +329,7 @@ export class Sfx {
       clearTimeout(this.musicTimer);
       this.musicTimer = null;
     }
+    this._stopMusicSources();
     if (this.audioElements.valley) this.audioElements.valley.pause();
     if (this.audioElements.battle) this.audioElements.battle.pause();
     this._stopValleyWaterfall();
@@ -300,8 +341,9 @@ export class Sfx {
     const currentTime = this.ctx.currentTime;
 
     // If audio file is actively playing with volume, procedural notes can remain silent or layer subtly
-    const audioFileActive = (this.audioElements.valley && !this.audioElements.valley.paused && this.audioElements.valley.volume > 0.05) ||
-                            (this.audioElements.battle && !this.audioElements.battle.paused && this.audioElements.battle.volume > 0.05);
+    // The procedural sequencer is only a fallback when the soundtrack files fail
+    // to load; layering it over the recorded loops sounds like stray notes.
+    const audioFileActive = this.musicLoad !== 'failed';
 
     // Schedule Valley Theme if active
     if (this.valleyGain && this.valleyGain.gain.value > 0.001) {

@@ -21,28 +21,54 @@ const MOOD_ICON = { frustrated: '\u{1F624}', confused: '\u{1F914}', engaged: '\u
 const STEP_LABEL = { onb_01_shelter: 'Step 1 · Shelter', onb_02_forager: 'Step 2 · Forager',
   onb_03_handoff: 'Step 3 · Handoff', free_play: 'After the tutorial' };
 
+const STEPS = [[1, 'Forge'], [2, 'Approve'], [3, 'Playtest'], [4, 'Report']];
+
 export function initOverlay(ctx) {
   const dock = ctx.dock;
+  // Humans get a slide-out panel over the map; bots keep the fixed side dock.
+  const slide = document.body.classList.contains('slide-dock');
   dock.innerHTML = `
-    <div class="council-crest"><span class="crest-gem">✦</span>ARCHITECT'S COUNCIL · AI PLAYTEST STUDIO</div>
+    <div class="council-head">
+      <div class="council-title"><span class="crest-gem">✦</span> AI Playtest Studio
+        <small>Test a feature idea on AI playtesters before real players see it</small></div>
+      ${slide ? '<button class="council-close" id="council-close" aria-label="Close the studio">✕</button>' : ''}
+    </div>
     <div class="pill" id="pill">
       <div class="pill-row"><span class="step" id="pill-step">-</span>
-        <span class="badge variant-${ctx.params.variant}" id="pill-variant">${ctx.params.variant}${ctx.params.patchId ? ` · ${esc(ctx.params.patchId)}` : ''}</span>
-        <span class="muted" title="Server-derived stuck events">stuck <span class="stuck-count" id="pill-stuck">0</span></span></div>
-      <div class="pill-row"><span class="checklist" id="pill-check"></span><span class="muted">1st action <b id="pill-ttfa">-</b></span></div>
+        <span class="badge variant-${ctx.params.variant}" id="pill-variant" title="Game variant">${ctx.params.variant}${ctx.params.patchId ? ` · ${esc(ctx.params.patchId)}` : ''}</span>
+        <span class="muted" title="Stuck events the server detected in this session">Stuck <span class="stuck-count" id="pill-stuck">0</span></span></div>
+      <div class="pill-row"><span class="checklist" id="pill-check"></span><span class="muted">First click <b id="pill-ttfa">-</b></span></div>
     </div>
+    <nav class="stepper" id="stepper" aria-label="Studio steps">
+      ${STEPS.map(([n, label]) => `<button class="step-btn" data-step="${n}"><b>${n}</b>${label}</button>`).join('')}
+    </nav>
     <div class="director" id="director">
-      <div class="tabs" role="tablist">
-        <button class="tab active" data-tab="forge" role="tab">\u{1F4DC} Feature Forge</button>
-        <button class="tab" data-tab="report" role="tab">\u{1F3DB}️ Council Report</button>
-        <button class="tab" data-tab="live" role="tab">\u{1F441}️ Live Chronicle</button>
-      </div>
       <div class="tab-body" id="tab-forge"></div>
       <div class="tab-body" id="tab-report" hidden></div>
       <div class="tab-body" id="tab-live" hidden></div>
-    </div>`;
+    </div>
+    <button class="live-link" id="live-link">\u{1F441}️ Live event stream</button>`;
 
   const ui = new Overlay(ctx);
+  if (slide) {
+    const toggle = document.createElement('button');
+    toggle.id = 'council-toggle';
+    toggle.innerHTML = '<span>✦</span> AI Studio';
+    toggle.title = 'Open the AI Playtest Studio';
+    document.getElementById('app').appendChild(toggle);
+    const setOpen = (open) => {
+      dock.classList.add('anim');
+      dock.classList.toggle('open', open);
+      toggle.hidden = open;
+    };
+    toggle.addEventListener('click', () => setOpen(true));
+    document.getElementById('council-close').addEventListener('click', () => setOpen(false));
+    ui.setOpen = setOpen;
+    if (ctx.params.dock || ctx.blocked) setOpen(true);
+    // A plain visit opens on the Game Manager menu; links with a variant, patch or dock go straight in.
+    const q = new URLSearchParams(location.search);
+    if (!['variant', 'patch_id', 'dock', 'play'].some((k) => q.has(k))) ui.openManager();
+  }
   return { update: () => ui.update() };
 }
 
@@ -63,13 +89,19 @@ class Overlay {
     // Emblem source per patch_id. Only a Muse Image emblem is labelled as one.
     this.emblemSource = {};
 
-    document.querySelectorAll('#director .tab').forEach((b) => b.addEventListener('click', () => this.showTab(b.dataset.tab)));
+    this.step = 1;
+    this.tab = 'forge';
+    this.slide = document.body.classList.contains('slide-dock');
+    document.querySelectorAll('#stepper .step-btn').forEach((b) => b.addEventListener('click', () => this.showStep(Number(b.dataset.step))));
+    document.getElementById('live-link').addEventListener('click', () => this.showTab('live'));
 
     this.personasReady = fetch('/api/personas').then((r) => r.json()).catch(() => []).then((rows) => {
+      // Nobody starts selected: a click always means "add this playtester".
       this.personas = rows;
-      rows.forEach((x) => this.chosen.add(x.persona_id));
       return rows;
     });
+    this.presetsReady = fetch('/api/feature_studio/presets').then((r) => r.json()).catch(() => [])
+      .then((rows) => { this.presets = rows; });
     this.renderLive();
     this.renderForge();
     if (ctx.telemetry) ctx.telemetry.listeners.push((ev) => this.onEvent(ev));
@@ -79,10 +111,35 @@ class Overlay {
     else if (ctx.params.bot || ctx.params.externalBot) this.showTab('live');
   }
 
+  // Steps 1-3 are sections of the Forge panel; step 4 is the Report panel.
+  showStep(n) {
+    if (n === 4 && this.slide) { this.openReportFull(); return; }
+    this.step = n === 4 ? this.step : n;
+    this.showTab(n === 4 ? 'report' : 'forge');
+  }
+
   showTab(name) {
-    document.querySelectorAll('#director .tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
+    this.tab = name;
     for (const t of TABS) document.getElementById(`tab-${t}`).hidden = t !== name;
+    document.querySelectorAll('#tab-forge [data-steps]').forEach((s) => {
+      s.hidden = !s.dataset.steps.split(' ').includes(String(this.step));
+    });
+    this.renderStepper();
     if (name === 'report') this.renderReport();
+  }
+
+  renderStepper() {
+    const f = this.feature;
+    const reachable = { 1: true, 2: !!f, 3: f?.status === 'approved', 4: true };
+    const done = { 1: !!f, 2: ['approved', 'rejected'].includes(f?.status), 3: !!this.reportPatch, 4: false };
+    const current = this.tab === 'report' ? 4 : this.tab === 'forge' ? this.step : 0;
+    document.querySelectorAll('#stepper .step-btn').forEach((b) => {
+      const n = Number(b.dataset.step);
+      b.classList.toggle('current', n === current);
+      b.classList.toggle('done', done[n] && n !== current);
+      b.disabled = !reachable[n];
+    });
+    document.getElementById('live-link').classList.toggle('current', this.tab === 'live');
   }
 
   // --------------------------------------------------------------- Pill
@@ -93,9 +150,10 @@ class Overlay {
     const sig = [g.step_id, g.stats.first_click_t, has('shelter'), g.stats.forager_harvests > 0, g.techs.has('tech_toolmaking'), this.stuckEvents].join('|');
     if (sig === this.lastPillSig) return;
     this.lastPillSig = sig;
-    document.getElementById('pill-step').textContent = g.achieved ? `${g.step_id} ★` : g.step_id;
-    document.getElementById('pill-ttfa').textContent = g.stats.first_click_t === null ? 'waiting…' : `${g.stats.first_click_t.toFixed(1)}s sim`;
-    const item = (done, label) => `<span class="${done ? 'ok' : 'todo'}">[${done ? '✓' : ' '}] ${label}</span>`;
+    const step = STEP_LABEL[g.step_id] || g.step_id;
+    document.getElementById('pill-step').textContent = g.achieved ? `${step} ★` : step;
+    document.getElementById('pill-ttfa').textContent = g.stats.first_click_t === null ? '-' : `${g.stats.first_click_t.toFixed(1)}s`;
+    const item = (done, label) => `<span class="${done ? 'ok' : 'todo'}">${done ? '✓' : '○'} ${label}</span>`;
     document.getElementById('pill-check').innerHTML = item(has('shelter'), 'Shelter') + item(g.stats.forager_harvests > 0, 'Forager')
       + item(g.techs.has('tech_toolmaking'), 'Research');
     const stuck = document.getElementById('pill-stuck');
@@ -133,7 +191,7 @@ class Overlay {
       <div class="stream" id="stream"></div>`;
     if (this.ctx.blocked) {
       el.querySelector('#bot-btn').disabled = true;
-      el.querySelector('#bot-note').textContent = 'This variant needs an approved patch. Open the Council Report tab.';
+      el.querySelector('#bot-note').textContent = 'This variant needs an approved patch. Approve it in the Report step.';
       this.showTab('report');
     }
     await this.personasReady;
@@ -293,7 +351,7 @@ class Overlay {
       </div>
       <div class="note" id="decide-note">${decided
         ? (patch.status === 'approved' ? `Approved by a human. Variant B can now run with <code>?variant=B&amp;patch_id=${esc(patch.patch_id)}</code>.` : 'Rejected. Variant B stays unavailable.')
-        : 'Human approval gate: nothing is applied until you approve.'}</div>`;
+        : 'Nothing changes in the game until you approve.'}</div>`;
     el.querySelector('#btn-approve').addEventListener('click', () => this.decide('approve'));
     el.querySelector('#btn-reject').addEventListener('click', () => this.decide('reject'));
   }
@@ -356,25 +414,46 @@ class Overlay {
   async renderForge() {
     const el = document.getElementById('tab-forge');
     el.innerHTML = `
-      <div class="scroll-input">
-        <textarea id="forge-prompt" rows="3" maxlength="600" placeholder="Describe a new feature in your own words. Example: a glowing raider ambush in the tutorial that costs 20 wood and gives 10 RP."></textarea>
-        <button class="game-btn emerald" id="forge-btn">✦ Forge Feature Variant</button>
-      </div>
-      <div class="note" id="forge-note">The architect agent drafts a config patch. Nothing reaches players until you approve it.</div>
-      <div id="decree"></div>
-      <div class="section-h">Summon the playtester guild</div>
-      <div class="guild" id="guild"></div>
-      <button class="game-btn amber" id="summon-btn" disabled>▶ Summon Playtesters</button>
-      <div class="note" id="summon-note">Approve a decree first.</div>`;
+      <section data-steps="1">
+        <div class="section-h">Pick a feature idea</div>
+        <div class="presets" id="presets"></div>
+        <div class="scroll-input">
+          <textarea id="forge-prompt" rows="2" maxlength="600" placeholder="…or describe your own: a raider ambush at tutorial step 2 that costs 20 wood and gives 10 RP."></textarea>
+          <button class="game-btn emerald" id="forge-btn">✦ Forge Feature</button>
+        </div>
+      </section>
+      <div class="note" id="forge-note">The designer agent turns the idea into a config patch. Nothing reaches players until you approve it.</div>
+      <section data-steps="2 3"><div id="decree"></div></section>
+      <section data-steps="3">
+        <div class="section-h">Choose the playtesters</div>
+        <div class="guild" id="guild"></div>
+        <button class="game-btn amber" id="summon-btn" disabled>▶ Run A/B Playtest</button>
+        <div class="note" id="summon-note">Approve the patch first.</div>
+        <div class="agents-live" id="agents-live"></div>
+      </section>`;
     el.querySelector('#forge-btn').addEventListener('click', () => this.forge());
     el.querySelector('#summon-btn').addEventListener('click', () => this.summon());
+    this.showTab(this.tab);
+    this.renderPresets();
     await this.personasReady;
     this.renderGuild();
     this.feature = await this.latestFeature();
     this.renderDecree();
-    if (this.feature && !this.feature.baseline_patch_id) {
-      document.getElementById('forge-note').textContent = 'Tip: approve patch_001 in the Council Report first so the feature stacks on the clean onboarding baseline.';
-    }
+  }
+
+  async renderPresets() {
+    await this.presetsReady;
+    const el = document.getElementById('presets');
+    el.innerHTML = this.presets.map((x) => `
+      <button class="preset" data-id="${esc(x.preset_id)}" title="${esc(x.prompt)}">
+        <span class="pr-ico">${esc(x.icon)}</span>
+        <span class="pr-text"><b>${esc(x.label)}</b><span>${esc(x.summary)}</span></span>
+      </button>`).join('');
+    el.querySelectorAll('.preset').forEach((b) => b.addEventListener('click', () => {
+      const x = this.presets.find((p) => p.preset_id === b.dataset.id);
+      document.getElementById('forge-prompt').value = x.prompt;
+      this.forge(x.preset_id);
+    }));
   }
 
   renderGuild() {
@@ -382,6 +461,7 @@ class Overlay {
     el.innerHTML = this.personas.map((x) => `
       <button class="medallion ${this.chosen.has(x.persona_id) ? 'on' : ''}" data-id="${esc(x.persona_id)}" aria-pressed="${this.chosen.has(x.persona_id)}"
         title="${esc(x.description)}&#10;${esc((x.grounding || []).join('; '))}">
+        ${this.chosen.has(x.persona_id) ? '<span class="m-check">✓</span>' : ''}
         <span class="m-ico">${esc(x.emblem || '✦')}</span>
         <span class="m-name">${esc(x.archetype || x.label)}</span>
         <span class="m-sub">${esc(x.subtitle || '')}</span>
@@ -394,39 +474,43 @@ class Overlay {
     }));
   }
 
-  async forge() {
+  async forge(presetId = null, mode = 'stub') {
     const prompt = document.getElementById('forge-prompt').value.trim();
     const note = document.getElementById('forge-note');
     if (!prompt) { note.textContent = 'Describe the feature first.'; return; }
     const btn = document.getElementById('forge-btn');
     btn.disabled = true;
-    note.textContent = 'The architect agent is drafting the decree…';
+    note.textContent = 'The designer agent is drafting the patch…';
     try {
       const r = await fetch('/api/feature_studio/propose', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, mode: 'stub' }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, mode, preset_id: presetId }),
       });
       const data = await r.json();
       if (!r.ok) throw new Error(typeof data.detail === 'string' ? data.detail : `HTTP ${r.status}`);
       this.feature = data.patch;
       this.emblemSource[data.patch.patch_id] = data.emblem_source;
-      note.textContent = `${data.patch.patch_id} staged as ${data.patch.status}. Review the decree below.`;
+      note.textContent = data.source === 'preset_muse_spark'
+        ? `${data.patch.patch_id}: drafted earlier by Muse Spark, replayed from the recording. Schema valid. Review it.`
+        : data.source === 'meta' ? `${data.patch.patch_id}: drafted live by Muse Spark. Schema valid. Review it before approving.`
+          : `${data.patch.patch_id} passed schema validation. Review it before approving.`;
     } catch (err) {
       note.textContent = `Could not forge: ${err.message}`;
     }
     btn.disabled = false;
     this.renderDecree();
+    if (this.feature) this.showStep(2);
   }
 
   renderDecree() {
     const el = document.getElementById('decree');
     const p = this.feature;
-    if (!p) { el.innerHTML = ''; this.updateSummon(); return; }
+    if (!p) { el.innerHTML = ''; this.updateSummon(); this.renderStepper(); return; }
     const f = p.body.feature_plugin;
     const badges = (obj, sign) => Object.entries(obj || {}).map(([k, v]) => `<span class="res-badge ${sign === '-' ? 'cost' : 'gain'}">${RES_ICON[k] || ''} ${sign}${esc(v)}</span>`).join('');
     const icon = f.icon_url ? `<img src="${esc(f.icon_url)}?v=${esc(p.patch_id)}" alt="">` : `<span>${esc(f.icon)}</span>`;
     const canDecide = p.status === 'validated';
     const gen = this.emblemSource[p.patch_id] === 'muse_image' ? 'Generated via Muse Image' : 'Procedural stub emblem';
-    const seal = { validated: '✔ Validated', approved: '✔ Approved', rejected: '✖ Dismissed', proposed: 'Pending' }[p.status] || esc(p.status);
+    const seal = { validated: 'Awaiting approval', approved: '✔ Approved', rejected: '✖ Rejected', proposed: 'Pending' }[p.status] || esc(p.status);
     el.innerHTML = `
       <div class="decree ${esc(p.status)}">
         <div class="decree-top">
@@ -439,15 +523,16 @@ class Overlay {
           <span class="wax-seal ${esc(p.status)}">${seal}</span>
         </div>
         <div class="decree-why">${esc(p.rationale || '')}</div>
-        <div class="note">${esc(p.patch_id)}${p.baseline_patch_id ? ` · stacked on ${esc(p.baseline_patch_id)}` : ''}${p.status === 'approved' ? ` · <a href="/?variant=B&amp;patch_id=${esc(p.patch_id)}">play it</a>` : ''}</div>
-        <div class="decide">
-          <button class="game-btn emerald" id="decree-approve" ${canDecide ? '' : 'disabled'}>✔ Approve Decree</button>
-          <button class="game-btn iron" id="decree-dismiss" ${canDecide ? '' : 'disabled'}>✖ Dismiss</button>
-        </div>
+        <div class="note">${esc(p.patch_id)}${p.baseline_patch_id ? ` · on top of ${esc(p.baseline_patch_id)}` : ''}${p.status === 'approved' ? ` · <a href="/?variant=B&amp;patch_id=${esc(p.patch_id)}">play it yourself</a>` : ''}</div>
+        ${canDecide ? `<div class="decide">
+          <button class="game-btn emerald" id="decree-approve">✔ Approve</button>
+          <button class="game-btn iron" id="decree-dismiss">✖ Reject</button>
+        </div>` : ''}
       </div>`;
-    el.querySelector('#decree-approve').addEventListener('click', () => this.decideFeature('approve'));
-    el.querySelector('#decree-dismiss').addEventListener('click', () => this.decideFeature('reject'));
+    el.querySelector('#decree-approve')?.addEventListener('click', () => this.decideFeature('approve'));
+    el.querySelector('#decree-dismiss')?.addEventListener('click', () => this.decideFeature('reject'));
     this.updateSummon();
+    this.renderStepper();
   }
 
   async decideFeature(action) {
@@ -459,12 +544,14 @@ class Overlay {
       const data = await r.json();
       if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
       this.feature = data.patch;
-      note.textContent = action === 'approve' ? 'Decree approved by a human. Summon the playtesters.' : 'Decree dismissed. Nothing changes.';
+      // Approval is the gate: only now does the feature reach the open game.
+      if (action === 'approve') this.ctx.activateFeature?.(data.patch.body.feature_plugin);
+      note.textContent = action === 'approve' ? 'Approved by you. Now pick playtesters and run the A/B test.' : 'Rejected. Nothing changes in the game.';
     } catch (err) {
       note.textContent = `Could not ${action}: ${err.message}`;
     }
     this.renderDecree();
-    document.getElementById('summon-note').scrollIntoView({ block: 'nearest' });
+    this.showStep(this.feature?.status === 'approved' ? 3 : 1);
   }
 
   updateSummon() {
@@ -474,9 +561,9 @@ class Overlay {
     const ready = this.feature?.status === 'approved' && this.chosen.size > 0 && !this.job;
     btn.disabled = !ready;
     if (this.job) return;
-    note.textContent = this.feature?.status !== 'approved' ? 'Approve a decree first.'
-      : this.chosen.size ? `${this.chosen.size} persona${this.chosen.size === 1 ? '' : 's'} × arms A and B, stub policy, no Meta API cost.`
-        : 'Pick at least one persona.';
+    note.textContent = this.feature?.status !== 'approved' ? 'Approve the patch first.'
+      : this.chosen.size ? `${this.chosen.size} playtester${this.chosen.size === 1 ? '' : 's'} each play the game twice: without the feature (A) and with it (B).`
+        : 'Tap the playtesters you want to send.';
   }
 
   async summon() {
@@ -495,13 +582,15 @@ class Overlay {
       return;
     }
     this.updateSummon();
+    this.renderAgents(personas, []);
     note.scrollIntoView({ block: 'nearest' });
     const tick = async () => {
       try {
         this.job = await (await fetch(`/api/feature_studio/jobs/${this.job.job_id}`)).json();
       } catch { /* retry */ }
       if (this.job.status === 'running') {
-        note.textContent = `Playtesting: ${this.job.sessions_started} of ${this.job.sessions_total} sessions started…`;
+        note.textContent = `Playtesting… ${this.job.sessions_started} of ${this.job.sessions_total} sessions started.`;
+        this.renderAgents(personas, this.job.sessions || []);
         setTimeout(tick, JOB_POLL_MS);
         return;
       }
@@ -510,9 +599,155 @@ class Overlay {
       this.updateSummon();
       if (failed) { note.textContent = `Playtest failed: ${failed}`; return; }
       this.reportPatch = this.feature.patch_id;
-      this.showTab('report');
+      note.textContent = 'Playtest finished.';
+      this.showStep(4);
     };
     tick();
+  }
+
+  // One card per playtester: arm A (game without the feature) and arm B (with it).
+  renderAgents(personas, sessions) {
+    const el = document.getElementById('agents-live');
+    const byId = Object.fromEntries(this.personas.map((x) => [x.persona_id, x]));
+    const arm = (pid, a) => sessions.find((x) => x.run_id.includes(`_${a}_${pid}_s`));
+    el.innerHTML = personas.map((pid) => {
+      const x = byId[pid] || {};
+      const runs = ['A', 'B'].map((a) => [a, arm(pid, a)]);
+      const said = runs.map(([, r]) => r).reverse().find((r) => r?.thought);
+      const chip = ([a, r]) => {
+        const st = r ? r.state : 'waiting';
+        const mark = { done: '✓', playing: '…', waiting: '·' }[st];
+        return `<span class="arm st-${st}" title="${a === 'A' ? 'Without' : 'With'} the feature: ${st}">${a} ${mark}</span>`;
+      };
+      return `<div class="agent-card">
+        <span class="ag-ico">${esc(x.emblem || '✦')}</span>
+        <div class="ag-body"><div class="ag-h"><b>${esc(x.archetype || pid)}</b>${runs.map(chip).join('')}
+          ${said?.mood ? `<span class="mood mood-${esc(said.mood)}">${MOOD_ICON[said.mood] || ''}</span>` : ''}</div>
+          ${said ? `<div class="ag-thought">“${esc(said.thought)}”</div>` : ''}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // ------------------------------------------------------ Game Manager
+  async openManager() {
+    const app = document.getElementById('app');
+    const el = document.createElement('div');
+    el.id = 'manager';
+    el.className = 'manager';
+    el.innerHTML = `
+      <div class="mgr-panel">
+        <div class="mgr-head"><h1>✦ Game Manager</h1>
+          <p>Choose a new feature for Dawn of Empires. You approve it, the game opens with it switched on,
+            and then AI playtesters try it before real players do.</p></div>
+        <div class="mgr-section">Prebuilt features</div>
+        <div class="mgr-cards" id="mgr-cards"><div class="note">Loading…</div></div>
+        <div class="mgr-section">Or describe your own idea</div>
+        <div class="mgr-own">
+          <textarea id="mgr-prompt" rows="2" maxlength="600" placeholder="A bonfire after the tutorial that costs 15 wood and gives 30 food."></textarea>
+          <button class="game-btn emerald" id="mgr-forge">✦ Ask Muse Spark</button>
+        </div>
+        <div class="mgr-note" id="mgr-note"></div>
+        <div id="mgr-draft"></div>
+        <button class="mgr-skip" id="mgr-skip">Just play, no new feature →</button>
+      </div>`;
+    app.appendChild(el);
+    el.querySelector('#mgr-skip').addEventListener('click', () => this.closeManager(false));
+    el.querySelector('#mgr-forge').addEventListener('click', () => this.managerForge());
+
+    let status = { meta_ready: false, muse_model_id: '' };
+    try { status = await (await fetch('/api/feature_studio/status')).json(); } catch { /* stub */ }
+    this.museMode = status.meta_ready ? 'meta' : 'stub';
+    document.getElementById('mgr-note').textContent = status.meta_ready
+      ? `Your idea goes live to the designer agent (${status.muse_model_id}). It takes about half a minute.`
+      : 'No META_API_KEY in .env, so the offline stub designer drafts your idea.';
+
+    await this.presetsReady;
+    const badges = (obj, sign) => Object.entries(obj || {}).map(([k, v]) => `<span class="res-badge ${sign === '-' ? 'cost' : 'gain'}">${RES_ICON[k] || ''} ${sign}${esc(v)}</span>`).join('');
+    const cards = document.getElementById('mgr-cards');
+    cards.innerHTML = this.presets.map((x) => `
+      <div class="mgr-card">
+        <div class="mc-ico">${esc(x.icon)}</div>
+        <div class="mc-title">${esc(x.label)}</div>
+        <div class="mc-text">${esc(x.summary)}</div>
+        <div class="mc-when">Unlocks: ${esc(x.unlock_at_step === 'free_play' ? 'after the tutorial' : STEP_LABEL[x.unlock_at_step] || x.unlock_at_step)}</div>
+        <div class="res-row">${badges(x.costs, '-')}${badges(x.rewards, '+')}</div>
+        <button class="game-btn amber" data-id="${esc(x.preset_id)}">✔ Approve &amp; play</button>
+      </div>`).join('');
+    cards.querySelectorAll('button[data-id]').forEach((b) => b.addEventListener('click', () => this.managerPick(b.dataset.id)));
+  }
+
+  // Clicking "Approve & play" is the human approval: forge the prebuilt patch, approve it, open the game.
+  async managerPick(presetId) {
+    const x = this.presets.find((p) => p.preset_id === presetId);
+    document.getElementById('forge-prompt').value = x.prompt;
+    document.getElementById('mgr-note').textContent = `Preparing ${x.label}…`;
+    await this.forge(presetId);
+    if (this.feature?.status !== 'validated') {
+      document.getElementById('mgr-note').textContent = document.getElementById('forge-note').textContent;
+      return;
+    }
+    await this.decideFeature('approve');
+    this.closeManager(this.feature?.status === 'approved');
+  }
+
+  async managerForge() {
+    const prompt = document.getElementById('mgr-prompt').value.trim();
+    const note = document.getElementById('mgr-note');
+    if (!prompt) { note.textContent = 'Describe the feature first.'; return; }
+    const btn = document.getElementById('mgr-forge');
+    btn.disabled = true;
+    note.textContent = this.museMode === 'meta' ? 'Muse Spark is designing your feature…' : 'The stub designer is drafting your feature…';
+    document.getElementById('forge-prompt').value = prompt;
+    this.feature = null;
+    await this.forge(null, this.museMode);
+    btn.disabled = false;
+    note.textContent = document.getElementById('forge-note').textContent;
+    const draft = document.getElementById('mgr-draft');
+    if (this.feature?.status !== 'validated') { draft.innerHTML = ''; return; }
+    // Same decree card as the studio panel, moved here so the approval happens in the menu.
+    draft.appendChild(document.getElementById('decree'));
+    draft.querySelector('#decree-approve').textContent = '✔ Approve & play';
+    draft.querySelector('#decree-approve').addEventListener('click', () => this.closeManager(true), { once: true });
+  }
+
+  closeManager(openStudio) {
+    const decree = document.getElementById('decree');
+    if (decree && decree.closest('#manager')) document.querySelector('#tab-forge [data-steps="2 3"]').appendChild(decree);
+    document.getElementById('manager')?.remove();
+    if (openStudio) {
+      this.showStep(3);
+      this.setOpen?.(true);
+    }
+  }
+
+  // ------------------------------------------------------ Full-screen report
+  openReportFull() {
+    let modal = document.getElementById('report-full');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'report-full';
+      modal.className = 'report-full';
+      modal.innerHTML = `<div class="rf-head"><h2>Playtest report</h2>
+        <button class="council-close" id="report-close" aria-label="Close the report">✕</button></div><div class="rf-body"></div>`;
+      document.getElementById('app').appendChild(modal);
+      modal.querySelector('#report-close').addEventListener('click', () => this.closeReportFull());
+    }
+    const tab = document.getElementById('tab-report');
+    modal.querySelector('.rf-body').appendChild(tab);
+    // Drop the previous report so nothing stale shows while the new one loads.
+    tab.innerHTML = '';
+    tab.hidden = false;
+    modal.hidden = false;
+    this.setOpen?.(false);
+    this.renderReport();
+  }
+
+  closeReportFull() {
+    const modal = document.getElementById('report-full');
+    if (!modal || modal.hidden) return;
+    modal.hidden = true;
+    document.getElementById('director').appendChild(document.getElementById('tab-report'));
+    this.showTab(this.tab === 'report' ? 'forge' : this.tab);
   }
 
   // ------------------------------------------------------ Council Report
@@ -539,14 +774,38 @@ class Overlay {
       if (first) report = await this.fetchStudioReport(first.patch_id);
     }
     if (!report) {
-      el.innerHTML = `<div class="note">No feature playtest yet: forge a decree, approve it and summon playtesters. Below is the analyst's onboarding diagnosis.</div>
+      el.innerHTML = `<div class="note">No feature playtested yet. Start at step 1. Below: the analyst's diagnosis of the onboarding.</div>
         <div id="report-loop"></div><div class="section-h">Onboarding fix A/B</div><div id="report-ab"></div>`;
       await this.renderAnalyst();
       await this.renderAb();
       return;
     }
     const byId = Object.fromEntries(this.personas.map((x) => [x.persona_id, x]));
-    const plaque = (label, v) => `<div class="plaque"><div class="pl-h">${label}</div><div class="pl-v">${esc(v.A)} <span>→</span> <b>${esc(v.B)}</b></div></div>`;
+    // KPI card: B big, A as "was", delta coloured by whether higher is better for that metric.
+    const plaque = (label, v, higherBetter = true) => {
+      const a = parseFloat(v.A); const b = parseFloat(v.B);
+      const d = Number.isFinite(a) && Number.isFinite(b) ? Math.round((b - a) * 10) / 10 : null;
+      const tone = d === null || d === 0 ? 'flat' : (d > 0) === higherBetter ? 'good' : 'bad';
+      const unit = String(v.B).endsWith('%') ? ' pts' : '';
+      return `<div class="plaque kpi ${tone}"><div class="pl-h">${label}</div><div class="pl-v"><b>${esc(v.B)}</b></div>
+        <div class="kpi-d">${d === null ? '' : `${d > 0 ? '▲' : d < 0 ? '▼' : '='} ${Math.abs(d)}${unit}`} <span>was ${esc(v.A)}</span></div></div>`;
+    };
+    const bars = (label, v) => {
+      const w = (x) => Math.max(0, Math.min(100, parseFloat(x) || 0));
+      return `<div class="ab-row"><div class="ab-l">${label}</div><div class="ab-bars">
+        <div class="ab-bar a" style="width:${w(v.A)}%"><span>A ${esc(v.A)}</span></div>
+        <div class="ab-bar b" style="width:${w(v.B)}%"><span>B ${esc(v.B)}</span></div></div></div>`;
+    };
+    const rows = report.persona_breakdown || [];
+    const maxD = Math.max(1, ...rows.map((r) => Math.abs(r.final_score_delta || 0)));
+    const deltas = rows.map((r) => {
+      const x = byId[r.persona_id] || {};
+      const d = r.final_score_delta || 0;
+      const w = (Math.abs(d) / maxD) * 50;
+      return `<div class="pd-row"><div class="pd-l">${esc(x.emblem || '')} ${esc(r.archetype || r.persona_id)}${r.stalled ? ' <i title="Did not finish the tutorial with the feature">stuck</i>' : ''}</div>
+        <div class="pd-track"><div class="pd-bar ${d < 0 ? 'neg' : 'pos'}" style="${d < 0 ? `right:50%` : `left:50%`};width:${w}%"></div></div>
+        <div class="pd-v">${d > 0 ? '+' : ''}${esc(d)}</div></div>`;
+    }).join('');
     const quotes = report.quotes.map((q) => {
       const x = byId[q.persona_id] || {};
       return `<div class="speech"><div class="sp-h">${esc(x.emblem || '')} ${esc(x.archetype || q.persona_id)}
@@ -557,23 +816,28 @@ class Overlay {
     const demoIds = new Set(demos.filter((d) => d.source === 'demo').map((d) => d.patch_id));
     const pillIcon = { positive: '✅', hurts: '❌', mixed: '⚠️' };
     const pills = demos.length ? `
-      <div class="demo-pills"><span class="demo-pills-label">Studio reports:</span>${demos.map((d) => `
+      <div class="demo-pills"><span class="demo-pills-label">Reports:</span>${demos.map((d) => `
         <button class="demo-pill${d.patch_id === report.patch_id ? ' active' : ''}${d.source === 'live' ? ' live' : ''}" data-pid="${esc(d.patch_id)}"
-          title="${esc(d.verdict_label)} · ${esc(d.title)} (${esc(d.patch_id)}${d.source === 'live' ? ', this session' : ', pre-baked demo'})">${esc(d.short)} ${pillIcon[d.verdict_key] || ''}${d.source === 'live' ? ' ●' : ''}</button>`).join('')}</div>
-      ${demoIds.has(report.patch_id) ? '<div class="note">Pre-baked demo at $0 cost — forge your own feature to playtest live.</div>' : ''}` : '';
+          title="${esc(d.verdict_label)} · ${esc(d.title)} (${esc(d.patch_id)}${d.source === 'live' ? ', this session' : ', recorded demo'})">${esc(d.short)} ${pillIcon[d.verdict_key] || ''}${d.source === 'live' ? ' ●' : ''}</button>`).join('')}</div>
+      ${demoIds.has(report.patch_id) ? '<div class="note">Recorded demo report. Pick a feature in the Game Manager or step 1 to playtest it live.</div>' : ''}` : '';
     el.innerHTML = `
       ${pills}
       <div class="verdict ${esc(report.key)}">${esc(report.label)}</div>
       <div class="takeaway">${esc(report.takeaway)}</div>
-      <div class="plaques">${plaque('Onboarding', p.onboarding)}${plaque('Stuck events', p.stuck)}${plaque('Stone Age', p.stone_age)}${plaque('Score', p.score)}</div>
+      <div class="plaques">${plaque('Tutorial finished', p.onboarding)}${plaque('Stuck events', p.stuck, false)}${plaque('Reached Stone Age', p.stone_age)}${plaque('Mean score', p.score)}</div>
+      <div class="charts">
+        <div class="chart"><div class="chart-h">Players who got there · A without the feature, B with it</div>
+          ${bars('Tutorial', p.onboarding)}${bars('Stone Age', p.stone_age)}</div>
+        ${rows.length ? `<div class="chart"><div class="chart-h">Score change per playtester (B − A)</div>${deltas}</div>` : ''}
+      </div>
       <div class="quotes">${quotes}</div>
       <div class="note">${esc(report.patch_id)} vs ${esc(report.baseline)} · ${esc(report.n_pairs)} paired runs · ${esc(report.provider_mode)} · $${esc(report.cost_usd)}</div>
       <div class="decide">
-        <button class="game-btn bronze" id="rework-btn" ${report.key === 'positive' ? 'disabled' : ''}>⚒️ Forge Feature Rework</button>
-        <button class="game-btn iron" id="replay-btn" ${report.replay ? '' : 'disabled'}>\u{1F3AC} Watch Split Replay</button>
+        <button class="game-btn bronze" id="rework-btn" ${report.key === 'positive' ? 'disabled' : ''}>⚒️ Ask AI for a Fix</button>
+        <button class="game-btn iron" id="replay-btn" ${report.replay ? '' : 'disabled'}>\u{1F3AC} Watch A/B Replay</button>
       </div>
       <div class="note" id="rework-note"></div>
-      <details class="onboarding-details"><summary class="section-h">Onboarding Baseline &amp; Loop (patch_001)</summary>
+      <details class="onboarding-details"><summary class="section-h">Onboarding fix patch_001: diagnosis and A/B</summary>
         <div id="report-loop"></div><div class="section-h">Onboarding fix A/B</div><div id="report-ab"></div></details>`;
     el.querySelector('#rework-btn').addEventListener('click', () => this.rework(report.patch_id));
     el.querySelectorAll('.demo-pill').forEach((b) => b.addEventListener('click', () => {
@@ -602,7 +866,9 @@ class Overlay {
       this.reportPatch = null;
       this.renderDecree();
       document.getElementById('forge-note').textContent = `${data.patch.patch_id}: ${data.rationale}`;
-      this.showTab('forge');
+      this.closeReportFull();
+      this.showStep(2);
+      this.setOpen?.(true);
     } catch (err) {
       note.textContent = `Could not rework: ${err.message}`;
     }

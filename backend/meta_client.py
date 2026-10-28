@@ -541,12 +541,54 @@ class MetaClient:
         out_path.write_bytes(self._call_image_api(prompt))
         return out_path
 
-    def _call_image_api(self, prompt: str) -> bytes:
+    def generate_image(self, prompt: str, *, size: str = "1024x1024", bucket: str = "dev",
+                       run_id: str = "sprites") -> bytes:
+        """Muse Image call for game art, cached by prompt and size. Needs provider_mode 'meta'."""
+        if self.provider_mode != "meta":
+            raise RuntimeError("Muse Image needs META_PROVIDER=meta and META_API_KEY in .env")
+        key = hashlib.sha256(json.dumps(["muse-image", prompt, size]).encode()).hexdigest()
+        cache = self.runs_dir / ".cache" / "muse_image" / f"{key}.png"
+        base = {"run_id": run_id, "provider_mode": self.provider_mode, "model_id": "muse-image",
+                "model_mode": "standard", "bucket": bucket}
+        if cache.exists():
+            self.ledger.log({**base, "images": 0, "cache_hit": True})
+            return cache.read_bytes()
+        if self.cache_only:
+            raise CacheMissError(f"Muse Image {key[:12]} not cached (META_CACHE_ONLY=1)")
+        price = self._price("muse-image", "per_image")
+        if price is None:
+            raise RuntimeError("muse-image price is not set in budget_config.json pricing_usd")
+        self.ledger.charge({**base, "images": 1, "estimated_cost_usd": price}, use_reserve=self.use_reserve)
+        data = self._call_image_api(prompt, size)
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_bytes(data)
+        return data
+
+    def sam_boxes(self, image_bytes: bytes, *, bucket: str = "dev", run_id: str = "sprites") -> list[dict[str, Any]]:
+        """SAM 3.1 boxes for one image, cached by frame hash. Needs provider_mode 'meta'."""
+        if self.provider_mode != "meta":
+            raise RuntimeError("SAM 3.1 needs META_PROVIDER=meta and META_API_KEY in .env")
+        # Exact content hash: similar sprites would collide under the perceptual frame hash.
+        cache = self.sam_cache_dir / f"img_{hashlib.sha256(image_bytes).hexdigest()}.json"
+        base = {"run_id": run_id, "provider_mode": self.provider_mode, "model_id": self.budget.sam_model_id,
+                "model_mode": "standard", "bucket": bucket}
+        if cache.exists():
+            self.ledger.log({**base, "images": 0, "cache_hit": True})
+            return json.loads(cache.read_text())
+        if self.cache_only:
+            raise CacheMissError(f"SAM frame {cache.stem} not cached (META_CACHE_ONLY=1)")
+        self.ledger.charge({**base, "images": 1, "estimated_cost_usd": self.sam_cost()}, use_reserve=self.use_reserve)
+        boxes = self._call_sam_api(image_bytes)
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(json.dumps(boxes))
+        return boxes
+
+    def _call_image_api(self, prompt: str, size: str = "256x256") -> bytes:
         url = os.environ.get("META_IMAGE_URL")
         if not url:
             raise RuntimeError("META_IMAGE_URL is not set")
         resp = self._client().post(url, headers=self._auth(), json={"model": "muse-image", "prompt": prompt,
-                                                                    "size": "256x256"})
+                                                                    "size": size})
         resp.raise_for_status()
         return base64.b64decode(resp.json()["data"][0]["b64_json"])
 

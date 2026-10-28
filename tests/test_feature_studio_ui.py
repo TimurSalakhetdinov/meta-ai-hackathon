@@ -1,6 +1,6 @@
 """Feature Studio dock in a real browser: forge, approve, playtest, report, rework, approve, playtest.
 
-Every step is a DOM click in #right-dock. The server runs in-process so the
+Every step is a DOM click in #right-dock, opened from its slide-out toggle. The server runs in-process so the
 playtest can use the fake playtester from test_feature_studio, which keeps the
 run at zero Meta API cost and a few seconds long. The test also fails on any
 page error, console error or horizontal overflow inside the dock.
@@ -81,6 +81,9 @@ def page(studio_url: str) -> Iterator[Any]:
               and pg.errors.append(f"http {r.status}: {r.url}"))
         pg.goto(f"{studio_url}/?variant=A&seed=42")
         pg.wait_for_function("window.__GAME_STATE__ && window.__GAME_STATE__.ready")
+        # Human mode: the studio is a slide-out panel, closed while playing.
+        assert not pg.is_visible("#forge-btn")
+        pg.click("#council-toggle")
         yield pg
         browser.close()
 
@@ -102,6 +105,10 @@ def _approve_and_playtest(page: Any) -> str:
 
 def test_forge_approve_playtest_rework_loop(page: Any) -> None:
     page.fill("#forge-prompt", PROMPT)
+    # Nobody is preselected; pick all five playtesters.
+    assert page.locator("#guild .medallion.on").count() == 0
+    for i in range(5):
+        page.locator("#guild .medallion").nth(i).dispatch_event("click")
     assert page.locator("#guild .medallion.on").count() == 5
     page.click("#forge-btn")
 
@@ -127,4 +134,17 @@ def test_forge_approve_playtest_rework_loop(page: Any) -> None:
 
     assert "POSITIVE IMPACT" in _approve_and_playtest(page)
     assert page.is_disabled("#rework-btn")
+    assert not page.errors, page.errors
+
+
+def test_game_manager_approve_and_play(studio_url: str, page: Any) -> None:
+    """A plain visit opens the Game Manager; Approve & play switches the feature on in the open game."""
+    page.goto(f"{studio_url}/?seed=42")
+    page.wait_for_function("window.__GAME_STATE__ && window.__GAME_STATE__.ready")
+    assert page.locator("#mgr-cards .mgr-card").count() == 3
+    page.click("#mgr-cards button[data-id='harvest_festival']")
+    page.wait_for_selector("#manager", state="detached")
+    assert page.inner_text("#decree .wax-seal") == "✔ Approved"
+    assert page.is_visible("#summon-btn")
+    assert "Harvest Festival is live" in page.inner_text("body")
     assert not page.errors, page.errors

@@ -42,10 +42,13 @@ def test_dock_outside_clip_and_targets_inside(server: Server, browser: Any, quer
     d = Driver(page)
     d.open(f"{server.base_url}/?{query}&seed=42&telemetry=0")
 
-    dock = page.locator("#right-dock").bounding_box()
-    assert dock["x"] >= 960 and dock["x"] + dock["width"] <= 1280
-    # No dock descendant may intersect the game clip.
+    # Humans get a slide-out dock that starts closed; otherwise it sits right of the clip.
+    if page.is_visible("#right-dock"):
+        dock = page.locator("#right-dock").bounding_box()
+        assert dock["x"] >= 960 and dock["x"] + dock["width"] <= 1280
+    # No visible dock descendant may intersect the game clip.
     leaks = page.evaluate("""() => [...document.querySelectorAll('#right-dock *')]
+        .filter((el) => getComputedStyle(el).visibility !== 'hidden')
         .map((el) => el.getBoundingClientRect())
         .filter((r) => r.width > 0 && r.height > 0 && r.left < 960).length""")
     assert leaks == 0

@@ -83,6 +83,9 @@ def test_three_eras_upgrades_quests_and_battles(rich_server: Server, browser: An
 
     _research(d, "tech_toolmaking")
     assert d.state()["step_id"] == "free_play"
+    d.build("woodcutter_hut")
+    d.grind_until(lambda s: any(b["type"] == "woodcutter_hut" and b["status"] == "done" for b in s["buildings"]),
+                  timeout=20)
 
     # Chapter I is complete: the reward waits for the claim button.
     st = d.state()

@@ -19,6 +19,23 @@ const $ = (id) => document.getElementById(id);
 
 const params = urlParams();
 
+// The layout is a fixed 1280x540 stage (bots and screenshots rely on it).
+// Scale it to fit the window; all game coordinates stay in stage pixels.
+// Humans get the map alone (960 wide) with the studio as a slide-out panel;
+// bots and replays keep the side dock.
+const slideDock = !(params.bot || params.externalBot || params.replayA || params.replayB);
+if (slideDock) document.body.classList.add('slide-dock');
+const STAGE_W = slideDock ? 960 : 1280;
+let uiScale = 1;
+function fitToWindow() {
+  uiScale = Math.min(window.innerWidth / STAGE_W, window.innerHeight / 540) || 1;
+  const left = (window.innerWidth - STAGE_W * uiScale) / 2;
+  const top = (window.innerHeight - 540 * uiScale) / 2;
+  document.body.style.transform = uiScale === 1 ? '' : `translate(${left}px, ${top}px) scale(${uiScale})`;
+}
+fitToWindow();
+window.addEventListener('resize', fitToWindow);
+
 if (params.replayA || params.replayB) {
   import('./replay.js').then((m) => m.startReplay(params));
 } else {
@@ -109,10 +126,17 @@ async function boot() {
 
   const root = $('game-root');
   const getTargets = () => renderedTargets(game, renderer, config);
+  // HUD panels rebuild their HTML as resources tick. If the button under the pointer is replaced
+  // between press and release, the click lands on its parent; fall back to the pressed target.
+  let pressed = null;
+  root.addEventListener('pointerdown', (e) => {
+    const el = e.target.closest('[data-target]');
+    pressed = el ? { target: el.dataset.target, gone: () => !el.isConnected } : null;
+  }, true);
   root.addEventListener('click', (e) => {
     const rect = root.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const x = (e.clientX - rect.left) / uiScale;
+    const y = (e.clientY - rect.top) / uiScale;
 
     // Handle Build Bar category filter tabs
     const catBtn = e.target.closest('[data-build-cat]');
@@ -123,12 +147,16 @@ async function boot() {
 
     const el = e.target.closest('[data-target]');
     let target = el ? el.dataset.target : null;
+    if (!target && pressed?.gone()) target = pressed.target;
+    pressed = null;
     if (!target && (e.target === $('world') || e.target === root)) target = renderer.hitTest(game, x, y)?.target_id || null;
     if (!target && e.target.classList.contains('modal-backdrop')) target = targetBelow(e.target, e.clientX, e.clientY, game, renderer, x, y);
 
     const outcome = game.click(target || 'empty', x, y);
     if (target === 'btn_mute') sfx.toggle();
     if (outcome.result === 'rejected') sfx.play('reject');
+    if (outcome.result === 'rejected' && target?.startsWith('tech_')) techView.flashRejected(target, game);
+    else if (outcome.result === 'rejected' && target?.startsWith('btn_feature_')) hud.featureRejected();
     else if (outcome.result === 'ui' && target !== 'btn_mute') sfx.play('click');
     if (target === 'btn_speed') {
       game.clock.speed = SPEEDS[(SPEEDS.indexOf(game.clock.speed) + 1) % SPEEDS.length] || 1;
@@ -147,6 +175,7 @@ async function boot() {
   const overlay = initOverlay({
     dock: $('right-dock'), game, params, runId, telemetry, provider, getTargets, cfgMeta,
     clickAt: (x, y) => clickAt(root, x, y),
+    activateFeature: (plugin) => hud.activateFeature(plugin),
   });
 
   window.__GAME_DEBUG__ = {
@@ -222,8 +251,8 @@ function targetBelow(backdrop, cx, cy, game, renderer, x, y) {
 
 function clickAt(root, x, y) {
   const rect = root.getBoundingClientRect();
-  const cx = rect.left + x;
-  const cy = rect.top + y;
+  const cx = rect.left + x * uiScale;
+  const cy = rect.top + y * uiScale;
   const el = document.elementFromPoint(cx, cy) || root;
   el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: cx, clientY: cy, view: window }));
 }
@@ -238,14 +267,16 @@ function renderedTargets(game, renderer, config) {
   const onScreen = (x, y, w, h) => w > 0 && h > 0 && x >= 0 && y >= 0 && x + w <= 960 && y + h <= 540;
   for (const el of root.querySelectorAll('[data-target]')) {
     const r = el.getBoundingClientRect();
-    const x = r.left - rect.left;
-    const y = r.top - rect.top;
-    if (!r.width || !r.height) continue;
+    const x = (r.left - rect.left) / uiScale;
+    const y = (r.top - rect.top) / uiScale;
+    const w = r.width / uiScale;
+    const h = r.height / uiScale;
+    if (!w || !h) continue;
     const id = el.dataset.target;
     const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-    const visible = onScreen(x, y, r.width, r.height) && !!hit && el.contains(hit);
+    const visible = onScreen(x, y, w, h) && !!hit && el.contains(hit);
     const t = {
-      target_id: id, kind: kindOf(id), x: round1(x), y: round1(y), w: round1(r.width), h: round1(r.height),
+      target_id: id, kind: kindOf(id), x: round1(x), y: round1(y), w: round1(w), h: round1(h),
       visible, locked: false, affordable: true, computed_salience: 'medium', highlighted: guide === id,
       label: (el.getAttribute('title') || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60),
     };
@@ -292,8 +323,8 @@ function renderedTargets(game, renderer, config) {
     out.push(t);
   }
   for (const w of renderer.worldTargets(game)) {
-    const cx = rect.left + w.x + w.w / 2;
-    const cy = rect.top + w.y + w.h / 2;
+    const cx = rect.left + (w.x + w.w / 2) * uiScale;
+    const cy = rect.top + (w.y + w.h / 2) * uiScale;
     const visible = onScreen(w.x, w.y, w.w, w.h) && document.elementFromPoint(cx, cy) === canvas
       && renderer.hitTest(game, w.x + w.w / 2, w.y + w.h / 2)?.target_id === w.target_id;
     out.push({
@@ -385,6 +416,22 @@ class Hud {
         <span class="c-cost"></span>
         <span class="c-lock" hidden></span>
       </button>`).join('');
+    requestAnimationFrame(() => this.fitCardNames());
+    if (!this.fitBound) { this.fitBound = true; addEventListener('resize', () => this.fitCardNames(true)); }
+  }
+
+  // Long names ("Sacred Obelisk") overflow the card; shrink each one until it fits on a single line.
+  // Hidden cards have no width, so they are fitted later, the first time they show.
+  fitCardNames(refit = false) {
+    for (const n of document.querySelectorAll('#cards .c-name')) {
+      if (n.dataset.fit && !refit) continue;
+      const room = n.parentElement.clientWidth - 6;
+      if (room <= 0) continue;
+      n.dataset.fit = '1';
+      n.style.fontSize = '';
+      let size = parseFloat(getComputedStyle(n).fontSize);
+      while (n.scrollWidth > room && size > 6) n.style.fontSize = `${(size -= 0.5)}px`;
+    }
   }
 
   initCampaign() {
@@ -447,6 +494,11 @@ class Hud {
       }
       el.classList.toggle('low', (r === 'wood' || r === 'food') && res[r] < 20);
     }
+    // Show a resource only once it matters: coins only paid for map expansions,
+    // stone arrives with Masonry, hero scrolls with the Hero Roster.
+    $('res-coins').hidden = true;
+    $('res-stone').hidden = !(res.stone > 0 || g.techs.has('tech_masonry'));
+    $('res-scrolls').hidden = !g.heroesUnlocked();
 
     const workers = `${g.workersFree}/${g.workersTotal}`;
     if (this.prev.workers !== workers) {
@@ -463,7 +515,7 @@ class Hud {
       this.prev.score = g.score;
     }
 
-    $('btn_speed').textContent = `${g.clock.speed}x`;
+    if ($('btn_speed').textContent !== `${g.clock.speed}x`) $('btn_speed').textContent = `${g.clock.speed}x`;
     $('era-name').textContent = ERA_LABEL[g.era];
     $('era-banner').classList.toggle('stone', g.era !== 'dawn_age');
     $('era-banner').classList.toggle('bronze', g.era === 'bronze_age');
@@ -481,7 +533,9 @@ class Hud {
       $('advisor').classList.toggle('hint', mood === 'hint');
     }
 
-    $('btn_mute').textContent = this.sfx.muted ? '\u{1F507}' : '\u{1F50A}';
+    // Rewrite the icon only when it changes: replacing it every frame swallows real clicks.
+    const muteIcon = this.sfx.muted ? '\u{1F507}' : '\u{1F50A}';
+    if ($('btn_mute').textContent !== muteIcon) $('btn_mute').textContent = muteIcon;
     $('btn_mute').classList.toggle('on', !this.sfx.muted);
     window.__SFX_MUTED__ = this.sfx.muted;
 
@@ -516,6 +570,7 @@ class Hud {
     const sig = JSON.stringify([res, g.selectedCard, [...g.techs], g.stepIndex, g.workersFree, this.buildCategory]);
     if (sig === this.sig) return;
     this.sig = sig;
+    requestAnimationFrame(() => this.fitCardNames());
 
     const allowed = CATEGORY_MAP[this.buildCategory] || null;
 
@@ -733,6 +788,19 @@ class Hud {
     }
   }
 
+  // A human-approved feature switches on in the open game; it shows once its unlock step is reached.
+  activateFeature(f) {
+    const g = this.game;
+    g.config.feature_plugin = f;
+    g.featureUses = 0;
+    g.featureReadyAt = 0;
+    this.featureEl?.remove();
+    this.featureSig = '';
+    this.buildFeatureCard(f);
+    this.toast(`${f.title} is live`, g.featureUnlocked() ? 'Find its button in your village.'
+      : `It unlocks ${f.unlock_at_step === 'free_play' ? 'after the tutorial' : 'at its tutorial step'}.`);
+  }
+
   buildFeatureCard(f) {
     const el = document.createElement('button');
     el.id = 'feature-card';
@@ -758,6 +826,24 @@ class Hud {
     el.append(ico, label, cost, ribbon, cool);
     $('game-root').appendChild(el);
     this.featureEl = el;
+  }
+
+  // A refused feature click shakes the card and says why, so it never feels dead.
+  featureRejected() {
+    const g = this.game;
+    const st = g.featureStatus();
+    const el = this.featureEl;
+    el.classList.remove('shake');
+    void el.offsetWidth;
+    el.classList.add('shake');
+    // The shake replaces the pulse animation, so drop it again once it ends.
+    el.addEventListener('animationend', () => el.classList.remove('shake'), { once: true });
+    if (st.cooldown) this.toast(`${g.feature.title} is recharging`, `Ready in ${Math.ceil(st.cooldown)}s.`);
+    else if (st.missing) {
+      const m = st.missing;
+      this.toast(`Not enough ${RESOURCE_LABEL[m.resource] || m.resource}`,
+        `${g.feature.title} needs ${m.required} · you have ${Math.floor(m.available)}.`);
+    }
   }
 
   updateFeatureCard() {
@@ -853,10 +939,10 @@ class Hud {
         $('game-root').appendChild(tag);
       }
       const r = el.getBoundingClientRect();
-      const left = Math.min(960 - tag.offsetWidth - 4, Math.max(4, r.left - rootRect.left));
-      const above = r.top - rootRect.top - 18;
+      const left = Math.min(960 - tag.offsetWidth - 4, Math.max(4, (r.left - rootRect.left) / uiScale));
+      const above = (r.top - rootRect.top) / uiScale - 18;
       tag.style.left = `${left}px`;
-      tag.style.top = `${above < 46 ? r.bottom - rootRect.top + 4 : above}px`;
+      tag.style.top = `${above < 46 ? (r.bottom - rootRect.top) / uiScale + 4 : above}px`;
     }
   }
 }

@@ -196,3 +196,12 @@ Many short, independent sessions, not one long run. One pair is a demo, not evid
   - Full suite: 98 passed.
   - Known issue: `scratch/verify_hoh_overhaul.py` is stale (waits for `#game-canvas` and `window.game`; the canvas is `#world`).
   - Next: commit, review, merge to `main`, then the first live meta-mode run.
+- 2026-10-28 (Claude Code, session 5, uncommitted on `main` at handoff): Game polish before the handover to Muse Code. All work at $0 Meta spend.
+  - Done: AI Studio slide-out with a Game Manager menu of 3 prebuilt features (`configs/feature_presets.json`, "Approve & play" is the approval) and a "Ask Muse Spark" custom idea box.
+  - Done: tech tree relayout with orthogonal arrows; the playtester picker starts empty; Chapter I gains "Build a Woodcutter" after Toolmaking; dock buttons are card-sized; building names shrink to fit.
+  - Done: `meta_client.generate_image()` (Muse Image) and `sam_boxes()` (SAM 3.1), cached and charged to the ledger.
+  - Fixed: tech clicks were lost when the coin tick rebuilt the nodes; a `pointerdown` fallback now covers HUD rebuilds in general.
+  - Added: a wood safety net (1 wood / 2 s up to 30). It applies after the tutorial for every provider, and before Toolmaking for human players only, so bots still hit the planted `onb_03_handoff` deadlock.
+  - Known: `tests/test_e2e_closed_loop_stub.py::test_closed_loop_stub` fails since the safety net (line 39); it is not fixed yet.
+  - Known: the committed soundtrack WAVs are synth output, not MusicGen. The README and architecture docs claim otherwise. A local `facebook/musicgen-medium` run was in progress at handoff.
+  - Next for Muse Code: commit this work on a branch (drop the leftover `patch_007` and `patch_008`), fix the e2e test, install or rerun the MusicGen tracks, then hero busts in the Elder Kaelen style via Muse Image (plan in the local `docs/HANDOFF.md`, section 7).

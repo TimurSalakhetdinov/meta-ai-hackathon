@@ -3,17 +3,28 @@
 
 import { RESOURCE_LABEL, TECHS, TECH_ORDER } from './game.js';
 
+// Four columns; each chain sits on one row so its arrows run straight.
+const COL = [0, 205, 410, 615];
+const ROW = [0, 132, 264];
 const NODE_POS = {
-  tech_toolmaking: [0, 116],
-  tech_woodworking: [170, 0],
-  tech_baskets: [170, 116],
-  tech_masonry: [170, 232],
-  tech_irrigation: [342, 52],
-  tech_stone_age: [342, 190],
-  tech_bronze_age: [514, 190],
+  tech_toolmaking: [COL[0], ROW[1]],
+  tech_woodworking: [COL[1], ROW[0]],
+  tech_baskets: [COL[1], ROW[1]],
+  tech_masonry: [COL[1], ROW[2]],
+  tech_irrigation: [COL[2], ROW[1]],
+  tech_stone_age: [COL[2], ROW[2]],
+  tech_bronze_age: [COL[3], ROW[2]],
 };
-const NODE_W = 150;
-const NODE_H = 98;
+const NODE_W = 164;
+const NODE_H = 112;
+const TREE_W = COL[3] + NODE_W;
+const TREE_H = ROW[2] + NODE_H;
+
+// True if `req` is already implied by another requirement of `id` (e.g. Toolmaking -> Masonry -> Stone Age).
+function implied(id, req) {
+  const reaches = (from) => TECHS[from].requires.some((r) => r === req || reaches(r));
+  return TECHS[id].requires.some((other) => other !== req && reaches(other));
+}
 
 export class TechTreeView {
   constructor(root, rpLabel) {
@@ -25,29 +36,51 @@ export class TechTreeView {
   update(game) {
     const res = game.roundedResources();
     this.rpLabel.textContent = `Research points: ${res.rp}  ·  Researched ${game.techs.size}/${TECH_ORDER.length}`;
-    const sig = JSON.stringify([res, [...game.techs]]);
+    // Only the resources techs cost: passive coins tick every second, and rebuilding the
+    // nodes under the pointer swallows clicks.
+    const sig = JSON.stringify([res.food, res.wood, res.stone, res.rp, [...game.techs], this.flash?.until]);
     if (sig === this.signature) return;
     this.signature = sig;
     this.root.innerHTML = this.edgesSvg(game) + TECH_ORDER.map((id) => this.node(game, id)).join('');
   }
 
+  // Shake a node the player could not afford and say what is missing.
+  flashRejected(id, game) {
+    const st = game.techStatus(id);
+    const msg = !st.available
+      ? `Learn ${TECHS[st.requires].label} first`
+      : st.missing ? `Need ${st.missing.required} ${RESOURCE_LABEL[st.missing.resource]} · have ${Math.floor(st.missing.available)}` : '';
+    this.flash = { id, msg, until: performance.now() + 2500 };
+    this.signature = '';
+    this.update(game);
+    setTimeout(() => { this.signature = ''; }, 2600);
+  }
+
+  // Right-angled arrows through the middle of the column gap; implied edges are left out.
   edgesSvg(game) {
     const lines = [];
     for (const id of TECH_ORDER) {
       for (const req of TECHS[id].requires) {
+        if (implied(id, req)) continue;
         const [ax, ay] = NODE_POS[req];
         const [bx, by] = NODE_POS[id];
         const x1 = ax + NODE_W;
         const y1 = ay + NODE_H / 2;
-        const x2 = bx;
+        const x2 = bx - 3;
         const y2 = by + NODE_H / 2;
-        const mx = (x1 + x2) / 2;
+        const mx = Math.round((x1 + x2) / 2);
+        const r = Math.min(10, Math.abs(y2 - y1) / 2);
+        const dy = Math.sign(y2 - y1);
+        const d = dy === 0 ? `M${x1} ${y1} H${x2}`
+          : `M${x1} ${y1} H${mx - r} Q${mx} ${y1} ${mx} ${y1 + dy * r} V${y2 - dy * r} Q${mx} ${y2} ${mx + r} ${y2} H${x2}`;
         const done = game.techs.has(req);
-        lines.push(`<path d="M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}" fill="none"
-          stroke="${done ? '#5f9a3a' : '#b08b4a'}" stroke-width="${done ? 4 : 3}" stroke-dasharray="${done ? '' : '6 5'}"/>`);
+        lines.push(`<path d="${d}" fill="none" stroke="${done ? '#5f9a3a' : '#a07a3c'}" stroke-width="3"
+          stroke-linejoin="round" stroke-dasharray="${done ? '' : '7 5'}" marker-end="url(#${done ? 'arr-done' : 'arr'})"/>`);
       }
     }
-    return `<svg width="664" height="330">${lines.join('')}</svg>`;
+    const marker = (mid, color) => `<marker id="${mid}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="${color}"/></marker>`;
+    return `<svg width="${TREE_W}" height="${TREE_H}"><defs>${marker('arr', '#a07a3c')}${marker('arr-done', '#5f9a3a')}</defs>${lines.join('')}</svg>`;
   }
 
   node(game, id) {
@@ -65,7 +98,11 @@ export class TechTreeView {
       const res = game.roundedResources();
       cost = Object.entries(st.costs).filter(([, v]) => v > 0)
         .map(([r, v]) => `<span class="${res[r] < v ? 'short' : ''}">${v} ${RESOURCE_LABEL[r]}</span>`).join(' · ');
-      if (!st.available) cost = `\u{1F512} Needs ${TECHS[st.requires].label}`;
+      if (!st.available) cost = `\u{1F512} ${TECHS[st.requires].label}`;
+    }
+    if (this.flash?.id === id && performance.now() < this.flash.until) {
+      cls += ' shake';
+      cost = this.flash.msg;
     }
     return `<button class="${cls}" data-target="${id}" style="left:${x}px;top:${y}px">
       <span class="t-ico">${spec.icon}</span>

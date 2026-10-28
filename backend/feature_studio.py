@@ -229,14 +229,33 @@ def stage_feature(service: ConfigService, plugin: FeaturePlugin, *, title: str, 
                            actor="designer_agent", baseline_patch_id=baseline.patch_id if baseline else None)
 
 
+def load_presets(configs_dir: Path) -> list[dict[str, Any]]:
+    """Prebuilt feature ideas for the studio picker. Each carries a ready FeaturePlugin."""
+    path = Path(configs_dir) / "feature_presets.json"
+    return json.loads(path.read_text()) if path.exists() else []
+
+
 def propose_feature(prompt: str, *, configs_dir: Path, client: MetaClient,
-                    generated_dir: Path = GENERATED_DIR) -> dict[str, Any]:
-    """PM text to a validated FeaturePlugin patch with an emblem. Never approves."""
+                    generated_dir: Path = GENERATED_DIR, preset_id: Optional[str] = None) -> dict[str, Any]:
+    """PM text, or a prebuilt preset, to a validated FeaturePlugin patch with an emblem. Never approves.
+
+    A preset skips the model call: its plugin was built ahead of time (`recorded_from` says how),
+    so the demo runs the same way every time.
+    """
+    preset = None
+    if preset_id:
+        preset = next((p for p in load_presets(configs_dir) if p["preset_id"] == preset_id), None)
+        if preset is None:
+            raise ValueError(f"Unknown preset {preset_id}")
+        prompt = preset["prompt"]
     prompt = prompt.strip()
     if not prompt:
         raise ValueError("Describe the feature first")
     stub = stub_plugin(prompt)
-    raw = client.reason_json(ARCHITECT_SYSTEM, prompt, stub_result=stub, run_id="feature_studio", bucket="analysis")
+    if preset:
+        raw = preset["plugin"]
+    else:
+        raw = client.reason_json(ARCHITECT_SYSTEM, prompt, stub_result=stub, run_id="feature_studio", bucket="analysis")
     plugin = _clean_plugin(raw if isinstance(raw, dict) else {}, stub)
     emblem = client.generate_ui_emblem(plugin.visual_prompt or stub["visual_prompt"],
                                        out_path=Path(generated_dir) / f"{plugin.feature_id}.png",
@@ -244,8 +263,9 @@ def propose_feature(prompt: str, *, configs_dir: Path, client: MetaClient,
     plugin = plugin.model_copy(update={"icon_url": f"/static/assets/generated/{emblem.name}"})
     record = stage_feature(ConfigService(configs_dir), plugin, title=f"Feature: {plugin.title}",
                            rationale=f"PM prompt: {prompt}")
+    source = f"preset_{preset.get('recorded_from', 'prebuilt')}" if preset else client.provider_mode
     return {"patch": record.model_dump(), "plugin": plugin.model_dump(), "provider_mode": client.provider_mode,
-            "emblem_source": "muse_image" if client.provider_mode == "meta" else "procedural_stub"}
+            "source": source, "emblem_source": "muse_image" if client.provider_mode == "meta" else "procedural_stub"}
 
 
 # ------------------------------------------------------------------ verdict

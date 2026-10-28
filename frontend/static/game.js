@@ -122,16 +122,17 @@ export const ERA_LABEL = { dawn_age: 'Dawn Age', stone_age: 'Stone Age', bronze_
 // 6-Chapter Questlines. Preserves exact predicates for chapters 1-3 so existing tests pass.
 export const QUESTS = [
   {
-    id: 'chapter_1', title: 'Chapter I: Foundations of the Valley',
+    id: 'chapter_1', title: 'Chapter I: Foundations',
     objectives: [
       ['Build a Small Home', (g) => g.stepIndex >= 1],
-      ['Collect food from Rural Farm', (g) => g.stepIndex >= 2],
+      ['Build a Rural Farm and harvest food', (g) => g.stepIndex >= 2],
       ['Discover Basic Toolmaking', (g) => g.techs.has('tech_toolmaking')],
+      ['Build a Woodcutter', (g) => g.hasBuilt('woodcutter_hut')],
     ],
     reward: { food: 20, wood: 20, coins: 30, scrolls: 10 },
   },
   {
-    id: 'chapter_2', title: 'Chapter II: To Battle in the Wilds',
+    id: 'chapter_2', title: 'Chapter II: Into the Stone Age',
     objectives: [
       ['Research Masonry', (g) => g.techs.has('tech_masonry')],
       ['Build a Stone Quarry', (g) => g.hasBuilt('stone_quarry')],
@@ -151,7 +152,7 @@ export const QUESTS = [
   {
     id: 'chapter_4', title: 'Chapter IV: Rise of Culture & Prosperity',
     objectives: [
-      ['Expand Valley or Build Granary', (g) => g.expansionsUnlocked.size > 0 || g.hasBuilt('granary')],
+      ['Build a Granary', (g) => g.hasBuilt('granary')],
       ['Upgrade 2 Buildings to Lv.2', (g) => g.buildings.filter((b) => (b.level || 1) >= 2).length >= 2],
       ['Research Irrigation', (g) => g.techs.has('tech_irrigation')],
     ],
@@ -202,7 +203,7 @@ export const ADVISOR_TEXT = {
   onb_01_shelter: 'Step 1/3: Build a Small Home. Pick the Small Home card, then a glowing building pad.',
   onb_02_forager: 'Step 2/3: Build a Rural Farm, then tap it to harvest fresh food.',
   onb_03_handoff: 'Step 3/3: You lead the valley now! Discover Basic Toolmaking to complete your training.',
-  free_play: 'Free play: train Heroes in the Barracks, expand territory, conquer Campaign stages, and advance to the Stone Age.',
+  free_play: 'Free play: train Heroes in the Barracks, conquer Campaign stages, and advance to the Stone Age.',
   achieved: 'The Stone Age has dawned! Upgrade buildings, build a Copper Smelter and lead your heroes to victory.',
   bronze: 'Bronze weapons and armor gleam throughout the valley. The Bronze Age is ours, Chief!',
 };
@@ -708,6 +709,17 @@ export class Game {
         if (!b.ready) b.cycleStart += dt;
       }
       if (!b.ready && !b.blockedReason && now - b.cycleStart >= spec.cycle(c)) b.ready = true;
+    }
+
+    // Safety net: villagers gather fallen branches (1 wood / 2 s, up to 30) so the valley never
+    // soft-locks on wood. Bots get it only after the tutorial, so the planted handoff friction
+    // (Woodcutter built before Toolmaking) still shows up in playtests; humans get it from the start.
+    const noWoodcutter = !this.buildings.some((b) => b.type === 'woodcutter_hut');
+    const woodTrap = !this.techs.has('tech_toolmaking') && this.resources.wood < c.research_toolmaking_wood_cost;
+    const human = this.meta.provider_mode === 'human';
+    if (this.resources.wood < c.optional_woodcutter_cost
+        && ((this.stepIndex >= STEPS.indexOf('free_play') && noWoodcutter) || (human && woodTrap))) {
+      this.resources.wood = Math.min(c.optional_woodcutter_cost, this.resources.wood + dt / 2);
     }
 
     const tent = this.buildings.find((b) => b.type === 'research_tent');

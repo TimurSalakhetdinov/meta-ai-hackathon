@@ -7,8 +7,8 @@ Supports:
    using pure Python standard library (wave, struct, math, random). Generates 16-second seamless
    valley theme (Alpine pastoral lyre, pan flute, warm strings, waterfall) and 12-second seamless
    battle theme (120 BPM driving war drums, rim clicks, staccato strings, brass stabs).
-2. `--mode musicgen`: AI generation using Meta's `facebook/musicgen-small` via HuggingFace
-   Transformers (requires torch and transformers).
+2. `--mode musicgen`: AI generation using Meta's MusicGen (`facebook/musicgen-medium` by default,
+   pick another size with `--model`) via HuggingFace Transformers (requires torch, transformers, scipy).
 """
 
 import argparse
@@ -372,35 +372,34 @@ def synthesize_battle_theme(duration=12.0, sample_rate=SAMPLE_RATE):
 
 
 # =====================================================================
-# META MUSICGEN-SMALL AI INTEGRATION
+# META MUSICGEN AI INTEGRATION
 # =====================================================================
 
-def generate_with_musicgen(output_dir, duration_valley=16.0, duration_battle=12.0):
+def generate_with_musicgen(output_dir, duration_valley=16.0, duration_battle=12.0, model_id="facebook/musicgen-medium"):
     """
-    Generates game soundtracks using Meta's facebook/musicgen-small model.
-    Falls back gracefully to procedural synthesis if torch/transformers are missing.
+    Generates game soundtracks using a Meta MusicGen model.
+    Exits with an error if torch/transformers are missing, so synth output is never mistaken for MusicGen.
     """
     try:
+        import numpy as np
+        import scipy.io.wavfile
         import torch
         from transformers import AutoProcessor, MusicgenForConditionalGeneration
     except ImportError:
-        print("[MusicGen] Torch or Transformers not installed in environment.")
-        print("[MusicGen] Falling back to high-quality procedural acoustic synthesizer...")
-        run_synth_mode(output_dir, duration_valley, duration_battle)
-        return
+        sys.exit("[MusicGen] torch, transformers and scipy are required for --mode musicgen.")
 
-    print("[MusicGen] Loading Meta facebook/musicgen-small model...")
+    print(f"[MusicGen] Loading Meta {model_id} model...")
     device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
-    processor = AutoProcessor.from_pretrained("facebook/musicgen-small")
-    model = MusicgenForConditionalGeneration.from_pretrained("facebook/musicgen-small").to(device)
+    processor = AutoProcessor.from_pretrained(model_id)
+    model = MusicgenForConditionalGeneration.from_pretrained(model_id).to(device)
 
     prompts = {
         "valley_theme.wav": (
-            "peaceful ancient mediterranean pastoral acoustic soundtrack, gentle lyre, pan flute, warm cello strings, alpine valley waterfall ambience, 72 bpm",
+            "calm medieval fantasy village soundtrack, gentle lute and wooden flute melody, warm cello strings, soft harp, pastoral, cozy strategy game background music, no vocals, 80 bpm",
             int(duration_valley),
         ),
         "battle_theme.wav": (
-            "epic ancient cinematic battle music, driving tribal war drums, taiko percussion, rhythmic brass fifths, strings ostinato, intense, 120 bpm",
+            "epic fantasy battle music for a strategy game, driving tribal war drums, taiko percussion, heroic brass, fast strings ostinato, intense, no vocals, 120 bpm",
             int(duration_battle),
         ),
     }
@@ -411,12 +410,13 @@ def generate_with_musicgen(output_dir, duration_valley=16.0, duration_battle=12.
         inputs = processor(text=[prompt], padding=True, return_tensors="pt").to(device)
         max_tokens = int(sec * 50)  # ~50 tokens per second for MusicGen
         with torch.no_grad():
-            audio_values = model.generate(**inputs, max_new_tokens=max_tokens)
+            audio_values = model.generate(**inputs, max_new_tokens=max_tokens, do_sample=True, guidance_scale=3.0)
 
-        # Convert to numpy / wav
-        audio_data = audio_values[0, 0].cpu().numpy()
-        import scipy.io.wavfile
-        scipy.io.wavfile.write(filepath, rate=model.config.audio_encoder.sampling_rate, data=audio_data)
+        # Peak-normalise and write 16-bit PCM, which every browser decodes
+        audio_data = audio_values[0, 0].float().cpu().numpy()
+        audio_data = audio_data / max(1e-6, float(np.abs(audio_data).max())) * 0.89
+        scipy.io.wavfile.write(filepath, rate=model.config.audio_encoder.sampling_rate,
+                               data=(audio_data * 32767).astype(np.int16))
         print(f"[MusicGen] Saved {filepath}")
 
 
@@ -441,10 +441,12 @@ def main():
                         help="Target directory for output audio files")
     parser.add_argument("--duration-valley", type=float, default=16.0, help="Duration in seconds for valley theme")
     parser.add_argument("--duration-battle", type=float, default=12.0, help="Duration in seconds for battle theme")
+    parser.add_argument("--model", default="facebook/musicgen-medium",
+                        help="MusicGen checkpoint for --mode musicgen (musicgen-small, -medium or -large)")
     args = parser.parse_args()
 
     if args.mode == "musicgen":
-        generate_with_musicgen(args.output_dir, args.duration_valley, args.duration_battle)
+        generate_with_musicgen(args.output_dir, args.duration_valley, args.duration_battle, args.model)
     else:
         run_synth_mode(args.output_dir, args.duration_valley, args.duration_battle)
 

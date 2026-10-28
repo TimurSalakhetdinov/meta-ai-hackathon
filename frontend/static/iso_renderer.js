@@ -94,7 +94,6 @@ export class IsoRenderer {
     this.sprites = sprites || {};
     this.seed = seed;
     const r = rngTools(mulberry32((seed ^ 0x5eed) >>> 0));
-    this.decor = buildDecor(r);
     this.ground = this.renderGround(rngTools(mulberry32((seed ^ 0x9a55) >>> 0)));
     this.fxRand = rngTools(mulberry32((seed ^ 0xf00d) >>> 0));
     this.popups = [];
@@ -274,12 +273,9 @@ export class IsoRenderer {
     this.drawShallows(ctx);
     ctx.drawImage(this.ground, 0, 0);
     this.drawCultureAura(ctx, game);
-    this.drawExpansionSectors(ctx, game);
     this.drawPadHighlights(ctx, game);
 
     const items = [];
-    for (const t of this.decor.trees) items.push({ y: t.y, draw: () => drawTree(ctx, t, this.time) });
-    for (const s of this.decor.rocks) items.push({ y: s.y, draw: () => drawRock(ctx, s) });
     for (const b of game.buildings) {
       const pos = tileToScreen(...b.tile);
       items.push({ y: pos.y, draw: () => this.drawBuilding(ctx, game, b, pos) });
@@ -485,46 +481,6 @@ export class IsoRenderer {
       ctx.stroke();
     }
     ctx.restore();
-  }
-
-  // Checkered 4x4 Expansion Sectors (exp_1 at [1, 6], exp_2 at [9, 4])
-  drawExpansionSectors(ctx, game) {
-    const sectors = [
-      { id: 'exp_1', origin: [0, 5], banner: { x: 110, y: 260, w: 88, h: 26 } },
-      { id: 'exp_2', origin: [8, 2], banner: { x: 762, y: 260, w: 88, h: 26 } },
-    ];
-    for (const sec of sectors) {
-      if (game.expansionsUnlocked?.has(sec.id)) continue;
-      for (let di = 0; di < 4; di++) {
-        for (let dj = 0; dj < 4; dj++) {
-          const ti = sec.origin[0] + di;
-          const tj = sec.origin[1] + dj;
-          const { x, y } = tileToScreen(ti, tj);
-          const col = ((di + dj) % 2 === 0) ? 'rgba(30,75,25,0.32)' : 'rgba(130,220,95,0.22)';
-          diamond(ctx, x, y, TILE_W, TILE_H, col);
-          ctx.strokeStyle = 'rgba(20,55,15,0.20)';
-          ctx.lineWidth = 1;
-          diamondPath(ctx, x, y, TILE_W, TILE_H);
-          ctx.stroke();
-        }
-      }
-      // Floating banner pill (🗺️ Expand)
-      const bob = Math.sin(this.time * 3 + (sec.id === 'exp_1' ? 0 : 1.5)) * 3;
-      const bx = sec.banner.x;
-      const by = sec.banner.y + bob;
-      roundRect(ctx, bx, by, sec.banner.w, sec.banner.h, 13, 'rgba(22, 45, 18, 0.90)');
-      ctx.strokeStyle = '#8cff66';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.roundRect(bx, by, sec.banner.w, sec.banner.h, 13);
-      ctx.stroke();
-      ctx.fillStyle = '#f0ffd6';
-      ctx.font = 'bold 12px Georgia, serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('🗺️ Expand', bx + sec.banner.w / 2, by + sec.banner.h / 2);
-      ctx.textBaseline = 'alphabetic';
-    }
   }
 
   drawPadHighlights(ctx, game) {
@@ -942,12 +898,6 @@ export class IsoRenderer {
       const { x, y } = tileToScreen(...p.tile);
       out.push({ target_id: p.id, kind: 'pad', x: x - TILE_W / 2, y: y - TILE_H / 2, w: TILE_W, h: TILE_H });
     }
-    if (!game.expansionsUnlocked?.has('exp_1')) {
-      out.push({ target_id: 'exp_1', kind: 'expansion', x: 110, y: 260, w: 88, h: 26, affordable: true });
-    }
-    if (!game.expansionsUnlocked?.has('exp_2')) {
-      out.push({ target_id: 'exp_2', kind: 'expansion', x: 762, y: 260, w: 88, h: 26, affordable: true });
-    }
     return out;
   }
 
@@ -960,6 +910,10 @@ export class IsoRenderer {
     if (pad && game.selectedCard) return pad;
     const chip = targets.find((t) => (t.kind === 'upgrade' || t.kind === 'worker' || t.kind === 'free_finish' || t.kind === 'expansion') && inRect(t, x, y));
     if (chip) return chip;
+    // The floating harvest bubble sits above the building box; clicking it harvests.
+    const bubble = targets.find((t) => t.kind === 'building' && t.ready
+      && Math.hypot(x - (t.x + t.w / 2), y - (t.y + t.h - 14 - 78)) <= 20);
+    if (bubble) return bubble;
     const buildings = targets.filter((t) => t.kind === 'building' && inRect(t, x, y))
       .sort((a, b) => (b.ready - a.ready) || (b.y + b.h) - (a.y + a.h));
     return buildings[0] || pad || null;
@@ -1208,101 +1162,6 @@ export class IsoRenderer {
     this.drawParticles(ctx, dt);
     this.drawPopups(ctx, dt);
   }
-}
-
-// ------------------------------------------------------------------ decor
-function buildDecor(r) {
-  const blocked = new Set([...ROAD]);
-  const reserve = ([i, j], radius) => {
-    for (let di = -radius; di <= radius; di++) for (let dj = -radius; dj <= radius; dj++) blocked.add(key(i + di, j + dj));
-  };
-  reserve(TOWN_CENTER_TILE, 1);
-  reserve(RESEARCH_TENT_TILE, 1);
-  PADS.forEach((p) => reserve(p.tile, 1));
-  const trees = [];
-  const rocks = [];
-  for (let i = 0; i < GRID; i++) {
-    for (let j = 0; j < GRID; j++) {
-      if (isWater(i, j) || isWater(i, j + 1) || blocked.has(key(i, j))) continue;
-      const { x, y } = tileToScreen(i, j);
-      if (isStony(i, j)) {
-        const n = r.int(1, 2);
-        for (let k = 0; k < n; k++) rocks.push({ x: x + r.range(-14, 14), y: y + r.range(-5, 5), s: r.range(0.7, 1.25), tone: r.range(-10, 10) });
-        continue;
-      }
-      const dense = isForest(i, j);
-      const n = dense ? r.int(1, 3) : (r.chance(0.16) ? 1 : 0);
-      for (let k = 0; k < n; k++) {
-        trees.push({
-          x: x + r.range(-16, 16), y: y + r.range(-6, 6), s: r.range(0.8, 1.2),
-          pine: dense ? r.chance(0.7) : r.chance(0.35), tone: r.range(-14, 10), phase: r.range(0, 6),
-        });
-      }
-    }
-  }
-  return { trees, rocks };
-}
-
-function drawTree(ctx, t, time) {
-  const sway = Math.sin(time * 1.1 + t.phase) * 1.3;
-  ctx.fillStyle = 'rgba(20,40,10,0.28)';
-  ctx.beginPath();
-  ctx.ellipse(t.x + 4, t.y + 2, 13 * t.s, 5 * t.s, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#6b4526';
-  ctx.fillRect(t.x - 2 * t.s, t.y - 12 * t.s, 4 * t.s, 13 * t.s);
-  if (t.pine) {
-    const layers = [[0, 16, 14], [-9, 13, 12], [-17, 10, 10]];
-    layers.forEach(([dy, half, hgt], n) => {
-      const top = t.y - 10 * t.s + dy * t.s - hgt * t.s - n * 2;
-      const sx = sway * (n + 1) * 0.5;
-      ctx.fillStyle = shade('#2f6b34', t.tone - n * 4);
-      ctx.beginPath();
-      ctx.moveTo(t.x + sx, top - 4 * t.s);
-      ctx.lineTo(t.x + half * t.s + sx * 0.5, t.y - 10 * t.s + dy * t.s);
-      ctx.lineTo(t.x - half * t.s + sx * 0.5, t.y - 10 * t.s + dy * t.s);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = 'rgba(160,220,120,0.18)';
-      ctx.beginPath();
-      ctx.moveTo(t.x + sx, top - 4 * t.s);
-      ctx.lineTo(t.x - half * t.s + sx * 0.5, t.y - 10 * t.s + dy * t.s);
-      ctx.lineTo(t.x - half * 0.3 * t.s + sx * 0.5, t.y - 10 * t.s + dy * t.s);
-      ctx.closePath();
-      ctx.fill();
-    });
-  } else {
-    const cy = t.y - 22 * t.s;
-    const blobs = [[-7, 3, 10], [7, 3, 10], [0, -6, 12], [0, 4, 11]];
-    for (const [dx, dy, rad] of blobs) circle(ctx, t.x + dx * t.s + sway, cy + dy * t.s, rad * t.s, shade('#4f8f3a', t.tone));
-    circle(ctx, t.x - 4 * t.s + sway, cy - 8 * t.s, 6 * t.s, 'rgba(190,240,140,0.25)');
-  }
-}
-
-function drawRock(ctx, s) {
-  const { x, y } = s;
-  const k = s.s;
-  ctx.fillStyle = 'rgba(30,30,30,0.25)';
-  ctx.beginPath();
-  ctx.ellipse(x + 3, y + 2, 14 * k, 5 * k, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = shade('#8c8a86', s.tone);
-  ctx.beginPath();
-  ctx.moveTo(x - 13 * k, y);
-  ctx.lineTo(x - 9 * k, y - 12 * k);
-  ctx.lineTo(x + 1 * k, y - 17 * k);
-  ctx.lineTo(x + 11 * k, y - 10 * k);
-  ctx.lineTo(x + 13 * k, y);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = shade('#b9b6ae', s.tone);
-  ctx.beginPath();
-  ctx.moveTo(x - 9 * k, y - 12 * k);
-  ctx.lineTo(x + 1 * k, y - 17 * k);
-  ctx.lineTo(x + 3 * k, y - 8 * k);
-  ctx.lineTo(x - 6 * k, y - 5 * k);
-  ctx.closePath();
-  ctx.fill();
 }
 
 function drawVillager(ctx, v, time) {

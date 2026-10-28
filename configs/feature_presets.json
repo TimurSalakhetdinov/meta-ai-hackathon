@@ -1,0 +1,83 @@
+[
+  {
+    "preset_id": "raider_ambush",
+    "label": "Raider Ambush",
+    "icon": "⚔️",
+    "summary": "A flashing battle button in tutorial step 2. Costs wood, gives stone and score.",
+    "prompt": "Add a Raider Ambush button at tutorial step 2 that costs wood and rewards score",
+    "recorded_from": "prebuilt",
+    "plugin": {
+      "feature_id": "raider_ambush",
+      "title": "Raider Ambush",
+      "icon": "⚔️",
+      "visual_prompt": "2.5D hand-painted strategy game icon emblem for Raider Ambush, crossed bronze swords over a round shield, warm gold and stone border, isolated on solid light background",
+      "description": "Add a Raider Ambush button at tutorial step 2 that costs wood and rewards score",
+      "unlock_at_step": "onb_02_forager",
+      "button_salience": "high_pulse",
+      "action_type": "encounter_modal",
+      "costs": {
+        "wood": 55
+      },
+      "rewards": {
+        "rp": 6,
+        "stone": 15,
+        "score": 15
+      },
+      "cooldown_sec": 12.0,
+      "advisor_intro": "Raiders by the river, Chief! Our hunters drove them off and took their spoils."
+    }
+  },
+  {
+    "preset_id": "harvest_festival",
+    "label": "Harvest Festival",
+    "icon": "🌾",
+    "summary": "A village feast after the tutorial. Spend a little food for food and score.",
+    "prompt": "Add a Harvest Festival after the tutorial that costs 10 food and gives 25 food and 20 score, with a 30 second cooldown",
+    "recorded_from": "prebuilt",
+    "plugin": {
+      "feature_id": "harvest_festival",
+      "title": "Harvest Festival",
+      "icon": "🌾",
+      "description": "A village feast after the tutorial: spend a little food, get more food and score.",
+      "unlock_at_step": "free_play",
+      "button_salience": "medium",
+      "action_type": "festival_buff",
+      "costs": {
+        "food": 10
+      },
+      "rewards": {
+        "food": 25,
+        "score": 20
+      },
+      "cooldown_sec": 30.0,
+      "advisor_intro": "The harvest is in, Chief! The village feasts and works harder for it.",
+      "visual_prompt": "2.5D hand-painted strategy game icon emblem for Harvest Festival, wheat sheaf and bread basket, warm gold and stone border, isolated on solid light background"
+    }
+  },
+  {
+    "preset_id": "wandering_merchant",
+    "label": "Wandering Merchant",
+    "icon": "🐪",
+    "summary": "A trader in tutorial step 1. Swap a little food for score.",
+    "prompt": "Add a Wandering Merchant at tutorial step 1 that trades 5 food for 10 score",
+    "recorded_from": "prebuilt",
+    "plugin": {
+      "feature_id": "wandering_merchant",
+      "title": "Wandering Merchant",
+      "icon": "🐪",
+      "description": "A trader visits during the first tutorial step and swaps food for score.",
+      "unlock_at_step": "onb_01_shelter",
+      "button_salience": "medium",
+      "action_type": "instant_trade",
+      "costs": {
+        "food": 5
+      },
+      "rewards": {
+        "score": 10
+      },
+      "cooldown_sec": 12.0,
+      "advisor_intro": "A merchant at the gate, Chief! He pays well for fresh food.",
+      "visual_prompt": "2.5D hand-painted strategy game icon emblem for Wandering Merchant, camel with trade bags, warm gold and stone border, isolated on solid light background"
+    }
+  }
+]
