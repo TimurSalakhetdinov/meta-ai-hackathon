@@ -54,7 +54,7 @@ flowchart LR
 - [x] Experiment agent: canary, worker pool, paired A/B reruns, McNemar and bootstrap report
 - [x] Closed loop from the CLI in stub mode (`python -m backend.cli run-closed-loop`)
 - [x] Committed demo runs in `runs_demo/` and a Dockerfile for a single-port deploy
-- [x] Feature studio in the dock: free-text feature to a validated patch with a stub emblem, five research-grounded personas, playtest behind the approval gate, verdict report and archetype-aware rework synthesis (stub mode, $0)
+- [x] Feature studio in the dock: free-text feature to a validated patch with a stub emblem, five research-grounded personas, playtest behind the approval gate, verdict report and archetype-aware rework synthesis (stub mode, $0). Pre-baked HURTS → POSITIVE demo bundle (`patch_005`/`patch_006` + 20 committed runs) with a 1-click Council Report switcher and split replays
 - [ ] Validation against human sessions
 - [ ] Demo video
 
@@ -92,7 +92,7 @@ Run the closed loop offline. Stub mode spends no Meta credits, and the prompt wa
 .venv/bin/python -m backend.cli analyze --run-id <run_id>
 ```
 
-The loop writes `runs/<run_id>/analysis.json`, `stuck_frame.png`, `runs/ab_summary.json` and `runs/voiceover_sheet.txt`. When `runs/` is empty, the server falls back to the read-only demo runs in `runs_demo/`.
+The loop writes `runs/<run_id>/analysis.json`, `stuck_frame.png`, `runs/ab_summary.json` and `runs/voiceover_sheet.txt`. When `runs/` is empty, the server falls back to the read-only demo runs in `runs_demo/`, including the Feature Studio HURTS (naive Raider Ambush at step 2, onboarding 100% → 60%) and POSITIVE (free-play rework, onboarding 100% → 100%, score 145 → 208) reports, switchable in the Council Report and replayable side by side.
 
 Run the tests (unit tests plus headless Playwright end-to-end and layout tests):
 

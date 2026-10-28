@@ -1,0 +1,146 @@
+{
+  "run_id": "studio_patch_006_B_cautious_hoarder_s42",
+  "variant_id": "B",
+  "patch_id": "patch_006",
+  "persona_id": "cautious_hoarder",
+  "seed": 42,
+  "time_scale": 4.0,
+  "provider_mode": "stub",
+  "analysis_version": "v1",
+  "time_to_first_action_sec": 1.228,
+  "stuck_events": 3,
+  "stuck_by_step": {
+    "free_play": 3
+  },
+  "stuck_abort": true,
+  "where_stuck": "free_play",
+  "onboarding_completed": true,
+  "first_achievement": true,
+  "first_achievement_sim_sec": 345.948,
+  "bronze_age_mastery": false,
+  "battles_won": 0,
+  "feature_uses": 2,
+  "feature_uses_onboarding": 0,
+  "action_rejected": 4,
+  "clicks": 85,
+  "session_ended": true,
+  "last_step_id": "free_play",
+  "sim_elapsed_sec": 382.413,
+  "final_score": 220,
+  "step_log": [
+    {
+      "sim_elapsed_sec": 0.0,
+      "step_id": "onb_01_shelter",
+      "event_type": "session_start",
+      "summary": "session_start"
+    },
+    {
+      "sim_elapsed_sec": 0.0,
+      "step_id": "onb_01_shelter",
+      "event_type": "step_enter",
+      "summary": "step_enter onb_01_shelter"
+    },
+    {
+      "sim_elapsed_sec": 4.628,
+      "step_id": "onb_01_shelter",
+      "event_type": "step_complete",
+      "summary": "step_complete onb_01_shelter"
+    },
+    {
+      "sim_elapsed_sec": 4.628,
+      "step_id": "onb_02_forager",
+      "event_type": "step_enter",
+      "summary": "step_enter onb_02_forager"
+    },
+    {
+      "sim_elapsed_sec": 20.294,
+      "step_id": "onb_02_forager",
+      "event_type": "step_complete",
+      "summary": "step_complete onb_02_forager"
+    },
+    {
+      "sim_elapsed_sec": 20.294,
+      "step_id": "onb_03_handoff",
+      "event_type": "step_enter",
+      "summary": "step_enter onb_03_handoff"
+    },
+    {
+      "sim_elapsed_sec": 26.36,
+      "step_id": "onb_03_handoff",
+      "event_type": "hint_shown",
+      "summary": "hint -> btn_research"
+    },
+    {
+      "sim_elapsed_sec": 27.56,
+      "step_id": "onb_03_handoff",
+      "event_type": "step_complete",
+      "summary": "step_complete onb_03_handoff"
+    },
+    {
+      "sim_elapsed_sec": 27.56,
+      "step_id": "free_play",
+      "event_type": "step_enter",
+      "summary": "step_enter free_play"
+    },
+    {
+      "sim_elapsed_sec": 35.294,
+      "step_id": "free_play",
+      "event_type": "quest_claimed",
+      "summary": "quest_claimed"
+    },
+    {
+      "sim_elapsed_sec": 109.49,
+      "step_id": "free_play",
+      "event_type": "action_rejected",
+      "summary": "card_tribal_monument: insufficient_wood"
+    },
+    {
+      "sim_elapsed_sec": 192.62,
+      "step_id": "free_play",
+      "event_type": "action_rejected",
+      "summary": "card_woodcutter_hut: insufficient_wood"
+    },
+    {
+      "sim_elapsed_sec": 231.02,
+      "step_id": "free_play",
+      "event_type": "stuck",
+      "summary": "STUCK (idle)"
+    },
+    {
+      "sim_elapsed_sec": 317.616,
+      "step_id": "free_play",
+      "event_type": "stuck",
+      "summary": "STUCK (idle)"
+    },
+    {
+      "sim_elapsed_sec": 345.948,
+      "step_id": "free_play",
+      "event_type": "achievement",
+      "summary": "first_achievement"
+    },
+    {
+      "sim_elapsed_sec": 353.547,
+      "step_id": "free_play",
+      "event_type": "action_rejected",
+      "summary": "card_smelter: insufficient_stone"
+    },
+    {
+      "sim_elapsed_sec": 367.347,
+      "step_id": "free_play",
+      "event_type": "action_rejected",
+      "summary": "tech_irrigation: insufficient_stone"
+    },
+    {
+      "sim_elapsed_sec": 375.948,
+      "step_id": "free_play",
+      "event_type": "stuck",
+      "summary": "STUCK (idle)"
+    },
+    {
+      "sim_elapsed_sec": 382.413,
+      "step_id": "free_play",
+      "event_type": "session_end",
+      "summary": "session_end"
+    }
+  ]
+}

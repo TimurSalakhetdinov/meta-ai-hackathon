@@ -198,7 +198,7 @@ export class StubBot {
     const distractible = p.distractibility ?? Math.max(p.salience_weight * (1 - p.follow_tutorial), p.curiosity);
     if (inTutorial && feature?.computed_salience === 'high_pulse' && !p.plan && r() < distractible) {
       this.featureUses += 1;
-      return { target: feature, thought: optionThought({ t: feature, why: 'feature' }, { featureUses: 0 }), mood: 'curious' };
+      return { target: feature, thought: optionThought({ t: feature, why: 'feature' }, { persona: this.persona, featureUses: 0 }), mood: 'curious' };
     }
     // In free play, before Stone Age, an affordable feature is a known way to gather resources.
     if (state.step_id === 'free_play' && feature && !state.achieved && this.featureUses < 2 && r() < 0.6) {

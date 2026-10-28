@@ -1,0 +1,158 @@
+{
+  "run_id": "studio_patch_006_B_impatient_newcomer_s42",
+  "variant_id": "B",
+  "patch_id": "patch_006",
+  "persona_id": "impatient_newcomer",
+  "seed": 42,
+  "time_scale": 4.0,
+  "provider_mode": "stub",
+  "analysis_version": "v1",
+  "time_to_first_action_sec": 2.478,
+  "stuck_events": 3,
+  "stuck_by_step": {
+    "free_play": 3
+  },
+  "stuck_abort": true,
+  "where_stuck": "free_play",
+  "onboarding_completed": true,
+  "first_achievement": true,
+  "first_achievement_sim_sec": 204.07,
+  "bronze_age_mastery": false,
+  "battles_won": 1,
+  "feature_uses": 3,
+  "feature_uses_onboarding": 0,
+  "action_rejected": 5,
+  "clicks": 70,
+  "session_ended": true,
+  "last_step_id": "free_play",
+  "sim_elapsed_sec": 310.132,
+  "final_score": 220,
+  "step_log": [
+    {
+      "sim_elapsed_sec": 0.0,
+      "step_id": "onb_01_shelter",
+      "event_type": "session_start",
+      "summary": "session_start"
+    },
+    {
+      "sim_elapsed_sec": 0.0,
+      "step_id": "onb_01_shelter",
+      "event_type": "step_enter",
+      "summary": "step_enter onb_01_shelter"
+    },
+    {
+      "sim_elapsed_sec": 8.478,
+      "step_id": "onb_01_shelter",
+      "event_type": "step_complete",
+      "summary": "step_complete onb_01_shelter"
+    },
+    {
+      "sim_elapsed_sec": 8.478,
+      "step_id": "onb_02_forager",
+      "event_type": "step_enter",
+      "summary": "step_enter onb_02_forager"
+    },
+    {
+      "sim_elapsed_sec": 37.343,
+      "step_id": "onb_02_forager",
+      "event_type": "step_complete",
+      "summary": "step_complete onb_02_forager"
+    },
+    {
+      "sim_elapsed_sec": 37.343,
+      "step_id": "onb_03_handoff",
+      "event_type": "step_enter",
+      "summary": "step_enter onb_03_handoff"
+    },
+    {
+      "sim_elapsed_sec": 43.41,
+      "step_id": "onb_03_handoff",
+      "event_type": "hint_shown",
+      "summary": "hint -> btn_research"
+    },
+    {
+      "sim_elapsed_sec": 52.209,
+      "step_id": "onb_03_handoff",
+      "event_type": "step_complete",
+      "summary": "step_complete onb_03_handoff"
+    },
+    {
+      "sim_elapsed_sec": 52.209,
+      "step_id": "free_play",
+      "event_type": "step_enter",
+      "summary": "step_enter free_play"
+    },
+    {
+      "sim_elapsed_sec": 60.076,
+      "step_id": "free_play",
+      "event_type": "quest_claimed",
+      "summary": "quest_claimed"
+    },
+    {
+      "sim_elapsed_sec": 111.874,
+      "step_id": "free_play",
+      "event_type": "action_rejected",
+      "summary": "card_forager_hut: no_free_worker"
+    },
+    {
+      "sim_elapsed_sec": 135.274,
+      "step_id": "free_play",
+      "event_type": "stuck",
+      "summary": "STUCK (idle)"
+    },
+    {
+      "sim_elapsed_sec": 141.939,
+      "step_id": "free_play",
+      "event_type": "action_rejected",
+      "summary": "card_forager_hut: no_free_worker"
+    },
+    {
+      "sim_elapsed_sec": 160.938,
+      "step_id": "free_play",
+      "event_type": "battle_won",
+      "summary": "battle_won"
+    },
+    {
+      "sim_elapsed_sec": 194.404,
+      "step_id": "free_play",
+      "event_type": "action_rejected",
+      "summary": "card_stone_quarry: insufficient_wood"
+    },
+    {
+      "sim_elapsed_sec": 204.07,
+      "step_id": "free_play",
+      "event_type": "achievement",
+      "summary": "first_achievement"
+    },
+    {
+      "sim_elapsed_sec": 234.07,
+      "step_id": "free_play",
+      "event_type": "stuck",
+      "summary": "STUCK (idle)"
+    },
+    {
+      "sim_elapsed_sec": 260.668,
+      "step_id": "free_play",
+      "event_type": "action_rejected",
+      "summary": "card_smelter: no_free_worker"
+    },
+    {
+      "sim_elapsed_sec": 274.734,
+      "step_id": "free_play",
+      "event_type": "action_rejected",
+      "summary": "card_stone_quarry: no_free_worker"
+    },
+    {
+      "sim_elapsed_sec": 306.934,
+      "step_id": "free_play",
+      "event_type": "stuck",
+      "summary": "STUCK (idle)"
+    },
+    {
+      "sim_elapsed_sec": 310.132,
+      "step_id": "free_play",
+      "event_type": "session_end",
+      "summary": "session_end"
+    }
+  ]
+}

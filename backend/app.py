@@ -272,14 +272,48 @@ def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = No
         started = sum(1 for line in job["log"] if line.startswith(("start ", "canary ")))
         return {**{k: v for k, v in job.items() if k != "log"}, "sessions_started": started}
 
+    def studio_bot_steps(run_id: str) -> list[dict[str, Any]]:
+        """Think-aloud lines, live first, then the committed demo bundle."""
+        return store.read_bot_steps(run_id) or demo_store.read_bot_steps(run_id)
+
     @app.get("/api/feature_studio/report/{patch_id}")
     def studio_report(patch_id: str):
         patch_or_404(patch_id)
         report = feature_studio.build_report(patch_id, configs_dir=configs_dir, runs_dir=runs_dir,
-                                             read_bot_steps=store.read_bot_steps)
+                                             read_bot_steps=studio_bot_steps, demo_dir=demo_dir)
         if report is None:
             raise HTTPException(404, f"No playtest has run for {patch_id} yet")
         return report
+
+    @app.get("/api/feature_studio/demos")
+    def studio_demos():
+        """Every switchable studio report: live runs first, then the pre-baked `runs_demo/` bundle.
+
+        Powers the 1-click pill bar in the Council Report so judges can flip between
+        the naive HURTS rollout and the POSITIVE rework at $0 runtime cost.
+        """
+        found: dict[str, dict[str, Any]] = {}
+        for base, source in ((demo_dir, "demo"), (runs_dir, "live")):
+            if not Path(base).exists():
+                continue
+            for path in sorted(Path(base).glob("studio_*_ab.json")):
+                pid = path.name[len("studio_"):-len("_ab.json")]
+                if pid in found and found[pid]["source"] == "live":
+                    continue
+                try:
+                    record = configs.load_patch(pid)
+                except PatchNotFoundError:
+                    continue
+                report = feature_studio.build_report(pid, configs_dir=configs_dir, runs_dir=runs_dir,
+                                                     read_bot_steps=studio_bot_steps, demo_dir=demo_dir)
+                if report is None:
+                    continue
+                short = ("Council Rework" if record.title.startswith("Rework:")
+                         else "Naive Feature" if record.title.startswith("Feature:") else record.title)
+                found[pid] = {"patch_id": pid, "title": record.title, "short": short,
+                              "verdict_key": report["key"], "verdict_label": report["label"],
+                              "source": source, "n_pairs": report.get("n_pairs")}
+        return [found[pid] for pid in sorted(found)]
 
     @app.post("/api/feature_studio/rework", status_code=201)
     def studio_rework(req: ReworkRequest):

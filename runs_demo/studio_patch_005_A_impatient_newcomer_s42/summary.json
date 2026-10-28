@@ -1,0 +1,188 @@
+{
+  "run_id": "studio_patch_005_A_impatient_newcomer_s42",
+  "variant_id": "B",
+  "patch_id": "patch_001",
+  "persona_id": "impatient_newcomer",
+  "seed": 42,
+  "time_scale": 4.0,
+  "provider_mode": "stub",
+  "analysis_version": "v1",
+  "time_to_first_action_sec": 0.954,
+  "stuck_events": 3,
+  "stuck_by_step": {
+    "free_play": 3
+  },
+  "stuck_abort": true,
+  "where_stuck": "free_play",
+  "onboarding_completed": true,
+  "first_achievement": true,
+  "first_achievement_sim_sec": 244.344,
+  "bronze_age_mastery": false,
+  "battles_won": 2,
+  "feature_uses": 0,
+  "feature_uses_onboarding": 0,
+  "action_rejected": 8,
+  "clicks": 86,
+  "session_ended": true,
+  "last_step_id": "free_play",
+  "sim_elapsed_sec": 359.54,
+  "final_score": 180,
+  "step_log": [
+    {
+      "sim_elapsed_sec": 0.0,
+      "step_id": "onb_01_shelter",
+      "event_type": "session_start",
+      "summary": "session_start"
+    },
+    {
+      "sim_elapsed_sec": 0.0,
+      "step_id": "onb_01_shelter",
+      "event_type": "step_enter",
+      "summary": "step_enter onb_01_shelter"
+    },
+    {
+      "sim_elapsed_sec": 4.088,
+      "step_id": "onb_01_shelter",
+      "event_type": "step_complete",
+      "summary": "step_complete onb_01_shelter"
+    },
+    {
+      "sim_elapsed_sec": 4.088,
+      "step_id": "onb_02_forager",
+      "event_type": "step_enter",
+      "summary": "step_enter onb_02_forager"
+    },
+    {
+      "sim_elapsed_sec": 28.553,
+      "step_id": "onb_02_forager",
+      "event_type": "step_complete",
+      "summary": "step_complete onb_02_forager"
+    },
+    {
+      "sim_elapsed_sec": 28.553,
+      "step_id": "onb_03_handoff",
+      "event_type": "step_enter",
+      "summary": "step_enter onb_03_handoff"
+    },
+    {
+      "sim_elapsed_sec": 34.553,
+      "step_id": "onb_03_handoff",
+      "event_type": "hint_shown",
+      "summary": "hint -> btn_research"
+    },
+    {
+      "sim_elapsed_sec": 42.152,
+      "step_id": "onb_03_handoff",
+      "event_type": "step_complete",
+      "summary": "step_complete onb_03_handoff"
+    },
+    {
+      "sim_elapsed_sec": 42.152,
+      "step_id": "free_play",
+      "event_type": "step_enter",
+      "summary": "step_enter free_play"
+    },
+    {
+      "sim_elapsed_sec": 49.219,
+      "step_id": "free_play",
+      "event_type": "quest_claimed",
+      "summary": "quest_claimed"
+    },
+    {
+      "sim_elapsed_sec": 80.884,
+      "step_id": "free_play",
+      "event_type": "battle_won",
+      "summary": "battle_won"
+    },
+    {
+      "sim_elapsed_sec": 87.418,
+      "step_id": "free_play",
+      "event_type": "action_rejected",
+      "summary": "card_granary: insufficient_wood"
+    },
+    {
+      "sim_elapsed_sec": 87.951,
+      "step_id": "free_play",
+      "event_type": "action_rejected",
+      "summary": "card_forager_hut: insufficient_wood"
+    },
+    {
+      "sim_elapsed_sec": 188.08,
+      "step_id": "free_play",
+      "event_type": "action_rejected",
+      "summary": "card_smelter: insufficient_wood"
+    },
+    {
+      "sim_elapsed_sec": 188.68,
+      "step_id": "free_play",
+      "event_type": "action_rejected",
+      "summary": "card_smelter: insufficient_wood"
+    },
+    {
+      "sim_elapsed_sec": 204.414,
+      "step_id": "free_play",
+      "event_type": "stuck",
+      "summary": "STUCK (idle)"
+    },
+    {
+      "sim_elapsed_sec": 229.545,
+      "step_id": "free_play",
+      "event_type": "action_rejected",
+      "summary": "card_stone_quarry: insufficient_wood"
+    },
+    {
+      "sim_elapsed_sec": 237.212,
+      "step_id": "free_play",
+      "event_type": "battle_won",
+      "summary": "battle_won"
+    },
+    {
+      "sim_elapsed_sec": 244.344,
+      "step_id": "free_play",
+      "event_type": "achievement",
+      "summary": "first_achievement"
+    },
+    {
+      "sim_elapsed_sec": 258.21,
+      "step_id": "free_play",
+      "event_type": "action_rejected",
+      "summary": "card_stone_quarry: insufficient_wood"
+    },
+    {
+      "sim_elapsed_sec": 274.344,
+      "step_id": "free_play",
+      "event_type": "stuck",
+      "summary": "STUCK (idle)"
+    },
+    {
+      "sim_elapsed_sec": 291.276,
+      "step_id": "free_play",
+      "event_type": "action_rejected",
+      "summary": "card_smelter: insufficient_wood"
+    },
+    {
+      "sim_elapsed_sec": 307.475,
+      "step_id": "free_play",
+      "event_type": "quest_claimed",
+      "summary": "quest_claimed"
+    },
+    {
+      "sim_elapsed_sec": 347.674,
+      "step_id": "free_play",
+      "event_type": "action_rejected",
+      "summary": "card_smelter: insufficient_wood"
+    },
+    {
+      "sim_elapsed_sec": 358.141,
+      "step_id": "free_play",
+      "event_type": "stuck",
+      "summary": "STUCK (idle)"
+    },
+    {
+      "sim_elapsed_sec": 359.54,
+      "step_id": "free_play",
+      "event_type": "session_end",
+      "summary": "session_end"
+    }
+  ]
+}

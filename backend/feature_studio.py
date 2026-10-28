@@ -481,11 +481,23 @@ def run_playtest(patch_id: str, *, configs_dir: Path, runs_dir: Path, client: Me
                                patch_id=patch_id, baseline_patch_id=baseline))
 
 
-def build_report(patch_id: str, *, configs_dir: Path, runs_dir: Path, read_bot_steps: Any) -> Optional[dict[str, Any]]:
-    path = Path(runs_dir) / summary_name(patch_id)
-    if not path.exists():
+def build_report(patch_id: str, *, configs_dir: Path, runs_dir: Path, read_bot_steps: Any,
+                 demo_dir: Optional[Path] = None) -> Optional[dict[str, Any]]:
+    """Council report for a playtested patch; falls back to the committed `runs_demo/` bundle.
+
+    A fresh clone or deploy has no live runs, so the pre-baked HURTS and POSITIVE
+    reports load from `demo_dir` at $0 cost. Live runs always win when both exist.
+    """
+    ab = None
+    for base in (runs_dir, demo_dir):
+        if base is None:
+            continue
+        path = Path(base) / summary_name(patch_id)
+        if path.exists():
+            ab = json.loads(path.read_text())
+            break
+    if ab is None:
         return None
-    ab = json.loads(path.read_text())
     record = ConfigService(configs_dir).load_patch(patch_id)
     plugin = record.body.get("feature_plugin") or {}
     report = verdict(ab, plugin)

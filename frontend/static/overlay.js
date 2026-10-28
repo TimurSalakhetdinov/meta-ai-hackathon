@@ -516,15 +516,27 @@ class Overlay {
   }
 
   // ------------------------------------------------------ Council Report
+  async fetchStudioReport(pid) {
+    try {
+      const r = await fetch(`/api/feature_studio/report/${encodeURIComponent(pid)}`);
+      if (r.ok) return await r.json();
+    } catch { /* none yet */ }
+    return null;
+  }
+
   async renderReport() {
     const el = document.getElementById('tab-report');
-    const pid = this.reportPatch || this.feature?.patch_id;
-    let report = null;
-    if (pid) {
-      try {
-        const r = await fetch(`/api/feature_studio/report/${encodeURIComponent(pid)}`);
-        if (r.ok) report = await r.json();
-      } catch { /* none yet */ }
+    let report = this.reportPatch ? await this.fetchStudioReport(this.reportPatch) : null;
+    let demos = [];
+    try {
+      const r = await fetch('/api/feature_studio/demos');
+      if (r.ok) demos = await r.json();
+    } catch { /* no switcher */ }
+    if (!report) {
+      // No live playtest this session: open the pre-baked naive demo so the
+      // HURTS → POSITIVE story is one click away at $0 cost on a fresh clone.
+      const first = demos.find((d) => d.source === 'demo');
+      if (first) report = await this.fetchStudioReport(first.patch_id);
     }
     if (!report) {
       el.innerHTML = `<div class="note">No feature playtest yet: forge a decree, approve it and summon playtesters. Below is the analyst's onboarding diagnosis.</div>
@@ -542,7 +554,15 @@ class Overlay {
         <div class="sp-t">“${esc(q.thought)}”</div><div class="sp-o">${esc(q.outcome)}</div></div>`;
     }).join('');
     const p = report.plaques;
+    const demoIds = new Set(demos.filter((d) => d.source === 'demo').map((d) => d.patch_id));
+    const pillIcon = { positive: '✅', hurts: '❌', mixed: '⚠️' };
+    const pills = demos.length ? `
+      <div class="demo-pills"><span class="demo-pills-label">Studio reports:</span>${demos.map((d) => `
+        <button class="demo-pill${d.patch_id === report.patch_id ? ' active' : ''}${d.source === 'live' ? ' live' : ''}" data-pid="${esc(d.patch_id)}"
+          title="${esc(d.verdict_label)} · ${esc(d.title)} (${esc(d.patch_id)}${d.source === 'live' ? ', this session' : ', pre-baked demo'})">${esc(d.short)} ${pillIcon[d.verdict_key] || ''}${d.source === 'live' ? ' ●' : ''}</button>`).join('')}</div>
+      ${demoIds.has(report.patch_id) ? '<div class="note">Pre-baked demo at $0 cost — forge your own feature to playtest live.</div>' : ''}` : '';
     el.innerHTML = `
+      ${pills}
       <div class="verdict ${esc(report.key)}">${esc(report.label)}</div>
       <div class="takeaway">${esc(report.takeaway)}</div>
       <div class="plaques">${plaque('Onboarding', p.onboarding)}${plaque('Stuck events', p.stuck)}${plaque('Stone Age', p.stone_age)}${plaque('Score', p.score)}</div>
@@ -556,6 +576,10 @@ class Overlay {
       <details class="onboarding-details"><summary class="section-h">Onboarding Baseline &amp; Loop (patch_001)</summary>
         <div id="report-loop"></div><div class="section-h">Onboarding fix A/B</div><div id="report-ab"></div></details>`;
     el.querySelector('#rework-btn').addEventListener('click', () => this.rework(report.patch_id));
+    el.querySelectorAll('.demo-pill').forEach((b) => b.addEventListener('click', () => {
+      this.reportPatch = b.dataset.pid;
+      this.renderReport();
+    }));
     el.querySelector('#replay-btn').addEventListener('click', () => {
       // Stub runs need dev=1, and the replay then labels them STUB / DEV MODE.
       const dev = report.provider_mode === 'meta' ? '' : '&dev=1';

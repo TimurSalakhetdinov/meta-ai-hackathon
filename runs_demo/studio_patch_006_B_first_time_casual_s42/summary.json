@@ -1,0 +1,152 @@
+{
+  "run_id": "studio_patch_006_B_first_time_casual_s42",
+  "variant_id": "B",
+  "patch_id": "patch_006",
+  "persona_id": "first_time_casual",
+  "seed": 42,
+  "time_scale": 4.0,
+  "provider_mode": "stub",
+  "analysis_version": "v1",
+  "time_to_first_action_sec": 2.36,
+  "stuck_events": 1,
+  "stuck_by_step": {
+    "free_play": 1
+  },
+  "stuck_abort": false,
+  "where_stuck": "free_play",
+  "onboarding_completed": true,
+  "first_achievement": true,
+  "first_achievement_sim_sec": 235.151,
+  "bronze_age_mastery": true,
+  "battles_won": 3,
+  "feature_uses": 3,
+  "feature_uses_onboarding": 0,
+  "action_rejected": 3,
+  "clicks": 55,
+  "session_ended": true,
+  "last_step_id": "free_play",
+  "sim_elapsed_sec": 306.481,
+  "final_score": 315,
+  "step_log": [
+    {
+      "sim_elapsed_sec": 0.0,
+      "step_id": "onb_01_shelter",
+      "event_type": "session_start",
+      "summary": "session_start"
+    },
+    {
+      "sim_elapsed_sec": 0.0,
+      "step_id": "onb_01_shelter",
+      "event_type": "step_enter",
+      "summary": "step_enter onb_01_shelter"
+    },
+    {
+      "sim_elapsed_sec": 8.426,
+      "step_id": "onb_01_shelter",
+      "event_type": "step_complete",
+      "summary": "step_complete onb_01_shelter"
+    },
+    {
+      "sim_elapsed_sec": 8.426,
+      "step_id": "onb_02_forager",
+      "event_type": "step_enter",
+      "summary": "step_enter onb_02_forager"
+    },
+    {
+      "sim_elapsed_sec": 27.492,
+      "step_id": "onb_02_forager",
+      "event_type": "step_complete",
+      "summary": "step_complete onb_02_forager"
+    },
+    {
+      "sim_elapsed_sec": 27.492,
+      "step_id": "onb_03_handoff",
+      "event_type": "step_enter",
+      "summary": "step_enter onb_03_handoff"
+    },
+    {
+      "sim_elapsed_sec": 33.492,
+      "step_id": "onb_03_handoff",
+      "event_type": "hint_shown",
+      "summary": "hint -> btn_research"
+    },
+    {
+      "sim_elapsed_sec": 35.159,
+      "step_id": "onb_03_handoff",
+      "event_type": "step_complete",
+      "summary": "step_complete onb_03_handoff"
+    },
+    {
+      "sim_elapsed_sec": 35.159,
+      "step_id": "free_play",
+      "event_type": "step_enter",
+      "summary": "step_enter free_play"
+    },
+    {
+      "sim_elapsed_sec": 42.958,
+      "step_id": "free_play",
+      "event_type": "quest_claimed",
+      "summary": "quest_claimed"
+    },
+    {
+      "sim_elapsed_sec": 138.088,
+      "step_id": "free_play",
+      "event_type": "battle_won",
+      "summary": "battle_won"
+    },
+    {
+      "sim_elapsed_sec": 208.885,
+      "step_id": "free_play",
+      "event_type": "action_rejected",
+      "summary": "card_stone_quarry: insufficient_wood"
+    },
+    {
+      "sim_elapsed_sec": 210.018,
+      "step_id": "free_play",
+      "event_type": "action_rejected",
+      "summary": "card_stone_quarry: insufficient_wood"
+    },
+    {
+      "sim_elapsed_sec": 209.62,
+      "step_id": "free_play",
+      "event_type": "stuck",
+      "summary": "STUCK (idle)"
+    },
+    {
+      "sim_elapsed_sec": 227.684,
+      "step_id": "free_play",
+      "event_type": "battle_won",
+      "summary": "battle_won"
+    },
+    {
+      "sim_elapsed_sec": 235.151,
+      "step_id": "free_play",
+      "event_type": "achievement",
+      "summary": "first_achievement"
+    },
+    {
+      "sim_elapsed_sec": 257.417,
+      "step_id": "free_play",
+      "event_type": "action_rejected",
+      "summary": "card_tribal_monument: insufficient_wood"
+    },
+    {
+      "sim_elapsed_sec": 272.216,
+      "step_id": "free_play",
+      "event_type": "battle_won",
+      "summary": "battle_won"
+    },
+    {
+      "sim_elapsed_sec": 306.281,
+      "step_id": "free_play",
+      "event_type": "achievement",
+      "summary": "bronze_age_mastery"
+    },
+    {
+      "sim_elapsed_sec": 306.481,
+      "step_id": "free_play",
+      "event_type": "session_end",
+      "summary": "session_end"
+    }
+  ]
+}

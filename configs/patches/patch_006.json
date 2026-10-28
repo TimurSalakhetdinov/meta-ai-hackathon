@@ -1,0 +1,38 @@
+{
+  "patch_id": "patch_006",
+  "status": "approved",
+  "created_by": "designer_agent",
+  "created_at": "2026-10-28T13:06:13Z",
+  "title": "Rework: Raider Ambush",
+  "rationale": "Designer rework: move unlock_at_step from onb_02_forager to free_play; tone down button_salience from high_pulse to medium; pay 10 Food instead of 55 Wood; reward 25 Food, 15 Stone, 6 RP and 25 score, the Stone Age bottleneck; set the cooldown to 15 s; affected archetypes: Rush-Clicker, Tinkerer.",
+  "target_step": "free_play",
+  "baseline_patch_id": "patch_001",
+  "body": {
+    "lock_optional_builds_until_step": "onb_03_handoff",
+    "research_button_salience": "high_pulse",
+    "starting_wood": 120,
+    "idle_hint_delay_sec": 6.0,
+    "feature_plugin": {
+      "feature_id": "raider_ambush",
+      "title": "Raider Ambush",
+      "icon": "⚔️",
+      "icon_url": "/static/assets/generated/raider_ambush.png",
+      "visual_prompt": "2.5D hand-painted strategy game icon emblem for Raider Ambush, crossed bronze swords over a round shield, warm gold and stone border, isolated on solid light background",
+      "description": "Add a Raider Ambush button at tutorial step 2 that costs wood and rewards score",
+      "unlock_at_step": "free_play",
+      "button_salience": "medium",
+      "action_type": "encounter_modal",
+      "costs": {
+        "food": 10
+      },
+      "rewards": {
+        "food": 25,
+        "stone": 15,
+        "rp": 6,
+        "score": 25
+      },
+      "cooldown_sec": 15.0,
+      "advisor_intro": "Raiders by the river, Chief! Our hunters drove them off and took their spoils."
+    }
+  }
+}

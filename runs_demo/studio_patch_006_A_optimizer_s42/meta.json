@@ -1,0 +1,39 @@
+{
+  "run_id": "studio_patch_006_A_optimizer_s42",
+  "variant_id": "B",
+  "patch_id": "patch_001",
+  "persona_id": "optimizer",
+  "seed": 42,
+  "time_scale": 4.0,
+  "provider_mode": "stub",
+  "started_wall_ts_ms": 1793192864015,
+  "analysis_config": {
+    "analysis_version": "v1",
+    "stuck_idle_sim_sec": 30.0,
+    "stuck_rejected_streak": 3,
+    "stuck_abort_per_step": 3
+  },
+  "config": {
+    "variant": "B",
+    "patch_id": "patch_001",
+    "base_config_sha256": "61e878205dc62c997fd1e63f7fb5c9e8d18713cba2e3b6c2fc9dac788f40cc0d",
+    "diff": {
+      "starting_wood": {
+        "from": 80,
+        "to": 120
+      },
+      "lock_optional_builds_until_step": {
+        "from": null,
+        "to": "onb_03_handoff"
+      },
+      "research_button_salience": {
+        "from": "low",
+        "to": "high_pulse"
+      },
+      "idle_hint_delay_sec": {
+        "from": 15.0,
+        "to": 6.0
+      }
+    }
+  }
+}

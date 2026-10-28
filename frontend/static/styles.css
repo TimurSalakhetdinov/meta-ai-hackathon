@@ -353,6 +353,12 @@ select.persona { flex: 1; padding: 4px; background: #fffaf0; color: var(--ink); 
 .m-sub { font: italic 7.5px var(--serif); color: #6b5338; line-height: 1.1; text-align: center; }
 
 /* Council Report. */
+.demo-pills { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-bottom: 4px; max-width: 100%; }
+.demo-pills-label { font: 700 10px var(--serif); color: #6a2a14; }
+.demo-pill { padding: 2px 8px; border-radius: 10px; font: 700 10px var(--ui); color: #3a2208;
+  background: linear-gradient(#fff6d8, #ecd9a8); border: 1px solid var(--trim); cursor: pointer; white-space: nowrap; }
+.demo-pill.live { border-style: dashed; }
+.demo-pill.active { color: #fff; background: linear-gradient(#8a5a2a, #5a3a1c); border-color: var(--gold); }
 .verdict { padding: 6px 4px; text-align: center; font: 800 11.5px var(--serif); letter-spacing: .3px; border-radius: 6px; border: 2px solid; }
 .verdict.positive { color: #fff; background: linear-gradient(#4fae3c, #1f6a14); border-color: var(--gold); }
 .verdict.mixed { color: #3a2208; background: linear-gradient(#ffd27a, #c48a1d); border-color: #8a5424; }
