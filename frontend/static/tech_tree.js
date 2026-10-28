@@ -4,16 +4,16 @@
 import { RESOURCE_LABEL, TECHS, TECH_ORDER } from './game.js';
 
 const NODE_POS = {
-  tech_toolmaking: [0, 118],
-  tech_woodworking: [170, 8],
-  tech_baskets: [170, 118],
-  tech_masonry: [170, 228],
-  tech_irrigation: [342, 50],
+  tech_toolmaking: [0, 116],
+  tech_woodworking: [170, 0],
+  tech_baskets: [170, 116],
+  tech_masonry: [170, 232],
+  tech_irrigation: [342, 52],
   tech_stone_age: [342, 190],
   tech_bronze_age: [514, 190],
 };
 const NODE_W = 150;
-const NODE_H = 82;
+const NODE_H = 98;
 
 export class TechTreeView {
   constructor(root, rpLabel) {
@@ -47,7 +47,7 @@ export class TechTreeView {
           stroke="${done ? '#5f9a3a' : '#b08b4a'}" stroke-width="${done ? 4 : 3}" stroke-dasharray="${done ? '' : '6 5'}"/>`);
       }
     }
-    return `<svg width="664" height="318">${lines.join('')}</svg>`;
+    return `<svg width="664" height="330">${lines.join('')}</svg>`;
   }
 
   node(game, id) {

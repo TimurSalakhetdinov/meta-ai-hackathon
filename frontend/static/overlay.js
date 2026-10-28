@@ -60,6 +60,8 @@ class Overlay {
     this.feature = null;
     this.chosen = new Set();
     this.job = null;
+    // Emblem source per patch_id. Only a Muse Image emblem is labelled as one.
+    this.emblemSource = {};
 
     document.querySelectorAll('#director .tab').forEach((b) => b.addEventListener('click', () => this.showTab(b.dataset.tab)));
 
@@ -110,7 +112,7 @@ class Overlay {
       const data = await r.json();
       this.liveNext = data.next;
       this.botNext = data.bot_next;
-      for (const ev of data.events) if (ev.event_type === 'stuck') this.addStream(streamLine(ev), 'stuck');
+      for (const ev of data.events) if (ev.event_type === 'stuck') this.addStream(streamLine(ev), 'stuck-row');
       if (data.summary) this.stuckEvents = data.summary.stuck_events;
     } catch { /* server restarting; retry next tick */ }
   }
@@ -393,6 +395,7 @@ class Overlay {
       const data = await r.json();
       if (!r.ok) throw new Error(typeof data.detail === 'string' ? data.detail : `HTTP ${r.status}`);
       this.feature = data.patch;
+      this.emblemSource[data.patch.patch_id] = data.emblem_source;
       note.textContent = `${data.patch.patch_id} staged as ${data.patch.status}. Review the decree below.`;
     } catch (err) {
       note.textContent = `Could not forge: ${err.message}`;
@@ -409,11 +412,12 @@ class Overlay {
     const badges = (obj, sign) => Object.entries(obj || {}).map(([k, v]) => `<span class="res-badge ${sign === '-' ? 'cost' : 'gain'}">${RES_ICON[k] || ''} ${sign}${esc(v)}</span>`).join('');
     const icon = f.icon_url ? `<img src="${esc(f.icon_url)}?v=${esc(p.patch_id)}" alt="">` : `<span>${esc(f.icon)}</span>`;
     const canDecide = p.status === 'validated';
+    const gen = this.emblemSource[p.patch_id] === 'muse_image' ? 'Generated via Muse Image' : 'Procedural stub emblem';
     const seal = { validated: '✔ Validated', approved: '✔ Approved', rejected: '✖ Dismissed', proposed: 'Pending' }[p.status] || esc(p.status);
     el.innerHTML = `
       <div class="decree ${esc(p.status)}">
         <div class="decree-top">
-          <div class="emblem">${icon}${f.icon_url ? '<span class="gen-badge">Generated via Muse Image</span>' : ''}</div>
+          <div class="emblem">${icon}${f.icon_url ? `<span class="gen-badge">${gen}</span>` : ''}</div>
           <div class="decree-meta">
             <div class="decree-title">${esc(f.title)}</div>
             <div class="decree-step">${esc(STEP_LABEL[f.unlock_at_step] || f.unlock_at_step)} · ${esc(f.button_salience.replace('_', ' '))}</div>
@@ -447,6 +451,7 @@ class Overlay {
       note.textContent = `Could not ${action}: ${err.message}`;
     }
     this.renderDecree();
+    document.getElementById('summon-note').scrollIntoView({ block: 'nearest' });
   }
 
   updateSummon() {
@@ -477,6 +482,7 @@ class Overlay {
       return;
     }
     this.updateSummon();
+    note.scrollIntoView({ block: 'nearest' });
     const tick = async () => {
       try {
         this.job = await (await fetch(`/api/feature_studio/jobs/${this.job.job_id}`)).json();
@@ -536,7 +542,9 @@ class Overlay {
       <div class="note" id="rework-note"></div>`;
     el.querySelector('#rework-btn').addEventListener('click', () => this.rework(report.patch_id));
     el.querySelector('#replay-btn').addEventListener('click', () => {
-      location.href = `/?replay_a=${encodeURIComponent(report.replay.A)}&replay_b=${encodeURIComponent(report.replay.B)}`;
+      // Stub runs need dev=1, and the replay then labels them STUB / DEV MODE.
+      const dev = report.provider_mode === 'meta' ? '' : '&dev=1';
+      location.href = `/?replay_a=${encodeURIComponent(report.replay.A)}&replay_b=${encodeURIComponent(report.replay.B)}${dev}`;
     });
   }
 
@@ -548,6 +556,7 @@ class Overlay {
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+      this.emblemSource[data.patch.patch_id] = this.emblemSource[patchId];
       this.feature = data.patch;
       this.reportPatch = null;
       this.renderDecree();

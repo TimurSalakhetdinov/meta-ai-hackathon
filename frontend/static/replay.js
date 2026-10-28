@@ -99,7 +99,7 @@ class Panel {
 
     this.el = document.createElement('div');
     this.el.className = 'rp-panel';
-    const label = side === 'A' ? 'A · base config' : `B · ${esc(meta.patch_id || 'patched')} (approved)`;
+    const label = side === 'A' ? `A · ${meta.patch_id ? `${esc(meta.patch_id)} (baseline)` : 'base config'}` : `B · ${esc(meta.patch_id || 'patched')} (approved)`;
     this.el.innerHTML = `
       <div class="rp-label"><span>${label}</span><span class="badge">${esc(meta.run_id)}</span></div>
       <canvas width="960" height="540"></canvas>
