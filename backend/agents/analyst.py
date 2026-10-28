@@ -210,9 +210,44 @@ def analyze_run(run_id: str, *, runs_dir: Path, configs_dir: Path,
         stuck_png = run_dir / "stuck_frame.png"
         stuck_png.write_bytes(png)
 
-    stub = stub_diagnosis(summary, events, targets)
+    # Committed demo runs ship without frames/ to keep the repo small: re-analysis
+    # must not wipe their visual evidence. Reuse the saved SAM masks and stuck frame.
+    prior: dict[str, Any] = {}
+    prior_path = run_dir / "analysis.json"
+    if prior_path.exists():
+        try:
+            prior = json.loads(prior_path.read_text())
+        except json.JSONDecodeError:
+            prior = {}
+    if not masks and isinstance(prior.get("sam_masks"), list) and prior["sam_masks"]:
+        masks = prior["sam_masks"]
+    stuck_frame_name = "stuck_frame.png" if (stuck_png or (run_dir / "stuck_frame.png").exists()) else None
+
+    frame_targets = targets
+    if not frame_targets and masks:
+        # No fresh frame: rebuild the salience inputs from the preserved SAM masks.
+        # Research salience comes from the run's own resolved config (the game sets
+        # btn_research.computed_salience from that lever directly).
+        resolved: dict[str, Any] = {}
+        resolved_path = run_dir / "resolved_config.json"
+        if resolved_path.exists():
+            try:
+                resolved = json.loads(resolved_path.read_text())
+            except json.JSONDecodeError:
+                resolved = {}
+        frame_targets = []
+        for m in masks:
+            bbox = m.get("bbox") or []
+            pseudo: dict[str, Any] = {"target_id": m.get("target_id")}
+            if isinstance(bbox, (list, tuple)) and len(bbox) == 4:
+                pseudo.update({"x": bbox[0], "y": bbox[1], "w": bbox[2], "h": bbox[3]})
+            if m.get("target_id") == "btn_research" and resolved.get("research_button_salience"):
+                pseudo["computed_salience"] = resolved["research_button_salience"]
+            frame_targets.append(pseudo)
+
+    stub = stub_diagnosis(summary, events, frame_targets)
     client = client or MetaClient(runs_dir=runs_dir, configs_dir=configs_dir)
-    visual_salience = compute_visual_salience(targets, masks)
+    visual_salience = compute_visual_salience(frame_targets, masks)
     evidence = {"where_stuck": where, "stuck_events": summary.get("stuck_events"),
                 "stuck_by_step": summary.get("stuck_by_step"), "action_rejected": summary.get("action_rejected"),
                 "step_log": summary.get("step_log", [])[-25:], "stub_hypotheses": stub["hypotheses"],
@@ -229,7 +264,7 @@ def analyze_run(run_id: str, *, runs_dir: Path, configs_dir: Path,
         "onboarding_completed": summary.get("onboarding_completed"),
         "first_achievement": summary.get("first_achievement"),
         "stuck_bot_step_index": idx,
-        "stuck_frame": "stuck_frame.png" if stuck_png else None,
+        "stuck_frame": stuck_frame_name,
         "sam_masks": masks,
         "visual_salience": visual_salience,
         "diagnosis": reasoning.get("diagnosis", stub["diagnosis"]),

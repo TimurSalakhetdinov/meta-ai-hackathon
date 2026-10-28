@@ -24,7 +24,7 @@ flowchart LR
 ```
 
 1. **Playtester agents.** Muse Spark agents with different player personas (e.g. impatient casual, careful completionist, first-time gamer) play a browser game through computer use: they look at the screen and act.
-2. **Analyst agent.** It uses SAM 3.1 to segment UI elements in gameplay screenshots and Muse Spark to reason over sessions. It builds an onboarding funnel and ranks friction points (where personas hesitate, fail, or drop off).
+2. **Analyst agent.** It uses SAM 3.1 to segment UI elements in gameplay screenshots and Muse Spark to reason over sessions. It builds an onboarding funnel and ranks friction points with quantified evidence, including the SAM 3.1 distractor-to-goal visual salience ratio.
 3. **Designer agent.** It proposes concrete onboarding config changes, such as tutorial steps, hints, pacing or difficulty.
 4. **Human approval gate.** No change is applied until a human approves it.
 5. **Experiment agent.** It reruns the playtesters on the old and new configs as an A/B comparison and reports whether the fix improved the funnel.
@@ -48,13 +48,13 @@ flowchart LR
 - [x] Stub persona bot behind Watch Bot Play (offline placeholder, labelled STUB)
 - [x] Three eras (Dawn, Stone, Bronze Age), upgrades, quests, expeditions and worker assignment
 - [x] Async Playwright bot runner with Set-of-Mark frames, cost ledger, budget caps and response cache
-- [ ] Playtester agents with Muse Spark (computer use): runner and adapters built, first live run pending
-- [x] Analyst agent: stuck step, stuck frame and think-aloud quotes (stub diagnosis; live SAM 3.1 plus Muse Spark pending)
+- [ ] Playtester agents with Muse Spark (computer use): runner and adapters built, working-memory scratchpad per persona, first live run pending
+- [x] Analyst agent: stuck step, stuck frame, SAM 3.1 distractor-to-goal visual salience ratio (6.76x on the demo run) and think-aloud quotes, all surfaced in the Council Report (stub diagnosis; live SAM 3.1 plus Muse Spark pending)
 - [x] Designer agent staging a validated patch behind the approval gate
 - [x] Experiment agent: canary, worker pool, paired A/B reruns, McNemar and bootstrap report
 - [x] Closed loop from the CLI in stub mode (`python -m backend.cli run-closed-loop`)
 - [x] Committed demo runs in `runs_demo/` and a Dockerfile for a single-port deploy
-- [x] Feature studio in the dock: free-text feature to a validated patch with a stub emblem, five research-grounded personas, playtest behind the approval gate, verdict report and rework (stub mode, $0)
+- [x] Feature studio in the dock: free-text feature to a validated patch with a stub emblem, five research-grounded personas, playtest behind the approval gate, verdict report and archetype-aware rework synthesis (stub mode, $0)
 - [ ] Validation against human sessions
 - [ ] Demo video
 

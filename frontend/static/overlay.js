@@ -249,18 +249,26 @@ class Overlay {
       return;
     }
     const analysisRun = this.ctx.params.analysisRun || (this.ctx.params.variant === 'A' ? this.ctx.runId : null);
-    if (analysisRun) {
+    const fetchAnalysis = async (runId) => {
       try {
-        const r = await fetch(`/api/runs/${encodeURIComponent(analysisRun)}/analysis`);
-        if (r.ok) analysis = await r.json();
+        const r = await fetch(`/api/runs/${encodeURIComponent(runId)}/analysis`);
+        if (r.ok) return await r.json();
       } catch { /* none yet */ }
-    }
+      return null;
+    };
+    if (analysisRun) analysis = await fetchAnalysis(analysisRun);
+    if (!analysis && analysisRun !== 'demo_play_A') analysis = await fetchAnalysis('demo_play_A');
     const frame = analysis?.stuck_frame_url
       ? `<img src="${esc(analysis.stuck_frame_url)}" alt="Stuck frame">`
       : 'No stuck frame yet.<br>The analyst agent (SAM 3.1 + Muse Spark) writes one per stalled run.';
+    const vs = analysis?.visual_salience;
+    const vsNote = vs?.distractor_to_goal_area_ratio
+      ? `<div class="note">SAM 3.1 visual salience: <code>${esc(vs.distractor_target)}</code> (${Math.round(vs.distractor_area_px)} px², ${esc(vs.distractor_salience || 'n/a')}) is <b>${esc(vs.distractor_to_goal_area_ratio)}x</b> larger than <code>${esc(vs.goal_target)}</code> (${Math.round(vs.goal_area_px)} px², ${esc(vs.goal_salience || 'n/a')}).</div>`
+      : '';
     const diagnosis = analysis?.diagnosis
       ? `<div class="note ink">${esc(analysis.diagnosis)}</div>`
       : `<div class="note">No analyst diagnosis for this run yet.</div>`;
+    const hyps = (analysis?.hypotheses || []).map((h) => `<div class="note">• <b>${esc(h.id)}</b> (${Math.round((h.confidence ?? 0) * 100)}%): ${esc(h.evidence)}</div>`).join('');
     const quotes = (analysis?.playtester_quotes || []).map((q) => `<div class="quote"><span class="mood mood-${esc(q.player_mood || 'engaged')}">${esc(q.player_mood || 'engaged')}</span> “${esc(q.thought)}” <span class="note">step ${esc(q.bot_step_index)} · ${esc(q.trigger)}</span></div>`).join('');
     const rows = Object.entries(patch.body).map(([k, v]) => `<div><span class="k">${esc(k)}</span>: <span class="from">${esc(JSON.stringify(base?.[k]))}</span> → <span class="to">${esc(JSON.stringify(v))}</span></div>`).join('');
     const valid = validation?.valid;
@@ -269,8 +277,10 @@ class Overlay {
     el.innerHTML = `
       <div class="section-h">Stuck frame</div>
       <div class="frame-box">${frame}</div>
+      ${vsNote}
       <div class="section-h">Diagnosis</div>
       ${diagnosis}
+      ${hyps}
       ${quotes ? `<div class="section-h">Playtester think-aloud</div>${quotes}` : ''}
       <div class="section-h">${esc(patch.patch_id)} · ${esc(patch.title || '')}</div>
       <div class="note">${esc(patch.rationale || '')}</div>

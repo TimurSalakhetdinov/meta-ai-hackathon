@@ -6,24 +6,24 @@ Deadline: **Wed Nov 4, 9:00 PM ET (Thu Nov 5, 03:00 Berlin)**. Target a finished
 
 ### Claude Code, Oct 27 to 29: the game, config/telemetry contracts, and in-game AI Director UI
 Claude Code access ends on Oct 29, so these two days are dedicated to building a genuinely impressive, high-craft browser strategy game plus the exact config, telemetry, and UI contracts that the agents will plug into from Oct 29.
-- [ ] **Polished 2.5D isometric historical city-builder** in the browser (HTML5 Canvas + ES modules + F2P strategy UI chrome): 12x12 isometric diamond grid, terrain & shoreline animation, hybrid sprite loader (loads transparent isometric PNG sprites generated via Gemini Pro / Antigravity at $0 Meta API cost, with rich procedural isometric fallback), scaffolding-to-building animations, walking villagers, and floating resource popups.
-- [ ] **Real F2P strategy gameplay depth (20-minute window):**
+- [x] **Polished 2.5D isometric historical city-builder** in the browser (HTML5 Canvas + ES modules + F2P strategy UI chrome): 12x12 isometric diamond grid, terrain & shoreline animation, hybrid sprite loader (loads transparent isometric PNG sprites generated via Gemini Pro / Antigravity at $0 Meta API cost, with rich procedural isometric fallback), scaffolding-to-building animations, walking villagers, and floating resource popups.
+- [x] **Real F2P strategy gameplay depth (20-minute window):**
   - 3 onboarding steps (`onb_01_shelter`, `onb_02_forager`, `onb_03_handoff`) flowing into `free_play` and an Era Upgrade (`Dawn Age` → `Stone Age`) for `first_achievement`.
   - 4 resources (Food, Wood, Stone, Research Points) + **Population & Worker assignment** (Shelters add population; production buildings require available workers).
   - 7 buildings (Town Center, Shelter, Forager Hut, Woodcutter Hut, Stone Quarry, Research Academy, Tribal Monument) and a **visual Tech Tree modal with 5 technologies** (*Basic Toolmaking*, *Woodworking*, *Foraging Baskets*, *Masonry*, *Stone Age Awakening*).
-- [ ] **Config & patch service (FastAPI + Pydantic):** immutable `base_config.json` with planted onboarding & early-play friction, flat `GameConfigPatch` validation, human approval gate (`proposed -> validated -> approved/rejected`), and `audit_log.jsonl`.
-- [ ] **Telemetry & determinism:** seeded PRNG (`mulberry32`), simulation clock (`?speed=1..4`), raw event logging (`events.jsonl`), unbiased Python-side `stuck` derivation (`AnalysisConfig`), and `summary.json`.
-- [ ] **In-game right dock (`#right-dock`) & replay view:** Telemetry Pill, AI Director panel (Live trace, Analyst/Designer with human Approve/Reject buttons, A/B summary), and side-by-side replay player (`/?replay_a=&replay_b=`).
-- [ ] **Bot-ready DOM/Canvas hooks (`window.__GAME_STATE__`, `window.__GAME_DEBUG__`)** and tests for config, approval gate, and telemetry, plus a clean handoff note for Muse Code.
+- [x] **Config & patch service (FastAPI + Pydantic):** immutable `base_config.json` with planted onboarding & early-play friction, flat `GameConfigPatch` validation, human approval gate (`proposed -> validated -> approved/rejected`), and `audit_log.jsonl`.
+- [x] **Telemetry & determinism:** seeded PRNG (`mulberry32`), simulation clock (`?speed=1..4`), raw event logging (`events.jsonl`), unbiased Python-side `stuck` derivation (`AnalysisConfig`), and `summary.json`.
+- [x] **In-game right dock (`#right-dock`) & replay view:** Telemetry Pill, AI Director panel (Live trace, Analyst/Designer with human Approve/Reject buttons, A/B summary), and side-by-side replay player (`/?replay_a=&replay_b=`).
+- [x] **Bot-ready DOM/Canvas hooks (`window.__GAME_STATE__`, `window.__GAME_DEBUG__`)** and tests for config, approval gate, and telemetry, plus a clean handoff note for Muse Code.
 
 ### Muse Code, Oct 29 to Nov 4: bot runner, Meta API client, agents, experiments, demo
 Building the computer-use loop and multi-agent pipeline in Muse Code highlights Meta tooling.
-- [ ] **Meta Model API client (`backend/meta_client.py`):** SAM 3.1 set-of-mark segmentation, Muse Spark (`muse-spark-1.3-contributor` default) structured decisions, disk caching, token/cost ledger, and hard budget caps.
-- [ ] **Playtester bot runner (`backend/bot_runner.py`):** Playwright computer-use loop (960x540 clip capture, SAM marks, Muse Spark decision, cyan click ring, video/frame recording) plus variant-blind stub mode.
-- [ ] **Persona playtesters and prompts:** `first_time_casual`, `impatient_newcomer` (rush-clicker) and `optimizer` (see Run protocol below).
-- [ ] **Analyst agent:** SAM 3.1 on key screenshots, onboarding + early-play funnel, and ranked friction points.
-- [ ] **Designer agent:** concrete config patches routed through the human approval gate in the AI Director dock or CLI.
-- [ ] **Experiment agent:** canary + parallel worker pool A/B reruns on old and new configs, paired statistical report (`ab_summary.json`), and `voiceover_sheet.txt`.
+- [x] **Meta Model API client (`backend/meta_client.py`):** SAM 3.1 set-of-mark segmentation, Muse Spark (`muse-spark-1.3-contributor` default) structured decisions, disk caching, token/cost ledger, and hard budget caps.
+- [x] **Playtester bot runner (`backend/bot_runner.py`):** Playwright computer-use loop (960x540 clip capture, SAM marks, Muse Spark decision, cyan click ring, video/frame recording) plus variant-blind stub mode.
+- [x] **Persona playtesters and prompts:** `first_time_casual`, `impatient_newcomer` (rush-clicker) and `optimizer` (see Run protocol below).
+- [x] **Analyst agent:** SAM 3.1 on key screenshots, onboarding + early-play funnel, and ranked friction points.
+- [x] **Designer agent:** concrete config patches routed through the human approval gate in the AI Director dock or CLI.
+- [x] **Experiment agent:** canary + parallel worker pool A/B reruns on old and new configs, paired statistical report (`ab_summary.json`), and `voiceover_sheet.txt`.
 - [ ] Validation against human play sessions, README setup instructions, and the 3-minute demo video.
 
 ### Antigravity (Gemini 4 Argon, Gemini 3.8 Flash, Claude Opus 5.5 / Sonnet 5.5, Image Generator): whole event
@@ -164,3 +164,8 @@ Many short, independent sessions, not one long run. One pair is a demo, not evid
   - Feature studio: `summarize_persona_outcomes` joins A/B pairs with `personas.json` archetypes; the breakdown is in the council report and the rework prompt, and `stub_rework` names stalled archetypes that used the feature in onboarding.
   - Tests: new `tests/test_agents.py` (7 tests) plus 4 council tests in `tests/test_feature_studio.py`; `test_fresh_session_state.py` now pins scratchpad freshness instead of emptiness. Full suite: 87 passed.
   - Next: review and merge to `main`, then a first small live run in meta mode.
+- 2026-10-28 (Muse Code, `muse/agent-intelligence`): Surfaced agent intelligence in the dock and merged to `main`, all at $0 Meta spend (stub mode, no live calls in tests).
+  - The Council Report now shows the SAM 3.1 visual salience note (distractor vs Research goal, 6.76x on the demo run) under the stuck frame plus the quantified hypothesis list below the diagnosis. A fresh page falls back to `demo_play_A` analysis, so the tab renders out of the box.
+  - Fixed `analyze_run` wiping committed visual evidence: runs without `frames/` (like `runs_demo/`) keep their saved SAM masks and stuck frame, and the salience ratio rebuilds from masks plus the run's resolved config. New regression test in `tests/test_agents.py`.
+  - Refreshed `runs_demo/demo_play_A/analysis.json` via the stub CLI (`visual_salience` 6.76, updated evidence string). README status and architecture notes plus the plan checklist now cover the salience ratio, the per-persona working-memory scratchpad and archetype-aware rework synthesis.
+  - Full suite green on the branch and on `main` after the merge. Next: a first small live run in meta mode.

@@ -46,12 +46,21 @@
       "label": "Wood counter"
     }
   ],
+  "visual_salience": {
+    "goal_target": "btn_research",
+    "goal_area_px": 900.0,
+    "goal_salience": "low",
+    "distractor_target": "card_woodcutter_hut",
+    "distractor_area_px": 6080.0,
+    "distractor_salience": null,
+    "distractor_to_goal_area_ratio": 6.76
+  },
   "diagnosis": "Players stall at onb_03_handoff: low Research salience plus a wood shortfall.",
   "hypotheses": [
     {
       "id": "low_research_salience",
       "confidence": 0.7,
-      "evidence": "Research button salience is low; the playtester opened research 1 times at onb_03_handoff."
+      "evidence": "Research button salience is low; the playtester opened research 1 times at onb_03_handoff; SAM visual area ratio (distractor/Research) is 6.76x."
     },
     {
       "id": "wood_shortfall",

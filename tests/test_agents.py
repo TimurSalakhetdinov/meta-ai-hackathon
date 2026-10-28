@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import shutil
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -121,6 +122,27 @@ def test_analyze_run_saves_visual_salience(configs_dir: Path, runs_dir: Path) ->
     assert saved["visual_salience"]["goal_target"] == "btn_research"
     low = next(h for h in saved["hypotheses"] if h["id"] == "low_research_salience")
     assert "6.0x" in low["evidence"]
+
+
+def test_analyze_run_without_frames_preserves_committed_visual_evidence(
+        configs_dir: Path, runs_dir: Path) -> None:
+    """Committed demo runs ship without frames/: re-analysis must keep their masks and stuck frame."""
+    run_dir = runs_dir / "demo"
+    _write_run(run_dir)
+    shutil.rmtree(run_dir / "frames")
+    masks = [{"rank": 1, "target_id": "btn_research", "bbox": [916, 498, 30, 30], "label": "Research"},
+             {"rank": 2, "target_id": "card_woodcutter_hut", "bbox": [208, 454.3, 80, 76],
+              "label": "Woodcutter"}]
+    (run_dir / "analysis.json").write_text(json.dumps({"sam_masks": masks, "stuck_frame": "stuck_frame.png"}))
+    (run_dir / "stuck_frame.png").write_bytes(_frame_png())
+    (run_dir / "resolved_config.json").write_text(json.dumps({"research_button_salience": "low"}))
+    client = MetaClient(runs_dir=runs_dir, configs_dir=configs_dir, provider_mode="stub")
+    analysis = analyst.analyze_run("demo", runs_dir=runs_dir, configs_dir=configs_dir, client=client)
+    assert analysis["sam_masks"] == masks
+    assert analysis["stuck_frame"] == "stuck_frame.png"
+    assert analysis["visual_salience"]["distractor_to_goal_area_ratio"] == 6.76
+    low = next(h for h in analysis["hypotheses"] if h["id"] == "low_research_salience")
+    assert "6.76x" in low["evidence"]
 
 
 def test_draw_stuck_frame_highlights_feature_button() -> None:
