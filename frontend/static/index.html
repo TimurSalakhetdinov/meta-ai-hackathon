@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=1280">
-  <title>Dawn Age Settlement</title>
+  <title>Dawn of Empires</title>
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
@@ -18,6 +18,8 @@
           <div class="res" id="res-wood" title="Wood"><span class="ico">&#x1FAB5;</span><b>0</b></div>
           <div class="res" id="res-stone" title="Stone"><span class="ico">&#x1FAA8;</span><b>0</b></div>
           <div class="res" id="res-rp" title="Research points"><span class="ico">&#x1F4DC;</span><b>0</b></div>
+          <div class="res" id="res-coins" title="Coins"><span class="ico">&#x1FA99;</span><b>0</b></div>
+          <div class="res" id="res-scrolls" title="Hero Scrolls"><span class="ico">&#x1F4DC;</span><b>0</b></div>
           <div class="res" id="res-workers" title="Free / total workers"><span class="ico">&#x1F465;</span><b>0/0</b></div>
           <div class="res score" id="res-score" title="Settlement score"><span class="ico">&#x2B50;</span><b>0</b></div>
         </div>
@@ -36,27 +38,45 @@
       </section>
 
       <section id="quest-card" class="quest-card">
-        <div class="q-title" id="quest-title"></div>
+        <div class="q-header">
+          <div class="q-title" id="quest-title"></div>
+          <button id="btn_open_quests" class="q-ledger-btn" data-target="btn_open_quests" title="6 Chapters Ledger" hidden>&#x1F4D6; 6 Chapters</button>
+        </div>
         <ul id="quest-objectives" class="q-objectives"></ul>
         <div class="q-bar"><div id="quest-fill" class="q-fill"></div></div>
         <button id="btn_claim_quest" class="gold-btn claim" data-target="btn_claim_quest" title="Claim Reward" hidden>&#x1F381; Claim Reward</button>
       </section>
 
       <footer id="build-bar">
+        <div class="build-filter-bar">
+          <button class="build-cat-btn active" data-build-cat="all">All</button>
+          <button class="build-cat-btn" data-build-cat="homes">&#x1F3E0; Homes</button>
+          <button class="build-cat-btn" data-build-cat="production">&#x1F33E; Production</button>
+          <button class="build-cat-btn" data-build-cat="military">&#x2694;&#xFE0F; Military</button>
+          <button class="build-cat-btn" data-build-cat="culture">&#x1F3DB;&#xFE0F; Culture</button>
+        </div>
         <div id="cards" class="cards"></div>
       </footer>
-      <button id="btn_research" data-target="btn_research" class="research sal-low" title="Research">
-        <span class="r-ico">&#x1F4DC;</span><span class="r-label">Research</span>
-      </button>
-      <button id="btn_expedition" data-target="btn_expedition" class="expedition" title="Expedition" hidden>
-        <span class="r-ico">&#x2694;&#xFE0F;</span><span class="r-label">Expedition</span>
-      </button>
+
+      <!-- Bottom Right Action Dock -->
+      <div id="action-dock" class="action-dock">
+        <button id="btn_heroes" data-target="btn_heroes" class="dock-btn heroes-btn" title="Heroes Hall" hidden>
+          <span class="d-ico">&#x1F6E1;&#xFE0F;</span><span class="d-label">Heroes</span>
+        </button>
+        <button id="btn_expedition" data-target="btn_expedition" class="dock-btn expedition-btn" title="Campaign Map" hidden>
+          <span class="d-ico">&#x2694;&#xFE0F;</span><span class="d-label">Campaign</span>
+        </button>
+        <button id="btn_research" data-target="btn_research" class="dock-btn research-btn sal-low" title="Research">
+          <span class="d-ico">&#x1F4DC;</span><span class="d-label">Research</span>
+        </button>
+      </div>
 
       <div id="hint-arrow" class="hint-arrow" hidden></div>
       <div id="inspector" class="inspector" hidden></div>
       <div id="toast" class="toast" hidden></div>
       <div id="stub-banner" class="stub-banner" hidden>STUB / DEV MODE &mdash; NOT LIVE MUSE SPARK</div>
 
+      <!-- Welcome Modal -->
       <div id="welcome-modal" class="modal-backdrop" hidden>
         <div class="modal welcome">
           <img class="portrait big" src="/static/assets/sprites/advisor_welcome.png" alt="Elder Kaelen" width="88" height="88">
@@ -68,10 +88,11 @@
         </div>
       </div>
 
+      <!-- Research Tech Tree Modal -->
       <div id="research-modal" class="modal-backdrop" hidden>
         <div class="modal tech-modal">
           <div class="tech-head">
-            <h2>Tech Tree</h2>
+            <h2>Tech Tree &middot; Ancient Wisdom</h2>
             <span id="tech-rp" class="tech-rp"></span>
             <button id="btn_close_research" class="close-btn" data-target="btn_close_research" title="Close">&times;</button>
           </div>
@@ -79,14 +100,153 @@
         </div>
       </div>
 
+      <!-- Campaign Expedition Map Modal (Province 1: Ancient Wilds) -->
       <div id="expedition-modal" class="modal-backdrop" hidden>
         <div class="modal expedition-modal">
-          <div class="tech-head">
-            <h2>Expedition Map</h2>
-            <span id="expedition-cost" class="tech-rp"></span>
+          <div class="campaign-head">
+            <div class="c-title-box">
+              <h2>Province 1: Ancient Wilds</h2>
+              <div class="squad-power-badge">Squad Power: ⚔️ <b id="campaign-squad-power">175</b> &middot; Stamina: ⚡ <b id="campaign-stamina">100/100</b></div>
+            </div>
+            <button id="btn_start_arena" class="gold-btn arena-shortcut" data-target="btn_start_arena" title="Fight in Live 2.5D Arena">⚔️ Live 2.5D Battle Arena</button>
+            <button id="btn_campaign_heroes" class="gold-btn heroes-shortcut" data-target="btn_campaign_heroes" title="Level Up Heroes">&#x1F6E1;&#xFE0F; Heroes Hall</button>
             <button id="btn_close_expedition" class="close-btn" data-target="btn_close_expedition" title="Close">&times;</button>
           </div>
-          <div id="encounters" class="encounters"></div>
+          <div id="campaign-stages-grid" class="campaign-stages-grid"></div>
+          <div id="encounters" class="encounters" hidden></div>
+        </div>
+      </div>
+
+      <!-- Hero Roster & Level-Up Hall Modal -->
+      <div id="heroes-modal" class="modal-backdrop" hidden>
+        <div class="modal heroes-modal">
+          <div class="heroes-head">
+            <h2>Heroes Hall &middot; Champions of the Valley</h2>
+            <div class="squad-power-badge">Total Squad Power: ⚔️ <b id="heroes-total-power">175</b></div>
+            <button id="btn_close_heroes" class="close-btn" data-target="btn_close_heroes" title="Close">&times;</button>
+          </div>
+          <div class="heroes-body">
+            <!-- Left: Roster List -->
+            <div id="heroes-roster" class="heroes-roster"></div>
+            <!-- Center: Hero Showcase & Ult -->
+            <div id="hero-showcase" class="hero-showcase">
+              <div class="showcase-card">
+                <div class="hero-stars" id="showcase-stars">⭐⭐⭐</div>
+                <img id="showcase-portrait" class="showcase-img" src="/static/assets/sprites/portrait_vaelen.png" alt="">
+                <h3 id="showcase-name">Commander Vaelen</h3>
+                <div class="hero-title" id="showcase-title">Spartan Vanguard</div>
+                <div class="hero-role-tag" id="showcase-role">Infantry Melee Tank</div>
+                <div class="ult-card">
+                  <div class="ult-title" id="showcase-ult-name">⚡ Earthshatter Stomp</div>
+                  <div class="ult-desc" id="showcase-ult-desc">Deals 160% AoE shockwave damage to all enemies and stuns for 1.5s.</div>
+                </div>
+              </div>
+            </div>
+            <!-- Right: Stats Matrix & Level-Up Panel -->
+            <div class="hero-upgrade-panel">
+              <div class="matrix-box">
+                <h4>Attributes Matrix</h4>
+                <div class="stat-row"><span>Health (HP)</span><b id="stat-hp">180</b></div>
+                <div class="stat-row"><span>Attack (ATK)</span><b id="stat-atk">28</b></div>
+                <div class="stat-row"><span>Defense (DEF)</span><b id="stat-def">18</b></div>
+                <div class="stat-row highlight"><span>Combat Power</span><b id="stat-power">175</b></div>
+                <div class="stat-row"><span>Current Rank</span><b id="stat-level">Lv.1 / 7</b></div>
+              </div>
+              <div class="upgrade-actions">
+                <div class="upgrade-cost-tag" id="hero-upgrade-cost">Cost: 10 🌾 Food</div>
+                <button id="btn_hero_levelup" class="gold-btn hero-levelup-btn" data-target="btn_hero_levelup">⚔️ Train & Level Up (+15 Score)</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6-Chapter Questlines Ledger Modal -->
+      <div id="quests-modal" class="modal-backdrop" hidden>
+        <div class="modal quests-modal">
+          <div class="tech-head">
+            <h2>Questlines Ledger &middot; Chronicles of Dawn</h2>
+            <button id="btn_close_quests" class="close-btn" data-target="btn_close_quests" title="Close">&times;</button>
+          </div>
+          <div id="quests-ledger-list" class="quests-ledger-list"></div>
+        </div>
+      </div>
+
+      <!-- Live 2.5D Battle Arena Overlay -->
+      <div id="battle-hud" class="battle-hud" hidden>
+        <div class="battle-top-bar">
+          <div class="team-hp allied">
+            <div class="hp-label">Allied Squad <span id="battle-allied-hp-text">180/180</span></div>
+            <div class="hp-bar-track"><div id="battle-allied-hp-fill" class="hp-bar-fill allied"></div></div>
+          </div>
+          <div class="battle-wave-center">
+            <div class="stage-tag" id="battle-stage-name">Stage 1: Misty River</div>
+            <div class="wave-tag" id="battle-wave-text">WAVE 1/1</div>
+            <div class="battle-controls">
+              <button id="btn_battle_speed" class="battle-ctrl-btn" data-target="btn_battle_speed">1x</button>
+              <button id="btn_battle_auto" class="battle-ctrl-btn active" data-target="btn_battle_auto">AUTO</button>
+            </div>
+          </div>
+          <div class="team-hp enemy">
+            <div class="hp-label"><span id="battle-enemy-hp-text">180/180</span> Enemy Horde</div>
+            <div class="hp-bar-track"><div id="battle-enemy-hp-fill" class="hp-bar-fill enemy"></div></div>
+          </div>
+        </div>
+
+        <!-- Full-Screen Comic-Book Cut-In Slash -->
+        <div id="battle-cutin" class="battle-cutin" hidden>
+          <div class="cutin-stripe">
+            <img id="cutin-img" class="cutin-portrait" src="/static/assets/sprites/portrait_vaelen.png" alt="">
+            <div class="cutin-text">
+              <div class="cutin-hero" id="cutin-hero">COMMANDER VAELEN</div>
+              <div class="cutin-ult" id="cutin-ult">⚡ EARTHSHATTER STOMP!</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom Hero Rage Tray -->
+        <div class="battle-bottom-tray">
+          <button id="btn_ult_vaelen" class="hero-rage-card" data-target="btn_ult_vaelen">
+            <img src="/static/assets/sprites/portrait_vaelen.png" alt="" class="rage-portrait">
+            <div class="rage-info">
+              <span class="rage-name">Vaelen</span>
+              <div class="rage-bar-track"><div id="rage-fill-vaelen" class="rage-bar-fill" style="width: 60%"></div></div>
+            </div>
+            <span class="rage-ult-tag">ULT</span>
+          </button>
+          <button id="btn_ult_lyra" class="hero-rage-card" data-target="btn_ult_lyra">
+            <img src="/static/assets/sprites/portrait_lyra.png" alt="" class="rage-portrait">
+            <div class="rage-info">
+              <span class="rage-name">Lyra</span>
+              <div class="rage-bar-track"><div id="rage-fill-lyra" class="rage-bar-fill" style="width: 50%"></div></div>
+            </div>
+            <span class="rage-ult-tag">HEAL</span>
+          </button>
+        </div>
+
+        <!-- Victory Chest Modal -->
+        <div id="battle-victory-modal" class="battle-modal-backdrop" hidden>
+          <div class="battle-modal victory">
+            <div class="stars-burst">⭐⭐⭐</div>
+            <h2>VICTORY!</h2>
+            <img src="/static/assets/sprites/victory_chest.png" class="victory-chest-img" alt="Victory Chest">
+            <div class="loot-pills" id="victory-loot"></div>
+            <button id="btn_victory_continue" class="gold-btn victory-btn" data-target="btn_victory_continue">Continue & Collect Loot</button>
+          </div>
+        </div>
+
+        <!-- Defeat Recovery Modal (Stage 6 Wall) -->
+        <div id="battle-defeat-modal" class="battle-modal-backdrop" hidden>
+          <div class="battle-modal defeat">
+            <div class="defeat-icon">💀</div>
+            <h2>SQUAD DEFEATED!</h2>
+            <p class="defeat-desc">Wave 3's Lv.4 Sabertooths broke through! Required Combat Power: <b>460</b>.</p>
+            <div class="defeat-tip">Advisor Tip: Level up Commander Vaelen and Sun-Priestess Lyra to Lv.3+ in the Heroes Hall!</div>
+            <div class="defeat-actions">
+              <button id="btn_defeat_heroes" class="gold-btn defeat-heroes-btn" data-target="btn_defeat_heroes">🛡️ Level Up Your Team</button>
+              <button class="return-btn" data-target="btn_battle_continue">Return to Valley</button>
+            </div>
+          </div>
         </div>
       </div>
 

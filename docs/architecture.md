@@ -55,7 +55,7 @@ flowchart LR
 
 | Component | Location | Responsibility |
 |---|---|---|
-| Game frontend | `frontend/static/` | 2.5D isometric settlement canvas (3 eras: *Dawn → Stone → Bronze Age*, 7 buildable buildings + Town Center with Lv.1–3 upgrades, 7 techs, Chapter Quests, Expedition Map battles, worker assignment, Web Audio SFX, and custom `FeaturePlugin` button). Emits raw events. Exposes `window.__GAME_STATE__` and `window.__GAME_DEBUG__.getRenderedTargets()`. |
+| Game frontend | `frontend/static/` | 2.5D isometric settlement canvas (Dawn of Empires: 3 eras *Dawn → Stone → Bronze Age*, 7 buildable buildings + Town Center with Lv.1–3 upgrades, 7 techs, 6-Chapter Quests, 8-Stage Campaign battles with Stage 6 Sabertooth Wall, Live 2.5D Tactical Battle Arena with Ultimate cut-ins, Hero Hall Lv.1–7, Territory Expansions `exp_1`/`exp_2`, Sacred Obelisk +20% Culture aura, `⚡ FREE` instant-finish, dual-engine AudioCraft / MusicGen soundtrack + SFX, worker assignment, and custom `FeaturePlugin` button). Emits raw events. Exposes `window.__GAME_STATE__` and `window.__GAME_DEBUG__.getRenderedTargets()`. |
 | Right dock (Architect's Council) | `frontend/static/overlay.js` | **Telemetry Pill** (top: step id, time to first action, onboarding checklist) and **Architect's Council** studio (`📜 Feature Forge` for free-text PM feature prototyping + approval gate + 5-persona guild selector, `🏛️ Council Report` with 1-click `HURTS` / `POSITIVE` switcher + SAM 3.1 `6.76x` onboarding diagnosis, and `👁️ Live Chronicle` with `[▶ Watch Bot Play]`). Lives outside the `960x540` bot clip. |
 | Replay player | `frontend/static/replay.js` | `/?replay_a=<run>&replay_b=<run>&speed=4`: side-by-side playback from recorded artifacts on one timeline, no API calls. Refuses runs whose `provider_mode` is not `meta` unless `?dev=1`. |
 | Config & patch service | `backend/config_service.py` | Loads `configs/base_config.json`, applies patches (including `FeaturePlugin`), validates with Pydantic, enforces the approval gate, writes `audit_log.jsonl`. |
@@ -83,11 +83,13 @@ configs/
     patch_001.json        # patch body + metadata + status
     audit_log.jsonl       # append-only lifecycle transitions
 frontend/static/
-  index.html  styles.css  main.js  clock.js  iso_renderer.js  sprites.js
+  index.html  styles.css  main.js  clock.js  iso_renderer.js  sprites.js  audio.js
   game.js  tech_tree.js  overlay.js  replay.js
-  assets/sprites/           # transparent isometric PNGs (buildings, terrain, advisor, icons)
+  assets/sprites/           # 28 transparent isometric PNGs + 4 painted backdrops
+  assets/audio/             # valley_theme.wav & battle_theme.wav soundtrack loops
 scripts/
-  cutout_sprites.py         # removes solid backgrounds from generated isometric PNGs
+  cutout_sprites.py         # slices 7 sprite sheets & strips solid background into 28 PNGs
+  generate_music_tracks.py  # Meta AudioCraft / MusicGen + procedural acoustic synthesizer
 backend/
   app.py  schemas.py  config_service.py  telemetry.py
   bot_runner.py  meta_client.py  cli.py      # built Oct 29+ in Muse Code
@@ -141,6 +143,82 @@ To achieve a high-craft historical F2P strategy game look (*Dawn Age → Stone A
   - `impatient_newcomer` (rush-clicker) clicks bright affordable build cards immediately — falling into the baseline wood trap at `onb_03_handoff` by building `woodcutter_hut` before researching *Basic Toolmaking*, or later over-building production huts without enough `shelter` population.
   - `first_time_casual` follows the Advisor carefully, succeeds when UI salience and hints are clear, but hesitates when `research_button_salience = "low"` or when worker/stone dependencies are unclear in `free_play`.
   - `optimizer` balances Shelter population, Wood/Food/Stone production cycles, and Tech Tree multipliers to reach *Stone Age Awakening* and `first_achievement_target_score` fastest.
+
+## 3c. Dawn of Empires: 2.5D Systems, Audio & Assets Architecture
+
+The "Dawn of Empires" overhaul elevates the browser game into a modern, full-bleed 2.5D strategy and hero-tactics experience while maintaining 100% backward compatibility with all existing configs, patches, and Playwright bot contracts.
+
+### 1. Full-Bleed Alpine Valley & Environmental Atmosphere (`iso_renderer.js`)
+- **Sunlit Alpine Valley Backdrop (`valley_backdrop.jpg`):** Eliminates flat ocean boxes in favor of a full-bleed sunlit mountain valley framed by northern limestone cliffs with cascading waterfalls and mist particles, dense pine/oak forest flanks, and a rushing southern river crossed by an arched stone bridge. A multi-layered procedural fallback draws dynamically if the image is pending.
+- **Ambient Life & Parallax Shadows:** 3 soft, translucent cloud shadows (`rgba(15, 35, 18, 0.11)`) drift slowly across the valley meadow, accompanied by grazing sheep and soaring birds.
+- **Seamless Valley Floor Integration:** City tiles blend into surrounding meadowland with cobblestone avenues, wildflowers, and stone plaza borders rather than an artificial floating-island cliff edge.
+
+### 2. Checkered 4x4 Territory Expansions (`exp_1`, `exp_2`)
+- **Flank Expansion Sectors:**
+  - `exp_1` (Western Timber Clearing): unlocks building pads `pad_9` and `pad_10`.
+  - `exp_2` (Eastern Foothills Clearing): unlocks building pads `pad_11` and `pad_12`.
+- **Visual Presentation:** Locked sectors display a 4x4 checkered emerald grid overlay (`rgba(35, 80, 30, 0.38)` / `rgba(120, 210, 95, 0.25)`), dense vegetation, and a floating expansion chip banner (`target_id: "exp_1"`, `"exp_2"`). Unlocking triggers an animated smoke poof with flying wood and rock particles, clearing the terrain.
+
+### 3. Sacred Obelisk Culture Adjacency Aura (`tribal_monument`)
+- **Lime-Green Adjacency Aura:** When `tribal_monument` is selected in the build bar or constructed on the map, a pulsing lime-green radial diamond aura (`rgba(110, 245, 85, 0.24)` fill, dashed `#8cff66` border) extends 3 tiles outward.
+- **Productivity Boost:** Adjacent Small Homes (`shelter`) and Rural Farms (`forager_hut`) receive `b.cultureBoost = true` (`+20%` harvest yield and coin generation), accompanied by a floating `😊 +20%` euphoria badge above each boosted building.
+
+### 4. `⚡ FREE` Instant-Finish Chips & Curved Bezier Collect Arcs
+- **Instant Construction:** Buildings under construction display a bright green `⚡ FREE` pill (`target_id: "free_${b.key}"`). Clicking finishes construction immediately with a golden sparkler burst.
+- **Curved Bezier Fly-to-HUD FX:** Harvesting resources spawns 6 flying particles (`this.flyingIcons`) following quadratic/cubic Bezier trajectories from the source building to the exact top-HUD resource counter, complete with trailing sparkles.
+
+### 5. Hero Roster & Level-Up Hall (`frontend/static/game.js`, `🛡️ Heroes` Modal)
+- **Playable Champions:**
+  - **Commander Vaelen** (Infantry Vanguard Tank): High health and armor; ultimate ability *"Earthshatter Stomp"* deals 160% AoE shockwave damage and stuns enemies.
+  - **Sun-Priestess Lyra** (Mystic Healer): Unlocked by clearing Campaign Stage 2 or researching Stone Age; ultimate ability *"Solar Salve"* restores +45% max HP and grants a Golden Sun Shield.
+- **Progression & Power Formula:**
+  - Hero Level-Up (Lv.1–7) spends Food + Hero Scrolls/Coins.
+  - Stats scale per level: `power = Math.round(hp * 0.45 + atk * 2.2 + def * 1.8) + (abilityLevel - 1) * 35`.
+  - `squadPower()` aggregates team power (e.g., Lv.1 team = 307; Lv.3 team = 530+; Lv.5 team = 780+).
+  - Emits `hero_leveled` telemetry with `{hero_id, level, squad_power}`.
+
+### 6. 8-Stage Ancient Wilds Campaign Map (`CAMPAIGN_STAGES`)
+- **Progressive Campaign Nodes:**
+  1. *Misty River Crossing* (Power 120, 1 wave, starter encounter)
+  2. *Sunlit Glade Ambush* (Power 165, unlocks Sun-Priestess Lyra + Expansion Token)
+  3. *Megalithic Ruins* (Power 240, 2 waves)
+  4. *Whispering Pine Gorge* (Power 310, 2 waves)
+  5. *Quarry Ridge Outpost* (Power 390, 2 waves, awards 2nd Expansion Token)
+  6. **Sabertooth Canyon (Power 520, 3 waves — The Level-Check Wall):** Rushing this stage with under-leveled heroes (`squadPower < 460`) results in a squad wipe on Wave 3, triggering the DEFEAT recovery screen.
+  7. *Obsidian Crag* (Power 640, 3 waves)
+  8. **BOSS: Shadowclaw's Lair (Power 780, Alpha Shadowclaw boss wave)**
+- **Legacy Compatibility:** Stages 1–3 maintain backward compatibility with legacy `encounter_misty_river`, `encounter_megalithic_ruins`, and `encounter_quarry_ridge` target IDs.
+
+### 7. Live 2.5D Tactical Battle Arena (`#world` Canvas Mode)
+- **Canvas Battle Mode:** Clicking `⚔️ Enter 2.5D Battle Arena` transitions the main canvas into tactical combat backed by `battle_arena_bg.jpg`.
+- **Combat Features:**
+  - Split Allied Green vs. Enemy Red team health bars and wave tracker.
+  - Auto-marching heroes confronting multi-wave beast packs with animated attacks, floating damage numbers, and critical hit sparks.
+  - **Hero Rage & Comic-Book Slash Cut-In:** Hero cards accumulate Rage (`0% -> 100%`); full rage triggers a dramatic 0.9s diagonal portrait cut-in (`portrait_vaelen.png` / `portrait_lyra.png`) with comic-book energy slashes and ultimate particle effects.
+  - **Outcomes:** 3-Star Victory Chest on triumph (`victory_chest.png`) or Stage 6 Defeat Recovery modal offering `[🛡️ Level Up Your Team]`, navigating directly to the Heroes Hall.
+
+### 8. 6-Chapter Questlines Ledger Modal
+- **Progressive Narrative:** 6 chapters spanning valley founding, early battles, hero progression, cultural expansion, breaking the Sabertooth Wall, and the Dawn of the Bronze Empire.
+- **Interactive UI:** Accessible via `#quest-card` (`data-target="btn_quest_ledger"`), featuring chapter progress bars, lore quotes from Archon Solon, and claimable reward bundles.
+
+### 9. 28 Transparent PNG Sprites + 4 Painted Backdrops (`sprites.js`, `scripts/cutout_sprites.py`)
+- **Asset Library:** 28 transparent isometric PNG sprites organized across 7 style sheets:
+  1. *Sheet 1:* `town_center`, `shelter`, `forager_hut`, `research_tent`
+  2. *Sheet 2:* `woodcutter_hut`, `stone_quarry`, `tribal_monument`, `town_center_stone_age`
+  3. *Sheet 3:* `smelter`, `granary`, `advisor_welcome`, `advisor_hint`
+  4. *Sheet 4:* `barracks`, `rural_farm`, `culture_site`, `small_home_lv2`
+  5. *Sheet 5:* `hero_vaelen`, `hero_lyra`, `enemy_beast_pack`, `boss_shadowclaw`
+  6. *Sheet 6:* `portrait_vaelen`, `portrait_lyra`, `portrait_archon`, `victory_chest`
+  7. *Sheet 7:* `town_center_bronze_age`, `barracks_lv2`, `hero_ignis`, `hero_aurelius`
+- **4 Full-Bleed Backdrops:** `valley_backdrop.jpg` (960x540 sunlit valley), `battle_arena_bg.jpg` (tactical combat arena), `campaign_map_bg.jpg` (ancient wilds map), and `hero_hall_bg.jpg` (pantheon hall).
+- **Background Stripping Pipeline:** `scripts/cutout_sprites.py` executes flood-fill background removal with soft translucent drop-shadow preservation.
+
+### 10. Dual-Engine Soundtrack & Audio System (`frontend/static/audio.js`, `scripts/generate_music_tracks.py`)
+- **Meta AudioCraft / MusicGen Integration:** `scripts/generate_music_tracks.py` implements a generation pipeline using Meta's `facebook/musicgen-small` model:
+  - `valley_theme.wav`: 16-second seamless Alpine pastoral loop (72 BPM, ancient Mediterranean acoustic instrumentation, lyre, pan flute, warm cello strings, waterfall wash).
+  - `battle_theme.wav`: 12-second seamless 2.5D battle loop (120 BPM, driving tribal war drums, taiko percussion, rhythmic brass fifths, strings ostinato).
+- **Web Audio Synthesis Fallback:** In `audio.js`, a pure Web Audio physical-modeling synthesizer runs autonomously if audio files are offline, offering 16-step procedural sequencers, chord progressions, and ambient noise beds.
+- **Adaptive Crossfading & SFX:** Smooth 0.85s gain crossfading transitions between exploration and combat. Multi-layered SFX include FM metallic coin clinks, brass fanfares, rock fracture shockwaves, and major-9th harp glissandos.
 
 ## 4. Config schema and edit flow
 
@@ -226,7 +304,14 @@ The game emits **raw events only**. `stuck` is derived on the Python side with a
  "payload": {"target_id": "btn_research", "reason": "insufficient_wood", "wood_available": 0, "wood_required": 30}}
 ```
 
-- Game event types: `session_start`, `step_enter`, `step_complete`, `click`, `action_rejected`, `hint_shown`, `achievement`, `session_end`.
+- Game event types: `session_start`, `step_enter`, `step_complete`, `click`, `action_rejected`, `hint_shown`, `achievement`, `heartbeat`, `session_end`, `stuck` (derived), `quest_claimed`, `battle_won`, `battle_lost`, `hero_unlocked`, `hero_leveled`, `territory_expanded`.
+- **Dawn of Empires Telemetry Extensions:**
+  - `battle_lost`: Emitted when squad HP drops to 0 in tactical combat (e.g., rushing Stage 6 Sabertooth Canyon); carries `{"stage_id": "...", "enemy_power": N, "squad_power": N, "wave": N}`. Classified as non-progress by `_is_progress()`. Triggers the `combat_wall_underleveled_heroes` hypothesis in the Analyst agent diagnosis.
+  - `hero_leveled`: Emitted upon Hero level-up; carries `{"hero_id": "...", "level": N, "squad_power": N}`. Classified as progress and tracked in the `hero_levelups` summary metric.
+  - `territory_expanded`: Emitted when unlocking Expansion Sector `exp_1` or `exp_2`; carries `{"sector_id": "...", "unlocked_pads": [...]}`. Classified as progress.
+  - `hero_unlocked`: Emitted when unlocking Sun-Priestess Lyra (via Stage 2 clear or Stone Age discovery); carries `{"hero_id": "..."}`.
+  - `battle_won`: Emitted upon conquering a campaign stage; carries `{"stage_id": "...", "stars": N, "rewards": {...}}`.
+  - `quest_claimed`: Emitted when claiming rewards from the 6-Chapter Quest Ledger.
 - Derived event (Python): `stuck`, tagged with `analysis_version`.
 - `AnalysisConfig` (versioned, fixed across variants): `stuck_idle_sim_sec` (no state-advancing action for this long in simulated time) and `stuck_rejected_streak` (consecutive rejected or no-op clicks in one step).
 
@@ -237,6 +322,8 @@ The game emits **raw events only**. `stuck` is derived on the Python side with a
 - `stuck_events`: count of derived `stuck` events.
 - `where_stuck`: the step with the most `stuck` events, or the unfinished step at `session_end`; `null` if none.
 - `onboarding_completed`: `step_complete` for `onb_03_handoff` before `session_end`; `first_achievement` reported separately.
+- `battles_won` and `battles_lost`: counts of completed campaign battles.
+- `hero_levelups`: total Hero level increments achieved during the session.
 - Timestamped step log: ordered `sim_elapsed_sec, step_id, event_type, summary`.
 
 ## 6. Bot interface

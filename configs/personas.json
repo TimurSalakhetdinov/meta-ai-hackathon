@@ -9,15 +9,22 @@
       "BrainHex Daredevil (Nacke et al. 2014)",
       "Quantic Foundry Action (Yee 2015)"
     ],
-    "description": "Rush-clicker. Skips text, clicks the biggest, brightest affordable thing, builds at random. Catches shiny-button distractions and early resource drains.",
-    "prompt": "You are an impatient first-time player of a casual city-builder. You do not read tutorial text. You click whatever looks biggest, brightest and most rewarding right now. You get bored quickly when nothing happens.",
+    "description": "Rush-clicker. Skips text, clicks the biggest, brightest affordable thing, builds at random. Catches shiny-button distractions, instant-finishes timers with free chips, rushes into high-difficulty campaign battles under-leveled, and drains resources early.",
+    "prompt": "You are an impatient first-time player of a casual city-builder. You do not read tutorial text. You click whatever looks biggest, brightest and most rewarding right now, rush battles without preparing, and tap instant-finish buttons immediately. You get bored quickly when nothing happens.",
     "stub_policy": {
       "follow_tutorial": 0.15,
       "salience_weight": 1.0,
       "prefer_build": 0.9,
       "harvest": 0.7,
       "wait_when_unsure": 0.0,
-      "curiosity": 0.3
+      "curiosity": 0.3,
+      "instant_finish": true,
+      "rush_campaign": true,
+      "level_heroes": false,
+      "target_hero_level": 1,
+      "culture_adjacency": false,
+      "explore_modals": false,
+      "hoard_food_threshold": 0
     }
   },
   {
@@ -29,15 +36,22 @@
     "grounding": [
       "Quantic Foundry Immersion: Story (Yee 2015)"
     ],
-    "description": "Reads the tutorial, acts carefully, gets lost when the UI is crowded or guidance disappears. Catches low button salience and modal traps.",
-    "prompt": "You are a careful first-time player. You read the advisor's text and follow highlighted guidance. When there is no clear guidance you hesitate and look around before acting.",
+    "description": "Reads the tutorial, acts carefully, gets lost when the UI is crowded or guidance disappears. Follows advisor advice on hero leveling and campaign pacing. Catches low button salience, modal traps, and sudden combat difficulty spikes.",
+    "prompt": "You are a careful first-time player. You read the advisor's text and follow highlighted guidance. When there is no clear guidance you hesitate and look around before acting, leveling heroes when advised.",
     "stub_policy": {
       "follow_tutorial": 1.0,
       "salience_weight": 0.5,
       "prefer_build": 0.3,
       "harvest": 0.9,
       "wait_when_unsure": 0.8,
-      "curiosity": 0.1
+      "curiosity": 0.1,
+      "instant_finish": false,
+      "rush_campaign": false,
+      "level_heroes": true,
+      "target_hero_level": 2,
+      "culture_adjacency": false,
+      "explore_modals": false,
+      "hoard_food_threshold": 10
     }
   },
   {
@@ -51,8 +65,8 @@
       "BrainHex Mastermind (Nacke et al. 2014)",
       "Quantic Foundry Mastery: Strategy (Yee 2015)"
     ],
-    "description": "Min-maxer. Counts resources, looks for production bottlenecks and tech multipliers, ignores features with a poor payoff. Catches unbalanced feature economies.",
-    "prompt": "You are an experienced strategy player. You count resources before spending, avoid wasting scarce wood, keep workers busy, and race the tech tree towards the next era.",
+    "description": "Min-maxer. Counts resources, places Sacred Obelisks adjacent to homes and farms for the +20% culture yield boost, levels heroes before tough campaign walls, and ignores features with a poor payoff. Catches unbalanced feature economies and stat gate walls.",
+    "prompt": "You are an experienced strategy player. You count resources before spending, place culture monuments for maximum adjacency bonuses, level up heroes to beat power checks before difficult campaign stages, avoid wasting scarce wood, keep workers busy, and race the tech tree towards the next era.",
     "stub_policy": {
       "follow_tutorial": 0.6,
       "salience_weight": 0.2,
@@ -60,7 +74,14 @@
       "harvest": 1.0,
       "wait_when_unsure": 0.2,
       "plan": true,
-      "curiosity": 0.0
+      "curiosity": 0.0,
+      "instant_finish": true,
+      "rush_campaign": false,
+      "level_heroes": true,
+      "target_hero_level": 4,
+      "culture_adjacency": true,
+      "explore_modals": false,
+      "hoard_food_threshold": 0
     }
   },
   {
@@ -74,15 +95,22 @@
       "BrainHex Seeker (Nacke et al. 2014)",
       "Quantic Foundry Creativity: Discovery (Yee 2015)"
     ],
-    "description": "Feature tinkerer. Opens every newly unlocked button, modal or map node at least once, even mid-quest. Catches side features that derail the tutorial when explored once.",
-    "prompt": "You are a curious player who loves discovering what every new button does. Whenever something new appears you try it right away, even in the middle of a quest, then return to the main goal.",
+    "description": "Feature tinkerer. Opens every newly unlocked button, modal (Heroes Hall, Campaign Map, Quest Ledger) or expansion sector at least once, even mid-quest. Catches side features that derail the tutorial when explored once.",
+    "prompt": "You are a curious player who loves discovering what every new button does. Whenever something new appears you try it right away, inspecting the Heroes Hall, Campaign nodes, and territory expansions, even in the middle of a quest, then return to the main goal.",
     "stub_policy": {
       "follow_tutorial": 0.5,
       "salience_weight": 0.6,
       "prefer_build": 0.5,
       "harvest": 0.8,
       "wait_when_unsure": 0.2,
-      "curiosity": 1.0
+      "curiosity": 1.0,
+      "instant_finish": true,
+      "rush_campaign": false,
+      "level_heroes": true,
+      "target_hero_level": 2,
+      "culture_adjacency": false,
+      "explore_modals": true,
+      "hoard_food_threshold": 0
     }
   },
   {
@@ -95,15 +123,22 @@
       "BrainHex Survivor (Nacke et al. 2014)",
       "Quantic Foundry Mastery: Completion (Yee 2015)"
     ],
-    "description": "Resource turtle. Over-harvests and hesitates to spend scarce Wood or Stone on unfamiliar buttons unless guided. Catches features with an unclear value or a high perceived risk.",
-    "prompt": "You are a cautious player who hates wasting resources. You collect everything, keep a safety stock, and only spend on things the advisor recommends or whose payoff is obvious.",
+    "description": "Resource turtle. Over-harvests, maintains high food and coin reserves before leveling heroes or spending on territory expansion, and hesitates to spend scarce Wood or Stone on unfamiliar buttons unless guided. Catches features with an unclear value or a high perceived risk.",
+    "prompt": "You are a cautious player who hates wasting resources. You collect everything, keep a safety food buffer before upgrading heroes or expanding, and only spend on things the advisor recommends or whose payoff is obvious.",
     "stub_policy": {
       "follow_tutorial": 0.8,
       "salience_weight": 0.3,
       "prefer_build": 0.3,
       "harvest": 0.95,
       "wait_when_unsure": 0.7,
-      "curiosity": 0.0
+      "curiosity": 0.0,
+      "instant_finish": false,
+      "rush_campaign": false,
+      "level_heroes": false,
+      "target_hero_level": 1,
+      "culture_adjacency": false,
+      "explore_modals": false,
+      "hoard_food_threshold": 40
     }
   }
 ]

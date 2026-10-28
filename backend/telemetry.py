@@ -30,7 +30,9 @@ RUN_META_KEYS = ("run_id", "variant_id", "patch_id", "persona_id", "seed", "time
 
 def _is_progress(ev: dict[str, Any]) -> bool:
     et = ev["event_type"]
-    if et in ("step_enter", "step_complete", "achievement", "session_start"):
+    if et == "battle_lost":
+        return False
+    if et in ("step_enter", "step_complete", "achievement", "session_start", "battle_won", "hero_leveled", "territory_expanded"):
         return True
     return et == "click" and ev.get("payload", {}).get("result") == "advanced"
 
@@ -126,6 +128,8 @@ def compute_summary(events: list[dict[str, Any]], cfg: AnalysisConfig) -> dict[s
         "bronze_age_mastery": any(e["event_type"] == "achievement"
                                   and e.get("payload", {}).get("achievement_id") == "bronze_age_mastery" for e in events),
         "battles_won": sum(1 for e in events if e["event_type"] == "battle_won"),
+        "battles_lost": sum(1 for e in events if e["event_type"] == "battle_lost"),
+        "hero_levelups": sum(1 for e in events if e["event_type"] == "hero_leveled"),
         "feature_uses": sum(1 for e in clicks if e.get("payload", {}).get("feature_used")),
         "feature_uses_onboarding": sum(1 for e in clicks if e.get("payload", {}).get("feature_used")
                                        and (e.get("step_id") or "").startswith("onb_")),
@@ -156,6 +160,14 @@ def _event_summary(e: dict[str, Any]) -> str:
         return p.get("achievement_id", "achievement")
     if et == "hint_shown":
         return f"hint -> {p.get('target_id')}"
+    if et == "battle_lost":
+        return f"BATTLE LOST ({p.get('stage_id') or 'combat'})"
+    if et == "battle_won":
+        return f"BATTLE WON ({p.get('stage_id') or 'combat'})"
+    if et == "hero_leveled":
+        return f"HERO LEVELED ({p.get('hero_id') or 'hero'} Lv.{p.get('level', '?')})"
+    if et == "territory_expanded":
+        return f"EXPANSION ({p.get('sector_id') or 'sector'})"
     return et
 
 
