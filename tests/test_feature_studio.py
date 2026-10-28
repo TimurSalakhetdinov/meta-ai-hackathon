@@ -286,6 +286,75 @@ def test_propose_rework_sends_persona_breakdown(configs_dir: Path, tmp_path: Pat
     assert out["patch"]["status"] == "validated"  # the rework still waits for a human
 
 
+def test_committed_demo_demos_endpoint_lists_hurts_then_positive(app_client: TestClient) -> None:
+    """The pill switcher data: naive HURTS rollout first, council POSITIVE rework second."""
+    demos = app_client.get("/api/feature_studio/demos").json()
+    by_id = {d["patch_id"]: d for d in demos}
+    assert [d["patch_id"] for d in demos if d["source"] == "demo"] == ["patch_005", "patch_006"]
+    naive, rework = by_id["patch_005"], by_id["patch_006"]
+    assert (naive["short"], naive["verdict_key"]) == ("Naive Feature", "hurts")
+    assert (rework["short"], rework["verdict_key"]) == ("Council Rework", "positive")
+    assert naive["verdict_label"].startswith("❌ HURTS ONBOARDING")
+    assert rework["verdict_label"].startswith("✅ POSITIVE IMPACT")
+    assert naive["n_pairs"] == rework["n_pairs"] == 5
+
+
+def _assert_demo_bundle(app_client: TestClient, patch_id: str, key: str) -> dict[str, Any]:
+    """A committed demo report loads at $0 with distinct persona quotes and replayable runs."""
+    report = app_client.get(f"/api/feature_studio/report/{patch_id}")
+    assert report.status_code == 200, report.text
+    report = report.json()
+    assert report["key"] == key
+    assert report["provider_mode"] == "stub" and report["cost_usd"] == 0
+    assert report["n_pairs"] == 5 and report["baseline"] == "patch_001"
+    personas = [q["persona_id"] for q in report["quotes"]]
+    assert personas == ["impatient_newcomer", "first_time_casual", "optimizer", "curious_explorer",
+                        "cautious_hoarder"]
+    thoughts = [q["thought"] for q in report["quotes"]]
+    assert all(t and t != "No think-aloud recorded." for t in thoughts)
+    assert len(set(thoughts)) == 5, thoughts
+    root = Path(__file__).resolve().parents[1]
+    run_ids = [q["run_id"] for q in report["quotes"]] + [report["replay"]["A"], report["replay"]["B"]]
+    for run_id in run_ids:
+        d = root / "runs_demo" / run_id
+        for name in ("events.jsonl", "bot_steps.jsonl", "summary.json", "resolved_config.json"):
+            assert (d / name).exists(), (run_id, name)
+        rec = app_client.get(f"/api/runs/{run_id}/recording")
+        assert rec.status_code == 200, run_id
+        assert rec.json()["events"] and rec.json()["resolved_config"], run_id
+    return report
+
+
+def test_committed_demo_naive_report_is_hurts(app_client: TestClient) -> None:
+    report = _assert_demo_bundle(app_client, "patch_005", "hurts")
+    assert report["plaques"]["onboarding"] == {"A": "100%", "B": "60%"}
+    assert report["plaques"]["stone_age"] == {"A": "40%", "B": "0%"}
+    assert report["plaques"]["score"] == {"A": "145", "B": "73.6"}
+    assert "100% to 60%" in report["takeaway"]
+
+
+def test_committed_demo_rework_report_is_positive(app_client: TestClient) -> None:
+    report = _assert_demo_bundle(app_client, "patch_006", "positive")
+    assert report["plaques"]["onboarding"] == {"A": "100%", "B": "100%"}
+    assert report["plaques"]["stone_age"] == {"A": "40%", "B": "60%"}
+    assert report["plaques"]["score"] == {"A": "145", "B": "208"}
+    assert "keeps onboarding at 100%" in report["takeaway"]
+
+
+def test_live_studio_report_shadows_the_demo_bundle(app_client: TestClient, runs_dir: Path) -> None:
+    """A fresh live playtest of patch_005 wins over the committed demo until it is deleted."""
+    root = Path(__file__).resolve().parents[1]
+    ab = json.loads((root / "runs_demo" / fs.summary_name("patch_005")).read_text())
+    ab["binary"]["onboarding_completed"]["b_rate"] = 1.0
+    ab["binary"]["first_achievement"]["b_rate"] = ab["binary"]["first_achievement"]["a_rate"]
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    (runs_dir / fs.summary_name("patch_005")).write_text(json.dumps(ab))
+    report = app_client.get("/api/feature_studio/report/patch_005").json()
+    assert report["key"] == "mixed", report["takeaway"]  # no longer the committed HURTS
+    demos = {d["patch_id"]: d for d in app_client.get("/api/feature_studio/demos").json()}
+    assert demos["patch_005"]["source"] == "live"
+
+
 def test_stone_age_drop_hurts_even_when_tutorial_completes() -> None:
     pair = {"persona_id": "optimizer", "seed": 42,
             "A": {"run_id": "a", "onboarding_completed": True, "final_score": 145},

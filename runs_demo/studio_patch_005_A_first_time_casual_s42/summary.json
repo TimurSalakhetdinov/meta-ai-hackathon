@@ -1,0 +1,140 @@
+{
+  "run_id": "studio_patch_005_A_first_time_casual_s42",
+  "variant_id": "B",
+  "patch_id": "patch_001",
+  "persona_id": "first_time_casual",
+  "seed": 42,
+  "time_scale": 4.0,
+  "provider_mode": "stub",
+  "analysis_version": "v1",
+  "time_to_first_action_sec": 2.308,
+  "stuck_events": 3,
+  "stuck_by_step": {
+    "free_play": 3
+  },
+  "stuck_abort": true,
+  "where_stuck": "free_play",
+  "onboarding_completed": true,
+  "first_achievement": false,
+  "first_achievement_sim_sec": null,
+  "bronze_age_mastery": false,
+  "battles_won": 3,
+  "feature_uses": 0,
+  "feature_uses_onboarding": 0,
+  "action_rejected": 1,
+  "clicks": 88,
+  "session_ended": true,
+  "last_step_id": "free_play",
+  "sim_elapsed_sec": 456.224,
+  "final_score": 184,
+  "step_log": [
+    {
+      "sim_elapsed_sec": 0.0,
+      "step_id": "onb_01_shelter",
+      "event_type": "session_start",
+      "summary": "session_start"
+    },
+    {
+      "sim_elapsed_sec": 0.0,
+      "step_id": "onb_01_shelter",
+      "event_type": "step_enter",
+      "summary": "step_enter onb_01_shelter"
+    },
+    {
+      "sim_elapsed_sec": 8.242,
+      "step_id": "onb_01_shelter",
+      "event_type": "step_complete",
+      "summary": "step_complete onb_01_shelter"
+    },
+    {
+      "sim_elapsed_sec": 8.242,
+      "step_id": "onb_02_forager",
+      "event_type": "step_enter",
+      "summary": "step_enter onb_02_forager"
+    },
+    {
+      "sim_elapsed_sec": 26.708,
+      "step_id": "onb_02_forager",
+      "event_type": "step_complete",
+      "summary": "step_complete onb_02_forager"
+    },
+    {
+      "sim_elapsed_sec": 26.708,
+      "step_id": "onb_03_handoff",
+      "event_type": "step_enter",
+      "summary": "step_enter onb_03_handoff"
+    },
+    {
+      "sim_elapsed_sec": 32.774,
+      "step_id": "onb_03_handoff",
+      "event_type": "hint_shown",
+      "summary": "hint -> btn_research"
+    },
+    {
+      "sim_elapsed_sec": 35.174,
+      "step_id": "onb_03_handoff",
+      "event_type": "step_complete",
+      "summary": "step_complete onb_03_handoff"
+    },
+    {
+      "sim_elapsed_sec": 35.174,
+      "step_id": "free_play",
+      "event_type": "step_enter",
+      "summary": "step_enter free_play"
+    },
+    {
+      "sim_elapsed_sec": 43.107,
+      "step_id": "free_play",
+      "event_type": "quest_claimed",
+      "summary": "quest_claimed"
+    },
+    {
+      "sim_elapsed_sec": 68.039,
+      "step_id": "free_play",
+      "event_type": "battle_won",
+      "summary": "battle_won"
+    },
+    {
+      "sim_elapsed_sec": 96.771,
+      "step_id": "free_play",
+      "event_type": "action_rejected",
+      "summary": "card_shelter: insufficient_wood"
+    },
+    {
+      "sim_elapsed_sec": 259.032,
+      "step_id": "free_play",
+      "event_type": "battle_won",
+      "summary": "battle_won"
+    },
+    {
+      "sim_elapsed_sec": 272.764,
+      "step_id": "free_play",
+      "event_type": "battle_won",
+      "summary": "battle_won"
+    },
+    {
+      "sim_elapsed_sec": 393.094,
+      "step_id": "free_play",
+      "event_type": "stuck",
+      "summary": "STUCK (idle)"
+    },
+    {
+      "sim_elapsed_sec": 423.094,
+      "step_id": "free_play",
+      "event_type": "stuck",
+      "summary": "STUCK (idle)"
+    },
+    {
+      "sim_elapsed_sec": 453.094,
+      "step_id": "free_play",
+      "event_type": "stuck",
+      "summary": "STUCK (idle)"
+    },
+    {
+      "sim_elapsed_sec": 456.224,
+      "step_id": "free_play",
+      "event_type": "session_end",
+      "summary": "session_end"
+    }
+  ]
+}

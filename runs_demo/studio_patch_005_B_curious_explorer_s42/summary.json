@@ -1,0 +1,140 @@
+{
+  "run_id": "studio_patch_005_B_curious_explorer_s42",
+  "variant_id": "B",
+  "patch_id": "patch_005",
+  "persona_id": "curious_explorer",
+  "seed": 42,
+  "time_scale": 4.0,
+  "provider_mode": "stub",
+  "analysis_version": "v1",
+  "time_to_first_action_sec": 1.014,
+  "stuck_events": 3,
+  "stuck_by_step": {
+    "onb_03_handoff": 3
+  },
+  "stuck_abort": true,
+  "where_stuck": "onb_03_handoff",
+  "onboarding_completed": false,
+  "first_achievement": false,
+  "first_achievement_sim_sec": null,
+  "bronze_age_mastery": false,
+  "battles_won": 0,
+  "feature_uses": 1,
+  "feature_uses_onboarding": 1,
+  "action_rejected": 6,
+  "clicks": 28,
+  "session_ended": true,
+  "last_step_id": "onb_03_handoff",
+  "sim_elapsed_sec": 69.078,
+  "final_score": 50,
+  "step_log": [
+    {
+      "sim_elapsed_sec": 0.0,
+      "step_id": "onb_01_shelter",
+      "event_type": "session_start",
+      "summary": "session_start"
+    },
+    {
+      "sim_elapsed_sec": 0.0,
+      "step_id": "onb_01_shelter",
+      "event_type": "step_enter",
+      "summary": "step_enter onb_01_shelter"
+    },
+    {
+      "sim_elapsed_sec": 4.414,
+      "step_id": "onb_01_shelter",
+      "event_type": "step_complete",
+      "summary": "step_complete onb_01_shelter"
+    },
+    {
+      "sim_elapsed_sec": 4.414,
+      "step_id": "onb_02_forager",
+      "event_type": "step_enter",
+      "summary": "step_enter onb_02_forager"
+    },
+    {
+      "sim_elapsed_sec": 27.413,
+      "step_id": "onb_02_forager",
+      "event_type": "step_complete",
+      "summary": "step_complete onb_02_forager"
+    },
+    {
+      "sim_elapsed_sec": 27.413,
+      "step_id": "onb_03_handoff",
+      "event_type": "step_enter",
+      "summary": "step_enter onb_03_handoff"
+    },
+    {
+      "sim_elapsed_sec": 33.48,
+      "step_id": "onb_03_handoff",
+      "event_type": "hint_shown",
+      "summary": "hint -> btn_research"
+    },
+    {
+      "sim_elapsed_sec": 43.012,
+      "step_id": "onb_03_handoff",
+      "event_type": "hint_shown",
+      "summary": "hint -> btn_research"
+    },
+    {
+      "sim_elapsed_sec": 46.346,
+      "step_id": "onb_03_handoff",
+      "event_type": "action_rejected",
+      "summary": "tech_toolmaking: insufficient_wood"
+    },
+    {
+      "sim_elapsed_sec": 55.212,
+      "step_id": "onb_03_handoff",
+      "event_type": "action_rejected",
+      "summary": "tech_toolmaking: insufficient_wood"
+    },
+    {
+      "sim_elapsed_sec": 63.812,
+      "step_id": "onb_03_handoff",
+      "event_type": "action_rejected",
+      "summary": "tech_toolmaking: insufficient_wood"
+    },
+    {
+      "sim_elapsed_sec": 63.812,
+      "step_id": "onb_03_handoff",
+      "event_type": "stuck",
+      "summary": "STUCK (rejected_streak)"
+    },
+    {
+      "sim_elapsed_sec": 65.545,
+      "step_id": "onb_03_handoff",
+      "event_type": "action_rejected",
+      "summary": "tech_toolmaking: insufficient_wood"
+    },
+    {
+      "sim_elapsed_sec": 66.945,
+      "step_id": "onb_03_handoff",
+      "event_type": "action_rejected",
+      "summary": "card_forager_hut: insufficient_wood"
+    },
+    {
+      "sim_elapsed_sec": 66.946,
+      "step_id": "onb_03_handoff",
+      "event_type": "stuck",
+      "summary": "STUCK (idle)"
+    },
+    {
+      "sim_elapsed_sec": 68.945,
+      "step_id": "onb_03_handoff",
+      "event_type": "action_rejected",
+      "summary": "tech_toolmaking: insufficient_wood"
+    },
+    {
+      "sim_elapsed_sec": 68.945,
+      "step_id": "onb_03_handoff",
+      "event_type": "stuck",
+      "summary": "STUCK (rejected_streak)"
+    },
+    {
+      "sim_elapsed_sec": 69.078,
+      "step_id": "onb_03_handoff",
+      "event_type": "session_end",
+      "summary": "session_end"
+    }
+  ]
+}
