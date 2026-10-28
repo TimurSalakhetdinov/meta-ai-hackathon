@@ -83,6 +83,9 @@ def test_parser_reads_free_text() -> None:
     trade = fs.stub_plugin("A subtle wandering merchant after the tutorial: pay 15 food, get 25 wood, 30 second cooldown")
     assert trade["unlock_at_step"] == "free_play" and trade["button_salience"] == "low"
     assert trade["costs"] == {"food": 15} and trade["rewards"] == {"wood": 25} and trade["cooldown_sec"] == 30
+    early = fs.stub_plugin("Add a Raider Ambush button at tutorial step 2 that costs wood and rewards score")
+    assert early["unlock_at_step"] == "onb_02_forager" and early["costs"] == {"wood": 55}
+    assert fs.stub_plugin("A raider ambush in free play that costs wood")["costs"] == {"wood": 25}
     assert fs.parse_quantities("Festival at step 3 for 30 food granting 8 rp") == {"costs": {"food": 30}, "rewards": {"rp": 8}}
 
 
@@ -175,7 +178,8 @@ def test_early_feature_hurts_then_rework_is_positive(app_client: TestClient, con
     rp = rework.json()["patch"]
     assert rp["status"] == "validated" and rp["baseline_patch_id"] == "patch_001"
     plugin = rp["body"]["feature_plugin"]
-    assert plugin["unlock_at_step"] == "free_play" and plugin["costs"] == {"food": 20}
+    assert plugin["unlock_at_step"] == "free_play" and plugin["costs"] == {"food": 10}
+    assert plugin["rewards"] == {"food": 25, "stone": 15, "rp": 6, "score": 25} and plugin["cooldown_sec"] == 15.0
     assert plugin["icon_url"] == "/static/assets/generated/raider_ambush.png"
     assert app_client.post("/api/feature_studio/playtest", json={"patch_id": rp["patch_id"]}).status_code == 403
 

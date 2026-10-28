@@ -153,6 +153,21 @@ def parse_quantities(prompt: str) -> dict[str, dict[str, int]]:
     return out
 
 
+# "costs wood" with no number: an early feature priced like a starter building, a late one like a small upkeep.
+NAMED_COST_RE = re.compile(r"\b(?:costs?|spends?|pays?|consumes?|drains?|takes?|requires?|needs?)\s+(?:some\s+|a\s+little\s+)?"
+                           r"(wood|timber|lumber|food|berries|stones?)\b")
+NAMED_COST_DEFAULT = {"wood": (55, 25), "food": (20, 20), "stone": (15, 10)}
+
+
+def _named_costs(text: str, step: str) -> dict[str, int]:
+    out = {}
+    for m in NAMED_COST_RE.finditer(text):
+        res = RESOURCE_WORDS["stone" if m.group(1) == "stones" else m.group(1)]
+        early, late = NAMED_COST_DEFAULT[res]
+        out[res] = early if step != "free_play" else late
+    return out
+
+
 def slugify(text: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")[:40].strip("_")
     return slug if len(slug) >= 2 else "feature"
@@ -168,7 +183,7 @@ def stub_plugin(prompt: str) -> dict[str, Any]:
     cooldown = COOLDOWN_RE.search(prompt)
     cooldown_sec = float(next(g for g in cooldown.groups() if g)) if cooldown else 12.0
     step = _first_match(text, STEP_RULES, "free_play")
-    costs = qty["costs"] or dict(theme["costs"])
+    costs = qty["costs"] or _named_costs(text, step) or dict(theme["costs"])
     rewards = qty["rewards"] or dict(theme["rewards"])
     return {
         "feature_id": slugify(title),
@@ -348,7 +363,8 @@ def persona_quotes(ab: dict[str, Any], read_bot_steps: Any, feature_target: Opti
 
 # ------------------------------------------------------------------ rework
 def stub_rework(plugin: dict[str, Any], report: dict[str, Any]) -> dict[str, Any]:
-    """Designer rules: move a tutorial-time feature to free play and pay in food, or make an ignored one visible."""
+    """Designer rules: move a tutorial-time feature to free play and make it feed the Stone Age
+    bottleneck at a net gain, or make an ignored one visible."""
     new = dict(plugin)
     notes = []
     key = report.get("key")
@@ -356,10 +372,17 @@ def stub_rework(plugin: dict[str, Any], report: dict[str, Any]) -> dict[str, Any
         if plugin.get("unlock_at_step") != "free_play":
             notes.append(f"move unlock_at_step from {plugin.get('unlock_at_step')} to free_play")
             new["unlock_at_step"] = "free_play"
-        scarce = {r: v for r, v in (plugin.get("costs") or {}).items() if r in ("wood", "stone")}
-        if scarce:
-            new["costs"] = {**{r: v for r, v in plugin["costs"].items() if r not in scarce}, "food": 20}
-            notes.append(f"pay 20 Food instead of {', '.join(f'{v} {r.title()}' for r, v in scarce.items())}")
+        # Stone Age needs Masonry (35 Wood), then 50 Food, 20 Stone and 10 RP. Wood is the Masonry
+        # bottleneck, so pay a little food, which the Forager refills fastest and the reward refunds.
+        old_costs = plugin.get("costs") or {}
+        new["costs"] = {"food": 10}
+        if old_costs != new["costs"]:
+            was = ", ".join(f"{v} {r.title()}" for r, v in old_costs.items()) or "nothing"
+            notes.append(f"pay 10 Food instead of {was}")
+        new["rewards"] = {"food": 25, "stone": 15, "rp": 6, "score": 25}
+        notes.append("reward 25 Food, 15 Stone, 6 RP and 25 score, the Stone Age bottleneck")
+        new["cooldown_sec"] = 15.0
+        notes.append("set the cooldown to 15 s")
     if key == "mixed" and not report.get("feature_users"):
         if plugin.get("button_salience") != "high_pulse":
             new["button_salience"] = "high_pulse"

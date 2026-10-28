@@ -190,6 +190,22 @@ export class StubBot {
     // A highlighted card for a building already placed means "wait for it", not "build another".
     const guided = targets.find((t) => t.highlighted && t.kind !== 'pad'
       && !(t.kind === 'build_card' && owned.has(t.target_id.slice(5))));
+    // A pulsing NEW! button mid-tutorial tempts distractible players before they read the arrow.
+    // Planners hold back. The pulse clears after the first use, so this fires once at most.
+    const state = window.__GAME_STATE__ || {};
+    const feature = targets.find((t) => t.kind === 'feature' && t.affordable && !t.locked && !t.cooldown);
+    const inTutorial = state.step_id === 'onb_02_forager' || state.step_id === 'onb_03_handoff';
+    const distractible = p.distractibility ?? Math.max(p.salience_weight * (1 - p.follow_tutorial), p.curiosity);
+    if (inTutorial && feature?.computed_salience === 'high_pulse' && !p.plan && r() < distractible) {
+      this.featureUses += 1;
+      return { target: feature, thought: optionThought({ t: feature, why: 'feature' }, { featureUses: 0 }), mood: 'curious' };
+    }
+    // In free play, before Stone Age, an affordable feature is a known way to gather resources.
+    if (state.step_id === 'free_play' && feature && !state.achieved && this.featureUses < 2 && r() < 0.6) {
+      const thought = optionThought({ t: feature, why: 'feature' }, this);
+      this.featureUses += 1;
+      return { target: feature, thought, mood: 'curious' };
+    }
     if (guided && r() < p.follow_tutorial) {
       return { target: guided, thought: `The advisor's arrow points at ${shortLabel(guided)}. Follow it.` };
     }
