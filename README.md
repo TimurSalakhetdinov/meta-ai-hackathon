@@ -23,11 +23,11 @@ flowchart LR
     E --> R[Report: did the fix help?]
 ```
 
-1. **Playtester agents.** Muse Spark agents with different player personas (e.g. impatient casual, careful completionist, first-time gamer) play a browser game through computer use: they look at the screen and act.
-2. **Analyst agent.** It uses SAM 3.1 to segment UI elements in gameplay screenshots and Muse Spark to reason over sessions. It builds an onboarding funnel and ranks friction points with quantified evidence, including the SAM 3.1 distractor-to-goal visual salience ratio.
-3. **Designer agent.** It proposes concrete onboarding config changes, such as tutorial steps, hints, pacing or difficulty.
-4. **Human approval gate.** No change is applied until a human approves it.
-5. **Experiment agent.** It reruns the playtesters on the old and new configs as an A/B comparison and reports whether the fix improved the funnel.
+1. **Playtester agents (5 literature-grounded personas).** Muse Spark computer-use agents with working-memory scratchpads and distinct player-type psychology (`Rush-Clicker` / BrainHex Daredevil, `Story-Guided` / Quantic Story, `Strategist` / Bartle Achiever, `Tinkerer` / Bartle Explorer, `Hoarder` / Quantic Completion) play the browser game by looking at the screen and clicking.
+2. **Analyst agent.** It uses SAM 3.1 to segment UI elements in gameplay screenshots and Muse Spark to reason over sessions. It builds an onboarding funnel and ranks friction points with quantified evidence, including the SAM 3.1 distractor-to-goal visual salience ratio (`6.76x` on the baseline stall).
+3. **Designer agent & Feature Forge.** It proposes concrete onboarding config fixes (`patch_001`) or turns a Game PM's free-text feature idea into a schema-validated `FeaturePlugin` patch with a generated UI emblem (`Muse Image` / procedural stub), plus archetype-aware reworks when a naive feature hurts onboarding.
+4. **Human approval gate.** No config or feature patch is applied or playtested until a human approves it (`403` until approved).
+5. **Experiment agent.** It reruns the playtesters on the baseline and patched configs as a paired A/B comparison (McNemar exact test + paired bootstrap CI) and renders a 1-page Council Report (`❌ HURTS`, `⚠️ MIXED`, `✅ POSITIVE`) with side-by-side replay.
 6. **Validation.** Agent findings are compared against real human play sessions.
 
 ## Meta models used
@@ -58,7 +58,7 @@ flowchart LR
 - [ ] Validation against human sessions
 - [ ] Demo video
 
-The onboarding friction in the base config is planted on purpose, so the loop has a known problem to find. At `onb_03_handoff` the Woodcutter Hut is unlocked and marked NEW!, while the Research button is small. A player who builds the hut drops below the 30 wood that Basic Toolmaking needs, and the hut produces nothing without that tech. `configs/patches/patch_001.json` is a hand-written seed patch for the approval-gate demo until the designer agent exists.
+The onboarding friction in the base config is planted on purpose, so the loop has a known problem to find. At `onb_03_handoff` the Woodcutter Hut is unlocked and marked NEW!, while the Research button is small. A player who builds the hut drops below the 30 wood that Basic Toolmaking needs, and the hut produces nothing without that tech. `configs/patches/patch_001.json` is the baseline onboarding fix behind the approval gate; `patch_005.json` (naive Step-2 Raider Ambush, `❌ HURTS ONBOARDING`) and `patch_006.json` (free-play Designer rework, `✅ POSITIVE IMPACT`) are pre-baked Feature Studio patches stacked on `patch_001`.
 
 ## Getting started
 
@@ -74,10 +74,13 @@ Open these URLs on `http://localhost:8000`:
 
 | URL | What it shows |
 |---|---|
-| `/?variant=A&seed=42` | Base config (planted friction) |
-| `/?variant=B&patch_id=patch_001&seed=42` | Patched config; returns 403 until a human approves `patch_001` in the AI Director |
+| `/?variant=A&seed=42` | Base config (planted friction) + Architect's Council dock (`📜 Feature Forge`, `🏛️ Council Report`, `👁️ Live Chronicle`) |
+| `/?variant=A&seed=42&dock=report` | Opens directly to the **🏛️ Council Report** (1-click switcher between Naive Feature `❌ HURTS` and Council Rework `✅ POSITIVE`, plus the SAM 3.1 `6.76x` onboarding diagnosis below) |
+| `/?variant=B&patch_id=patch_001&seed=42` | Patched onboarding config (`patch_001` approved) |
+| `/?variant=B&patch_id=patch_005&seed=42` | Naive Step-2 Raider Ambush feature on the canvas (`55 Wood` cost, `NEW!` pulse) |
+| `/?variant=B&patch_id=patch_006&seed=42` | Reworked Free-Play Raider Ambush feature (`10 Food` cost, rewards `+25 Food, +15 Stone, +6 RP, +25 Score`) |
 | `/?variant=A&bot=1&persona=impatient_newcomer&speed=4` | Watch Bot Play with the stub persona policy |
-| `/?replay_a=<run_id>&replay_b=<run_id>&speed=4` | Side-by-side replay; add `&dev=1` for runs not played by Muse Spark |
+| `/?replay_a=<run_id>&replay_b=<run_id>&speed=4&dev=1` | Side-by-side synchronized replay |
 | `/?variant=A&inspect_config=1` | Config inspector: which lever drives which UI element |
 
 Other URL parameters: `seed`, `speed` (1 to 4), `run_id`, `telemetry=0`. Runs are written to `runs/<run_id>/` (`events.jsonl`, `bot_steps.jsonl`, `summary.json`, `resolved_config.json`).

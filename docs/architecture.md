@@ -55,15 +55,16 @@ flowchart LR
 
 | Component | Location | Responsibility |
 |---|---|---|
-| Game frontend | `frontend/static/` | Settlement canvas, resource bar, advisor, build bar, Research panel, first achievement. Emits raw events. Exposes `window.__GAME_STATE__` (idle flag, click sequence) and, for stub/debug only, `window.__GAME_DEBUG__.getRenderedTargets()`. |
-| Right dock | `frontend/static/overlay.js` | **Telemetry Pill** (top: step id, time to first action, onboarding checklist) and **AI Director** panel (tabs: Live bot with `[▶ Watch Bot Play]` button and persona selector, Analyst and Designer with approval gate, A/B summary). Lives outside the game area. |
+| Game frontend | `frontend/static/` | 2.5D isometric settlement canvas (3 eras: *Dawn → Stone → Bronze Age*, 7 buildable buildings + Town Center with Lv.1–3 upgrades, 7 techs, Chapter Quests, Expedition Map battles, worker assignment, Web Audio SFX, and custom `FeaturePlugin` button). Emits raw events. Exposes `window.__GAME_STATE__` and `window.__GAME_DEBUG__.getRenderedTargets()`. |
+| Right dock (Architect's Council) | `frontend/static/overlay.js` | **Telemetry Pill** (top: step id, time to first action, onboarding checklist) and **Architect's Council** studio (`📜 Feature Forge` for free-text PM feature prototyping + approval gate + 5-persona guild selector, `🏛️ Council Report` with 1-click `HURTS` / `POSITIVE` switcher + SAM 3.1 `6.76x` onboarding diagnosis, and `👁️ Live Chronicle` with `[▶ Watch Bot Play]`). Lives outside the `960x540` bot clip. |
 | Replay player | `frontend/static/replay.js` | `/?replay_a=<run>&replay_b=<run>&speed=4`: side-by-side playback from recorded artifacts on one timeline, no API calls. Refuses runs whose `provider_mode` is not `meta` unless `?dev=1`. |
-| Config & patch service | `backend/config_service.py` | Loads `configs/base_config.json`, applies patches, validates with Pydantic, enforces the approval gate, writes the audit log. |
-| Telemetry sink | `backend/telemetry.py` | Appends events to `runs/<run_id>/events.jsonl`, derives `stuck` with `AnalysisConfig`, writes `summary.json`. |
-| Bot runner | `backend/bot_runner.py` | Async Playwright. One fresh `BrowserContext` and fresh bot memory per session. Opens the game with URL params, waits for idle, captures the 960x540 clip, calls the Meta client, draws the cyan click ring, clicks, records video and frames. |
-| Meta client | `backend/meta_client.py` | SAM 3.1 segmentation and set-of-mark rendering, Muse Spark decisions (configurable model id, contributor by default), disk cache (Muse cache off in experiment mode), cost ledger and budget buckets, provider switch `stub` / `open_weights` / `meta`, `META_CACHE_ONLY` mode. |
-| Agents | `backend/agents/` | `analyst.py`, `designer.py`, `experiment.py` with typed interfaces and deterministic stub outputs. `experiment.py` owns the worker pool and paired statistics. Real reasoning is written in Muse Code from Oct 29. |
-| CLI | `backend/cli.py` | `run-session`, `run-closed-loop`, `replay` commands. |
+| Config & patch service | `backend/config_service.py` | Loads `configs/base_config.json`, applies patches (including `FeaturePlugin`), validates with Pydantic, enforces the approval gate, writes `audit_log.jsonl`. |
+| Feature studio | `backend/feature_studio.py` | Free-text PM prompt parser + `Muse Spark` architect reasoning, `Muse Image` / procedural stub emblem generation, 5-persona paired playtest runner, measured verdict engine (`hurts` / `mixed` / `positive`), and archetype-aware rework synthesis behind the approval gate. |
+| Telemetry sink | `backend/telemetry.py` | Appends events to `runs/<run_id>/events.jsonl`, derives `stuck` with `AnalysisConfig`, writes `summary.json` atomically. |
+| Bot runner | `backend/bot_runner.py` | Async Playwright. One fresh `BrowserContext` and fresh `BotMemory` (with working-memory `scratchpad`) per session. Captures the `960x540` clip, calls `MetaClient`, draws the cyan click ring, clicks, records frames and `bot_steps.jsonl`. |
+| Meta client | `backend/meta_client.py` | SAM 3.1 segmentation and set-of-mark rendering, Muse Spark decisions (`muse-spark-1.3-contributor` default) with working-memory prompt injection, Muse Image emblem generation, disk cache, cost ledger and budget buckets, `META_CACHE_ONLY` mode. |
+| Agents | `backend/agents/` | `analyst.py` (stuck frame + SAM 3.1 distractor-to-goal visual salience ratio + quotes), `designer.py` (config patch proposals behind the approval gate), `experiment.py` (canary + worker pool + McNemar & bootstrap stats). |
+| CLI | `backend/cli.py` | `run-session`, `run-closed-loop`, `analyze` commands. |
 
 ## 3. Stack and repo layout
 
