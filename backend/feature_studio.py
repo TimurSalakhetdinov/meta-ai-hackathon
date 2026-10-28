@@ -337,6 +337,35 @@ def _evidence(stat: dict[str, Any]) -> str:
     return f" Evidence: {lost} of {stat.get('n', 0)} pairs lost it (McNemar p = {p:.2f}, {note})."
 
 
+def summarize_persona_outcomes(ab: dict[str, Any], configs_dir: Path) -> list[dict[str, Any]]:
+    """One archetype-level row per persona: feature use, stalls and the B - A score delta.
+
+    Joins the paired sessions with `configs/personas.json` so the council report
+    and the rework designer see which archetypes the feature pulled off track.
+    """
+    personas = {r["persona_id"]: r for r in json.loads((Path(configs_dir) / "personas.json").read_text())}
+    rows: dict[str, dict[str, Any]] = {}
+    for pair in ab.get("pairs", []):
+        pid = pair.get("persona_id", "?")
+        a, b = pair.get("A", {}), pair.get("B", {})
+        row = rows.setdefault(pid, {"persona_id": pid, "archetype": personas.get(pid, {}).get("archetype"),
+                                    "grounding": personas.get(pid, {}).get("grounding", []),
+                                    "n_pairs": 0, "feature_uses": 0, "feature_uses_onboarding": 0,
+                                    "stalled": False, "_deltas": []})
+        row["n_pairs"] += 1
+        row["feature_uses"] += b.get("feature_uses", 0) or 0
+        row["feature_uses_onboarding"] += b.get("feature_uses_onboarding", 0) or 0
+        row["stalled"] = row["stalled"] or not b.get("onboarding_completed")
+        if a.get("final_score") is not None and b.get("final_score") is not None:
+            row["_deltas"].append(b["final_score"] - a["final_score"])
+    out = []
+    for row in rows.values():
+        deltas = row.pop("_deltas")
+        row["final_score_delta"] = round(sum(deltas) / len(deltas), 1) if deltas else None
+        out.append(row)
+    return out
+
+
 def persona_quotes(ab: dict[str, Any], read_bot_steps: Any, feature_target: Optional[str]) -> list[dict[str, Any]]:
     """One think-aloud line per tested persona, from its B session; prefers the step where it met the feature."""
     out = []
@@ -397,6 +426,10 @@ def stub_rework(plugin: dict[str, Any], report: dict[str, Any]) -> dict[str, Any
     if not notes:
         new["cooldown_sec"] = min(120.0, float(plugin.get("cooldown_sec", 12.0)) + 8.0)
         notes.append("lengthen the cooldown by 8 s so the feature paces free play")
+    affected = [r["archetype"] for r in report.get("persona_breakdown") or []
+                if r.get("feature_uses_onboarding") and r.get("stalled") and r.get("archetype")]
+    if affected:
+        notes.append(f"affected archetypes: {', '.join(dict.fromkeys(affected))}")
     return {"plugin": new, "rationale": "Designer rework: " + "; ".join(notes) + "."}
 
 
@@ -404,7 +437,7 @@ def propose_rework(plugin: dict[str, Any], report: dict[str, Any], *, configs_di
                    client: MetaClient) -> dict[str, Any]:
     stub = stub_rework(plugin, report)
     user = json.dumps({"plugin": plugin, "verdict": report.get("key"), "takeaway": report.get("takeaway"),
-                       "plaques": report.get("plaques")})
+                       "plaques": report.get("plaques"), "persona_breakdown": report.get("persona_breakdown")})
     out = client.reason_json(REWORK_SYSTEM, user, stub_result=stub, run_id="feature_studio", bucket="analysis")
     raw = out.get("plugin") if isinstance(out, dict) and isinstance(out.get("plugin"), dict) else {}
     reworked = _clean_plugin({**raw, "feature_id": plugin["feature_id"]}, stub["plugin"])
@@ -460,6 +493,7 @@ def build_report(patch_id: str, *, configs_dir: Path, runs_dir: Path, read_bot_s
     report.update(patch_id=patch_id, plugin=plugin, experiment_id=ab.get("experiment_id"),
                   baseline=ab.get("baseline"), run_type=ab.get("run_type"), n_pairs=ab.get("n_pairs"),
                   provider_mode=ab.get("provider_mode"), cost_usd=ab.get("cost_usd"),
+                  persona_breakdown=summarize_persona_outcomes(ab, configs_dir),
                   quotes=persona_quotes(ab, read_bot_steps, target),
                   replay=replay_pair(ab))
     return report

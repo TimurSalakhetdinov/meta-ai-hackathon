@@ -158,3 +158,9 @@ Many short, independent sessions, not one long run. One pair is a demo, not evid
   - The Council Report keeps the onboarding loop (`patch_001`) and its A/B below the feature report in a collapsible section. The Forge hints to approve `patch_001` first when a feature has no baseline.
   - The dock UI test allows the 404s for a missing run analysis and A/B summary, which render as notes. Any other failed response still fails the test.
   - Argon review round 7 is in `docs/hackathon/argon-review-log.md`.
+- 2026-10-28 (Muse Code, `muse/agent-intelligence`): Multi-agent intelligence upgrade, all at $0 Meta spend (`META_PROVIDER=stub`, no live calls in tests).
+  - Analyst: `compute_visual_salience` measures the SAM distractor-to-goal pixel-area ratio (Woodcutter card, or the `btn_feature_*` button under test); the ratio lands in the `low_research_salience` evidence, the Muse Spark evidence payload and `analysis.json`. The stuck-frame focus masks highlight the feature button when one is on screen.
+  - Playtester: stateful `update_scratchpad` (current step, steps in stage, repeat-click streak, last mood) feeds a compact "Working memory" line into the Muse Spark prompt; `cache_key` is unchanged so cached decisions stay compatible.
+  - Feature studio: `summarize_persona_outcomes` joins A/B pairs with `personas.json` archetypes; the breakdown is in the council report and the rework prompt, and `stub_rework` names stalled archetypes that used the feature in onboarding.
+  - Tests: new `tests/test_agents.py` (7 tests) plus 4 council tests in `tests/test_feature_studio.py`; `test_fresh_session_state.py` now pins scratchpad freshness instead of emptiness. Full suite: 87 passed.
+  - Next: review and merge to `main`, then a first small live run in meta mode.

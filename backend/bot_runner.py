@@ -82,6 +82,30 @@ def max_bot_steps(run_type: str) -> int:
     return MAX_BOT_STEPS[run_type]
 
 
+def update_scratchpad(scratchpad: dict[str, Any], state: dict[str, Any], decision: Any,
+                      events_tail: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """Fold one bot step into the persona's working memory.
+
+    Tracks the current tutorial step, how many bot steps were spent on it, the
+    streak of clicks on the same target (a wait breaks the streak) and the last
+    think-aloud mood. Returns a new dict; the caller's scratchpad is untouched.
+    """
+    prev = dict(scratchpad or {})
+    step_id = state.get("step_id")
+    if step_id == prev.get("current_step"):
+        steps_here = int(prev.get("steps_in_current_stage", 0) or 0) + 1
+    else:
+        steps_here = 1
+    target_id = getattr(decision, "target_id", None)
+    if target_id is not None and target_id == prev.get("last_target_id"):
+        repeats = int(prev.get("repeated_target_clicks", 0) or 0) + 1
+    else:
+        repeats = 1
+    return {**prev, "current_step": step_id, "steps_in_current_stage": steps_here,
+            "repeated_target_clicks": repeats, "last_target_id": target_id,
+            "last_mood": getattr(decision, "player_mood", None)}
+
+
 def session_url(base_url: str, spec: SessionSpec, provider_mode: str) -> str:
     q = {"variant": spec.variant, "seed": spec.seed, "persona": spec.persona_id, "speed": spec.speed,
          "run_id": spec.run_id, "provider": provider_mode, "bot": "external"}
@@ -129,7 +153,8 @@ class BotRunner:
                     decision = self.client.decide_action(
                         som=som, persona=persona, last_actions=memory.last_actions, run_id=spec.run_id,
                         step_index=i, experiment_mode=spec.experiment_mode, stub_decision=stub,
-                        sec_in_step=state["sim_elapsed_sec"] - step_entered_at)
+                        sec_in_step=state["sim_elapsed_sec"] - step_entered_at,
+                        scratchpad=memory.scratchpad)
                     corr = f"{spec.run_id}_b{i:03d}"
                     if decision.xy:
                         x, y = decision.xy
@@ -152,6 +177,7 @@ class BotRunner:
                         "step": i, "action": decision.action, "mark_id": decision.mark_id,
                         "summary": f"{decision.action} #{decision.mark_id}" if decision.mark_id else decision.action,
                     }])[-3:]
+                    memory.scratchpad = update_scratchpad(memory.scratchpad, state, decision)
                     cost += record.estimated_cost_usd or 0.0
                     steps = i + 1
                     stop = await self._stop_reason(page, http, spec)

@@ -48,4 +48,8 @@ def test_sessions_do_not_share_storage_or_memory(configs_dir: Path, runs_dir: Pa
     assert seen == [[None, None], [None, None]]
     assert first.memory is not second.memory
     assert [a["step"] for a in second.memory.last_actions] == [0, 1]
-    assert second.memory.scratchpad == {}
+    # The scratchpad now tracks each step, but stays private to its session: two
+    # steps on a fresh memory can never report more than two steps in one stage.
+    assert second.memory.scratchpad["steps_in_current_stage"] <= 2
+    assert second.memory.scratchpad["current_step"]
+    assert first.memory.scratchpad is not second.memory.scratchpad

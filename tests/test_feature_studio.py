@@ -217,6 +217,75 @@ def test_replay_prefers_pair_with_different_outcome() -> None:
     assert fs.replay_pair({"pairs": []}) is None
 
 
+def _council_ab() -> dict[str, Any]:
+    """Two archetypes derailed by the feature, one that ignored it and finished richer."""
+    def pair(pid: str, a_score: int, b_score: int, completed: bool, uses: int, onb: int) -> dict[str, Any]:
+        return {"persona_id": pid, "seed": 42,
+                "A": {"run_id": f"a_{pid}", "onboarding_completed": True, "final_score": a_score},
+                "B": {"run_id": f"b_{pid}", "onboarding_completed": completed, "final_score": b_score,
+                      "feature_uses": uses, "feature_uses_onboarding": onb,
+                      "where_stuck": None if completed else "onb_02_forager"}}
+    return {"pairs": [pair("impatient_newcomer", 180, 60, False, 3, 2),
+                      pair("curious_explorer", 170, 70, False, 2, 2),
+                      pair("optimizer", 200, 210, True, 1, 0)],
+            "mean_stuck_events": {"A": 1, "B": 3},
+            "binary": {"onboarding_completed": {"a_rate": 1.0, "b_rate": 1 / 3},
+                       "first_achievement": {"a_rate": 0.0, "b_rate": 0.0}}}
+
+
+def test_summarize_persona_outcomes_joins_archetypes(configs_dir: Path) -> None:
+    rows = {r["persona_id"]: r for r in fs.summarize_persona_outcomes(_council_ab(), configs_dir)}
+    rush = rows["impatient_newcomer"]
+    assert rush["archetype"] == "Rush-Clicker" and any("Daredevil" in g for g in rush["grounding"])
+    assert rush["feature_uses"] == 3 and rush["feature_uses_onboarding"] == 2
+    assert rush["stalled"] is True and rush["final_score_delta"] == 60 - 180
+    assert rows["curious_explorer"]["archetype"] == "Tinkerer"
+    assert rows["curious_explorer"]["stalled"] is True
+    opt = rows["optimizer"]
+    assert opt["stalled"] is False and opt["final_score_delta"] == 10
+
+
+def test_build_report_includes_persona_breakdown(configs_dir: Path, runs_dir: Path, tmp_path: Path) -> None:
+    client = MetaClient(runs_dir=runs_dir, configs_dir=configs_dir, provider_mode="stub")
+    pid = fs.propose_feature(PROMPT, configs_dir=configs_dir, client=client,
+                             generated_dir=tmp_path / "gen")["patch"]["patch_id"]
+    (runs_dir / fs.summary_name(pid)).write_text(json.dumps(_council_ab()))
+    report = fs.build_report(pid, configs_dir=configs_dir, runs_dir=runs_dir,
+                             read_bot_steps=lambda run_id: [])
+    assert report is not None and report["key"] == "hurts"
+    archetypes = [r["archetype"] for r in report["persona_breakdown"]]
+    assert archetypes == ["Rush-Clicker", "Tinkerer", "Strategist"]
+    assert report["persona_breakdown"][0]["final_score_delta"] == -120
+
+
+def test_stub_rework_names_affected_archetypes(configs_dir: Path) -> None:
+    breakdown = fs.summarize_persona_outcomes(_council_ab(), configs_dir)
+    plugin = fs.stub_plugin(PROMPT)
+    rationale = fs.stub_rework(plugin, {"key": "hurts", "persona_breakdown": breakdown})["rationale"]
+    assert "affected archetypes: Rush-Clicker, Tinkerer" in rationale
+    assert "Strategist" not in rationale  # finished onboarding, so not affected
+    plain = fs.stub_rework(plugin, {"key": "hurts"})["rationale"]
+    assert "affected archetypes" not in plain
+
+
+def test_propose_rework_sends_persona_breakdown(configs_dir: Path, tmp_path: Path,
+                                                monkeypatch: pytest.MonkeyPatch) -> None:
+    client = MetaClient(runs_dir=tmp_path / "runs", configs_dir=configs_dir, provider_mode="stub")
+    seen: dict[str, Any] = {}
+    orig = MetaClient.reason_json
+
+    def capture(self: MetaClient, system: str, user: str, **kw: Any) -> dict[str, Any]:
+        seen["user"] = json.loads(user)
+        return orig(self, system, user, **kw)
+
+    monkeypatch.setattr(MetaClient, "reason_json", capture)
+    breakdown = fs.summarize_persona_outcomes(_council_ab(), configs_dir)
+    report = {"key": "hurts", "takeaway": "drops onboarding", "plaques": {}, "persona_breakdown": breakdown}
+    out = fs.propose_rework(fs.stub_plugin(PROMPT), report, configs_dir=configs_dir, client=client)
+    assert seen["user"]["persona_breakdown"] == breakdown
+    assert out["patch"]["status"] == "validated"  # the rework still waits for a human
+
+
 def test_stone_age_drop_hurts_even_when_tutorial_completes() -> None:
     pair = {"persona_id": "optimizer", "seed": 42,
             "A": {"run_id": "a", "onboarding_completed": True, "final_score": 145},

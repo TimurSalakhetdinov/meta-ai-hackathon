@@ -1,9 +1,10 @@
 """Analyst agent: find where a playtester got stuck and why.
 
 Reads a run's events, bot steps and frames, picks the stuck frame, outlines the
-top 3 SAM masks on it (Research button, Woodcutter card, wood counter), pulls
-think-aloud quotes and writes `runs/<run_id>/analysis.json`. Stub mode builds
-the diagnosis from rules over the events; meta mode asks Muse Spark.
+top 3 SAM masks on it (Research button, Woodcutter card or feature button, wood
+counter), measures the distractor-to-goal visual area ratio, pulls think-aloud
+quotes and writes `runs/<run_id>/analysis.json`. Stub mode builds the diagnosis
+from rules over the events; meta mode asks Muse Spark.
 """
 
 from __future__ import annotations
@@ -82,6 +83,46 @@ def playtester_quotes(events: list[dict[str, Any]], bot_steps: list[dict[str, An
     return out[-MAX_QUOTES:]
 
 
+def _element_area(el: dict[str, Any]) -> Optional[float]:
+    """Pixel area of a rendered target (`w`/`h`) or a drawn mask (`bbox`)."""
+    if isinstance(el.get("w"), (int, float)) and isinstance(el.get("h"), (int, float)):
+        return float(el["w"]) * float(el["h"])
+    bbox = el.get("bbox")
+    if isinstance(bbox, (list, tuple)) and len(bbox) == 4 \
+            and all(isinstance(v, (int, float)) for v in bbox):
+        return float(bbox[2]) * float(bbox[3])
+    return None
+
+
+def compute_visual_salience(targets: list[dict[str, Any]], masks: list[dict[str, Any]]) -> dict[str, Any]:
+    """SAM-backed size comparison: the Research goal button vs the primary distractor.
+
+    The distractor is the Woodcutter Hut card, or the feature button under test
+    (`btn_feature_*`) when a feature studio run put one on screen. Rendered
+    targets win over drawn masks for the same element, since only they carry
+    `computed_salience`.
+    """
+    by_id: dict[str, dict[str, Any]] = {}
+    for el in list(masks or []) + list(targets or []):
+        if el.get("target_id"):
+            by_id[el["target_id"]] = el
+    goal_area = _element_area(by_id["btn_research"]) if "btn_research" in by_id else None
+    goal_sal = by_id.get("btn_research", {}).get("computed_salience")
+    distractor: Optional[str] = None
+    if "card_woodcutter_hut" in by_id:
+        distractor = "card_woodcutter_hut"
+    else:
+        features = sorted(t for t in by_id if t.startswith("btn_feature_"))
+        distractor = features[0] if features else None
+    dist_area = _element_area(by_id[distractor]) if distractor else None
+    dist_sal = by_id.get(distractor, {}).get("computed_salience") if distractor else None
+    ratio = round(dist_area / max(1.0, goal_area), 2) \
+        if dist_area is not None and goal_area is not None else None
+    return {"goal_target": "btn_research", "goal_area_px": goal_area, "goal_salience": goal_sal,
+            "distractor_target": distractor, "distractor_area_px": dist_area,
+            "distractor_salience": dist_sal, "distractor_to_goal_area_ratio": ratio}
+
+
 def stub_diagnosis(summary: dict[str, Any], events: list[dict[str, Any]],
                    frame_targets: list[dict[str, Any]]) -> dict[str, Any]:
     where = summary.get("where_stuck")
@@ -91,9 +132,11 @@ def stub_diagnosis(summary: dict[str, Any], events: list[dict[str, Any]],
     research = next((t for t in frame_targets if t["target_id"] == "btn_research"), None)
     hypotheses = []
     if research and research.get("computed_salience") in ("low", "medium"):
+        ratio = compute_visual_salience(frame_targets, []).get("distractor_to_goal_area_ratio")
+        visual = f"; SAM visual area ratio (distractor/Research) is {ratio}x" if ratio is not None else ""
         hypotheses.append({"id": "low_research_salience", "confidence": 0.7, "evidence": (
             f"Research button salience is {research['computed_salience']}; the playtester opened research "
-            f"{clicks.get('btn_research', 0)} times at {where}.")})
+            f"{clicks.get('btn_research', 0)} times at {where}{visual}.")})
     wood_short = reasons.get("insufficient_wood", 0)
     built_woodcutter = any(e["event_type"] == "click" and e["payload"].get("target_id") == "card_woodcutter_hut"
                            and e["payload"].get("result") == "ui" for e in at)
@@ -124,8 +167,13 @@ def draw_stuck_frame(png: bytes, targets: list[dict[str, Any]]) -> tuple[bytes, 
     draw = ImageDraw.Draw(img)
     font = ImageFont.load_default()
     by_id = {t["target_id"]: t for t in targets}
+    focus = list(FOCUS_TARGETS)
+    features = sorted(t for t in by_id if t.startswith("btn_feature_"))
+    if features:
+        # The feature button under test displaces the Woodcutter card as the distractor to watch.
+        focus = [features[0] if t == "card_woodcutter_hut" else t for t in focus]
     masks = []
-    for rank, (tid, color) in enumerate(zip(FOCUS_TARGETS, FOCUS_COLORS), start=1):
+    for rank, (tid, color) in enumerate(zip(focus, FOCUS_COLORS), start=1):
         t = by_id.get(tid)
         if not t:
             continue
@@ -164,9 +212,11 @@ def analyze_run(run_id: str, *, runs_dir: Path, configs_dir: Path,
 
     stub = stub_diagnosis(summary, events, targets)
     client = client or MetaClient(runs_dir=runs_dir, configs_dir=configs_dir)
+    visual_salience = compute_visual_salience(targets, masks)
     evidence = {"where_stuck": where, "stuck_events": summary.get("stuck_events"),
                 "stuck_by_step": summary.get("stuck_by_step"), "action_rejected": summary.get("action_rejected"),
-                "step_log": summary.get("step_log", [])[-25:], "stub_hypotheses": stub["hypotheses"]}
+                "step_log": summary.get("step_log", [])[-25:], "stub_hypotheses": stub["hypotheses"],
+                "visual_salience": visual_salience}
     reasoning = client.reason_json(ANALYST_SYSTEM, json.dumps(evidence), stub_result=stub, run_id=run_id)
 
     analysis = {
@@ -181,6 +231,7 @@ def analyze_run(run_id: str, *, runs_dir: Path, configs_dir: Path,
         "stuck_bot_step_index": idx,
         "stuck_frame": "stuck_frame.png" if stuck_png else None,
         "sam_masks": masks,
+        "visual_salience": visual_salience,
         "diagnosis": reasoning.get("diagnosis", stub["diagnosis"]),
         "hypotheses": reasoning.get("hypotheses", stub["hypotheses"]),
         "suggested_levers": reasoning.get("suggested_levers", stub["suggested_levers"]),

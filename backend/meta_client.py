@@ -388,6 +388,7 @@ class MetaClient:
         stub_decision: Optional[dict[str, Any]] = None,
         bucket: str = "playtester",
         sec_in_step: float = 0.0,
+        scratchpad: Optional[dict[str, Any]] = None,
     ) -> MuseDecision:
         model_id, mode = self.muse_model_id, self.model_mode
         key = self.cache_key(persona.persona_id, som.frame_phash, last_actions)
@@ -415,7 +416,8 @@ class MetaClient:
                                 "completion_tokens": self.budget.muse_max_output_tokens,
                                 "estimated_cost_usd": est, "entry_type": "reservation"},
                                use_reserve=self.use_reserve)
-            text, usage = self._call_muse_api(self._messages(som, persona, last_actions, sec_in_step))
+            text, usage = self._call_muse_api(self._messages(som, persona, last_actions, sec_in_step,
+                                                              scratchpad))
             raw = parse_decision_json(text)
             raw["usage"] = usage
             cost = self.muse_cost(usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0))
@@ -451,12 +453,16 @@ class MetaClient:
         )
 
     def _messages(self, som: SomResult, persona: Persona, last_actions: list[dict[str, Any]],
-                  sec_in_step: float) -> list[dict[str, Any]]:
+                  sec_in_step: float, scratchpad: Optional[dict[str, Any]] = None) -> list[dict[str, Any]]:
         marks = "; ".join(f"#{m.mark_id} at ({m.center[0]:.0f},{m.center[1]:.0f}) size {m.w:.0f}x{m.h:.0f}"
                           for m in som.marks)
         recent = "; ".join(a.get("summary", "") for a in last_actions[-3:]) or "none yet"
         text = (f"Marks: {marks or 'none'}.\nYour last actions: {recent}.\n"
                 f"Seconds since the tutorial step changed: {sec_in_step:.0f}.")
+        if scratchpad:
+            text += (f"\nWorking memory: step={scratchpad.get('current_step')}, "
+                     f"steps_here={scratchpad.get('steps_in_current_stage', 0)}, "
+                     f"last_mood={scratchpad.get('last_mood', 'engaged')}.")
         img = "data:image/png;base64," + base64.b64encode(som.annotated_png).decode()
         return [
             {"role": "system", "content": SYSTEM_PROMPT.format(k=K_MARKS, persona=persona.prompt)},
