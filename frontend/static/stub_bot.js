@@ -14,12 +14,70 @@ const STEP_MS = 420;
 const IDLE_WAIT_MS = 1600;
 const MAX_SIM_SEC = 420;
 
-const DEFAULT_POLICY = { follow_tutorial: 0.5, salience_weight: 0.5, prefer_build: 0.5, harvest: 0.8, wait_when_unsure: 0.3,
-  curiosity: 0.2 };
+const DEFAULT_POLICY = {
+  follow_tutorial: 0.5,
+  salience_weight: 0.5,
+  prefer_build: 0.5,
+  harvest: 0.8,
+  wait_when_unsure: 0.3,
+  curiosity: 0.2,
+  instant_finish: false,
+  rush_campaign: false,
+  level_heroes: false,
+  target_hero_level: 1,
+  culture_adjacency: false,
+  explore_modals: false,
+  hoard_food_threshold: 0,
+};
+
 const SALIENCE = { low: 0.05, medium: 0.45, high: 0.9, high_pulse: 1.2 };
 const PRODUCERS = { card_woodcutter_hut: 'woodcutter_hut', card_stone_quarry: 'stone_quarry', card_smelter: 'smelter' };
-const TECH_PRIORITY = ['tech_toolmaking', 'tech_stone_age', 'tech_masonry', 'tech_bronze_age', 'tech_baskets',
-  'tech_woodworking', 'tech_irrigation'];
+const PRODUCES = { forager_hut: 'food', woodcutter_hut: 'wood', stone_quarry: 'stone', smelter: 'stone' };
+const TECH_PRIORITY = [
+  'tech_toolmaking', 'tech_stone_age', 'tech_masonry', 'tech_bronze_age', 'tech_baskets',
+  'tech_woodworking', 'tech_irrigation',
+];
+
+// Persona-specific think-aloud lines
+const INSTANT_FINISH_LINES = {
+  impatient_newcomer: () => '⚡ Tap FREE instant-finish! Why wait for timers when it is instant?!',
+  optimizer: () => 'Zero-cost instant-completion accelerates production cycles by 100%.',
+  curious_explorer: () => 'Instant-finish button? Clicked! Let us see what unlocks immediately.',
+  first_time_casual: () => 'Free speed up! That helps get things done faster.',
+  cautious_hoarder: () => 'Free instant finish costs zero resources. A risk-free gain.',
+};
+
+const DEFEAT_LINES = {
+  impatient_newcomer: () => 'Ugh, wiped out by Wave 3 Sabertooths! We need way more brute force!',
+  optimizer: () => 'Defeat in Stage 6: squad power fell below 460 requirement. Must level heroes.',
+  first_time_casual: () => 'Oh no, our heroes were defeated! The advisor says we should train them.',
+  curious_explorer: () => 'Fascinating combat wipe! Those Sabertooths hit hard without hero ranks.',
+  cautious_hoarder: () => 'Too dangerous out there! Pull back and build up safety reserves.',
+};
+
+const HERO_LEVELUP_LINES = {
+  impatient_newcomer: () => 'Leveled up! Bigger stats, harder hits, let us smash things!',
+  optimizer: () => 'Hero promoted: Squad power increased past the combat stat check threshold.',
+  first_time_casual: () => 'Commander Vaelen grew stronger! The village is safer now.',
+  curious_explorer: () => 'New ability unlocked in the Heroes Hall! Look at those glowing constellations.',
+  cautious_hoarder: () => 'Spent surplus Food on hero training while keeping our stockpile intact.',
+};
+
+const CULTURE_AURA_LINES = {
+  impatient_newcomer: () => 'Bright green glowing circle! Shiny boost for the neighborhood!',
+  optimizer: () => 'Sacred Obelisk placed for maximum adjacency: +20% harvest yield across surrounding farms.',
+  curious_explorer: () => 'A lime-green culture aura! All nearby homes and farms are celebrating with +20%!',
+  first_time_casual: () => 'The sacred monument brings joy and prosperity to our settlers.',
+  cautious_hoarder: () => 'Adjacency bonus permanently increases return on investment for nearby plots.',
+};
+
+const EXPANSION_LINES = {
+  impatient_newcomer: () => 'More land, more space, blow away the trees and build!',
+  optimizer: () => 'Territory expanded: Unlocked 2 new construction pads for economic scaling.',
+  curious_explorer: () => 'Clearing the timber mist! What new territory lies in the western sector?',
+  first_time_casual: () => 'Our borders are expanding into the beautiful valley!',
+  cautious_hoarder: () => 'Unlocked territory safely with excess tokens, widening our resource base.',
+};
 
 export class StubBot {
   constructor({ runId, persona, seed, clickAt, ringAt, onThought, onDone }) {
@@ -127,6 +185,7 @@ export class StubBot {
     const p = this.policy;
     const by = (id) => targets.find((t) => t.target_id === id);
     const r = () => this.rng();
+    const state = window.__GAME_STATE__ || {};
 
     const ok = by('btn_advisor_ok');
     if (ok) return { target: ok, thought: 'A welcome message from the elder. Accept it and start playing.' };
@@ -134,11 +193,61 @@ export class StubBot {
     const claim = by('btn_claim_quest');
     if (claim && r() < 0.5 + p.follow_tutorial * 0.5) return { target: claim, thought: 'The quest card glows. Claim the chapter reward.' };
 
-    // Expedition map open: fight one affordable battle, otherwise leave.
+    // Defeat recovery screen
+    const defeatBtn = by('btn_defeat_heroes');
+    if (defeatBtn) {
+      const lineFn = DEFEAT_LINES[this.persona?.persona_id] || (() => 'Defeated! Head to Heroes Hall to level up.');
+      return { target: defeatBtn, thought: lineFn(), mood: 'frustrated' };
+    }
+
+    // Battle victory / return button
+    const continueBtn = by('btn_battle_continue');
+    if (continueBtn) {
+      return { target: continueBtn, thought: 'Battle concluded. Return to the valley.', mood: 'engaged' };
+    }
+
+    // Battle arena active ultimates
+    const ultVaelen = by('btn_ult_vaelen');
+    if (ultVaelen && !ultVaelen.locked && !ultVaelen.cooldown) {
+      return { target: ultVaelen, thought: '⚡ Commander Vaelen Rage 100%! Unleash Earthshatter Stomp!', mood: 'engaged' };
+    }
+    const ultLyra = by('btn_ult_lyra');
+    if (ultLyra && !ultLyra.locked && !ultLyra.cooldown) {
+      return { target: ultLyra, thought: '✨ Sun-Priestess Lyra Rage 100%! Cast Solar Salve to heal allies!', mood: 'engaged' };
+    }
+
+    // Heroes Hall modal open
+    if (by('btn_close_heroes')) {
+      const lvlBtn = by('btn_hero_levelup') || by('btn_levelup_vaelen') || by('btn_levelup_lyra')
+        || targets.find((t) => t.target_id.includes('levelup'));
+      const food = state.resources?.food ?? 100;
+      const foodOk = p.hoard_food_threshold ? food > p.hoard_food_threshold : true;
+      if (p.level_heroes && lvlBtn && lvlBtn.affordable && !lvlBtn.locked && foodOk) {
+        const lineFn = HERO_LEVELUP_LINES[this.persona?.persona_id] || (() => 'Hero leveled up! Squad power boosted.');
+        return { target: lvlBtn, thought: lineFn(), mood: 'engaged' };
+      }
+      return { target: by('btn_close_heroes'), thought: 'Heroes inspected. Return to the valley.' };
+    }
+
+    // Expedition / Campaign modal open: fight one battle or leave.
+    const enc = targets.filter((t) => (t.kind === 'encounter' || t.target_id.startsWith('stage_') || t.target_id.startsWith('encounter_')) && !t.cleared);
     if (by('btn_close_expedition')) {
-      const fight = targets.find((t) => t.kind === 'encounter' && t.affordable);
-      if (fight && r() < 0.7) return { target: fight, thought: `${shortLabel(fight)} looks winnable. Attack!` };
-      return { target: by('btn_close_expedition'), thought: 'No battle worth it right now. Back to the village.' };
+      const affordable = enc.filter((t) => t.affordable && !t.cleared);
+      if (affordable.length) {
+        if (p.rush_campaign && state.achieved) {
+          const stage6 = affordable.find((t) => t.target_id === 'stage_6' || t.target_id === 'btn_arena_stage_6');
+          if (stage6) return { target: stage6, thought: 'Charge straight into Stage 6 Sabertooth Canyon! No time to grind levels!', mood: 'engaged' };
+        }
+        if (p.plan) {
+          const stage6 = affordable.find((t) => t.target_id === 'stage_6' || t.target_id === 'btn_arena_stage_6');
+          const squadPower = state.squad_power ?? (state.stats?.squad_power ?? 307);
+          if (stage6 && squadPower < 460) {
+            return { target: by('btn_close_expedition'), thought: 'Squad power is below 460 for Sabertooth Canyon. Close campaign and level heroes first.', mood: 'engaged' };
+          }
+        }
+        return { target: affordable[0], thought: `${shortLabel(affordable[0])} looks winnable. Attack!` };
+      }
+      return { target: by('btn_close_expedition'), thought: 'Nothing out there is affordable. Return to the valley.' };
     }
 
     // Research modal open: the tech nodes are the only actionable things.
@@ -178,10 +287,36 @@ export class StubBot {
 
     const ready = targets.filter((t) => t.kind === 'building' && t.ready);
 
+    // In free_play: Instant-finish chips (free_*)
+    if (state.step_id === 'free_play' && state.achieved && p.instant_finish) {
+      const freeChip = targets.find((t) => t.target_id.startsWith('free_'));
+      if (freeChip) {
+        const lineFn = INSTANT_FINISH_LINES[this.persona?.persona_id] || (() => '⚡ Tap FREE instant-finish! Why wait for timers?');
+        return { target: freeChip, thought: lineFn(), mood: 'engaged' };
+      }
+    }
+
+    // In free_play: Territory Expansion (exp_1, exp_2)
+    if (state.step_id === 'free_play' && state.achieved) {
+      const expTarget = targets.find((t) => (t.target_id === 'exp_1' || t.target_id === 'exp_2') && t.affordable && !t.locked);
+      if (expTarget && (p.curiosity > 0.5 || p.plan || r() < 0.45)) {
+        const food = state.resources?.food ?? 100;
+        if (!p.hoard_food_threshold || food > p.hoard_food_threshold) {
+          const lineFn = EXPANSION_LINES[this.persona?.persona_id] || (() => 'Expand village territory into the valley clearing.');
+          return { target: expTarget, thought: lineFn(), mood: 'engaged' };
+        }
+      }
+    }
+
     // A build card is selected: place it on a plot.
     const pads = targets.filter((t) => t.kind === 'pad');
     const selected = targets.find((t) => t.selected);
     if (selected && pads.length) {
+      if (selected.target_id === 'card_tribal_monument' && p.culture_adjacency && state.achieved) {
+        const lineFn = CULTURE_AURA_LINES[this.persona?.persona_id] || (() => 'Place the Sacred Obelisk to project a +20% culture adjacency aura.');
+        const pad = pads.find((t) => t.highlighted) || pads[0];
+        return { target: pad, thought: lineFn() };
+      }
       const pad = pads.find((t) => t.highlighted) || pads[Math.floor(r() * Math.min(3, pads.length))];
       return { target: pad, thought: `Place the ${shortLabel(selected)} on an empty plot.` };
     }
@@ -192,7 +327,6 @@ export class StubBot {
       && !(t.kind === 'build_card' && owned.has(t.target_id.slice(5))));
     // A pulsing NEW! button mid-tutorial tempts distractible players before they read the arrow.
     // Planners hold back. The pulse clears after the first use, so this fires once at most.
-    const state = window.__GAME_STATE__ || {};
     const feature = targets.find((t) => t.kind === 'feature' && t.affordable && !t.locked && !t.cooldown);
     const inTutorial = state.step_id === 'onb_02_forager' || state.step_id === 'onb_03_handoff';
     const distractible = p.distractibility ?? Math.max(p.salience_weight * (1 - p.follow_tutorial), p.curiosity);
@@ -217,17 +351,21 @@ export class StubBot {
     const tutorialActive = targets.some((t) => t.highlighted);
     const missingProducer = (t) => !tutorialActive && PRODUCERS[t.target_id] && !owned.has(PRODUCERS[t.target_id]);
     const producerOpen = targets.some((t) => t.kind === 'build_card' && !t.locked && missingProducer(t));
-    const options = ready.map((t) => ({ t, w: 0.3 + p.harvest * 0.9, why: 'harvest' }));
+    // Saving for a tech: gather the scarcest basic resource first.
+    const res = state.resources || {};
+    const scarce = this.savingFor ? ['food', 'wood', 'stone'].sort((x, y) => (res[x] ?? 0) - (res[y] ?? 0))[0] : null;
+    const options = ready.map((t) => ({ t, w: (0.3 + p.harvest * 0.9) * (PRODUCES[t.building_type] === scarce ? 3 : 1), why: 'harvest' }));
     for (const t of targets) {
       const sal = SALIENCE[t.computed_salience] ?? 0.2;
       if (t.kind === 'build_card' && !t.locked) {
         let w = 0.2 + p.prefer_build * 0.6 + p.salience_weight * sal + (t.highlighted ? 0.6 : 0);
+        if (t.target_id === 'card_tribal_monument' && p.culture_adjacency && state.achieved) w *= 2.5;
         if (missingProducer(t)) w *= 4;
         else if (producerOpen) w *= 0.05;
         if (!t.affordable) w *= this.avoid.has(t.target_id) ? 0.1 : 0.35 * (1 - p.wait_when_unsure * 0.6);
         if (p.plan && !t.affordable) w *= 0.3;
         // Saving for a tech: only a missing producer is still worth the spend.
-        if (this.savingFor && !t.highlighted && !missingProducer(t)) w *= p.plan ? 0.1 : 0.3;
+        if (this.savingFor && !t.highlighted && !missingProducer(t)) w *= p.plan ? 0.05 : 0.1;
         options.push({ t, w, why: t.affordable ? 'build' : 'try' });
       } else if (t.kind === 'worker' && !t.staffed) {
         options.push({ t, w: 0.6 + p.harvest * 0.6, why: 'staff' });
@@ -244,9 +382,16 @@ export class StubBot {
         options.push({ t, w, why: 'feature' });
       } else if (t.target_id === 'btn_expedition') {
         options.push({ t, w: 0.08 + p.salience_weight * 0.25, why: 'expedition' });
+      } else if (t.target_id === 'btn_heroes' && state.achieved) {
+        const w = (p.level_heroes ? 0.35 : 0.05) + (p.explore_modals ? 0.35 : 0);
+        options.push({ t, w, why: 'heroes' });
+      } else if (t.target_id === 'btn_quest_ledger' && p.explore_modals && state.achieved) {
+        options.push({ t, w: 0.25, why: 'quest_ledger' });
       } else if (t.target_id === 'btn_research' && this.researchCooldown <= 0) {
         const w = (0.05 + p.salience_weight * sal * 1.6 + (t.highlighted ? 0.8 * p.follow_tutorial : 0) + (p.plan ? 0.35 : 0))
-          * (producerOpen ? 0.4 : 1);
+          * (producerOpen ? 0.4 : 1)
+          // Saving for a tech: check back once the cooldown is over.
+          * (this.savingFor ? 3 : 1);
         options.push({ t, w, why: 'research' });
       }
     }
@@ -330,6 +475,8 @@ function optionThought(o, bot) {
   if (o.why === 'staff') return `The ${pretty(o.t.building_type)} has no worker. Send someone back to it.`;
   if (o.why === 'upgrade') return `${o.t.label} is affordable. Upgrade it.`;
   if (o.why === 'expedition') return 'Crossed swords on the map. What is out there?';
+  if (o.why === 'heroes') return 'The Heroes Hall has training options. Inspect Commander Vaelen and Priestess Lyra.';
+  if (o.why === 'quest_ledger') return 'Open the 6-Chapter Questlines Ledger to read the realm lore.';
   return o.t.computed_salience === 'high' ? `${name} has a shiny NEW! ribbon. Build it.` : `Build a ${name}.`;
 }
 

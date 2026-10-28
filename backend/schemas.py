@@ -203,6 +203,10 @@ EventType = Literal[
     "stuck",
     "quest_claimed",
     "battle_won",
+    "battle_lost",
+    "hero_unlocked",
+    "hero_leveled",
+    "territory_expanded",
 ]
 
 

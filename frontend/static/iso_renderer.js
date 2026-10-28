@@ -32,7 +32,12 @@ export const PADS = [
   { id: 'pad_8', tile: [9, 0] },
 ];
 
-const isWater = (i, j) => j >= 10;
+export const EXPANSION_PADS = {
+  exp_1: [{ id: 'pad_9', tile: [2, 5] }, { id: 'pad_10', tile: [2, 8] }],
+  exp_2: [{ id: 'pad_11', tile: [9, 3] }, { id: 'pad_12', tile: [9, 6] }],
+};
+
+const isWater = (i, j) => false;
 const isForest = (i, j) => i + j <= 3;
 const isStony = (i, j) => i >= 10 && j <= 4;
 const key = (i, j) => `${i},${j}`;
@@ -48,8 +53,14 @@ function routeTiles(to) {
   return out;
 }
 
+const ALL_ROUTED_PADS = [
+  ...PADS,
+  ...EXPANSION_PADS.exp_1,
+  ...EXPANSION_PADS.exp_2,
+];
+
 export const ROUTES = Object.fromEntries([
-  ...PADS.map((p) => [p.id, routeTiles(p.tile)]),
+  ...ALL_ROUTED_PADS.map((p) => [p.id, routeTiles(p.tile)]),
   ['research_tent', routeTiles(RESEARCH_TENT_TILE)],
 ]);
 
@@ -58,7 +69,7 @@ for (const route of Object.values(ROUTES)) {
   for (const [i, j] of route.slice(1, -1)) ROAD.add(key(i, j));
 }
 
-const RESOURCE_ICON = { food: '\u{1F35E}', wood: '\u{1FAB5}', stone: '\u{1FAA8}', rp: '\u{1F4DC}' };
+const RESOURCE_ICON = { food: '\u{1F35E}', wood: '\u{1FAB5}', stone: '\u{1FAA8}', rp: '\u{1F4DC}', scrolls: '📜', coins: '🪙' };
 
 // Procedural fallback palettes, also used for scaffolding tints.
 const FALLBACK_STYLE = {
@@ -72,6 +83,7 @@ const FALLBACK_STYLE = {
   tribal_monument:       { w: 22, d: 22, h: 52, wall: '#a69c8b', roof: '#c9a43a', roofH: 12 },
   granary:               { w: 30, d: 30, h: 24, wall: '#c8a464', roof: '#9a6a32', roofH: 20 },
   smelter:               { w: 32, d: 30, h: 22, wall: '#8d7f72', roof: '#b0602e', roofH: 16 },
+  barracks:              { w: 46, d: 46, h: 28, wall: '#9a7b56', roof: '#a3302a', roofH: 14 },
 };
 const CHIP = 18;
 
@@ -86,6 +98,7 @@ export class IsoRenderer {
     this.ground = this.renderGround(rngTools(mulberry32((seed ^ 0x9a55) >>> 0)));
     this.fxRand = rngTools(mulberry32((seed ^ 0xf00d) >>> 0));
     this.popups = [];
+    this.flyingIcons = [];
     this.particles = [];
     this.smokeTimers = new Map();
     this.villagers = new Map();
@@ -99,6 +112,23 @@ export class IsoRenderer {
     switch (effect.type) {
       case 'popup':
         this.popups.push({ text: effect.text, color: effect.color || '#fff4c2', x: pos.x, y: pos.y - (effect.lift ?? 70), born: this.time });
+        if (effect.text && effect.text.includes('+')) {
+          const match = effect.text.match(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u);
+          const icon = match ? match[0] : '✨';
+          for (let i = 0; i < 4; i++) {
+            this.flyingIcons.push({
+              icon,
+              sx: pos.x,
+              sy: pos.y - 20,
+              cx: (pos.x + 320) / 2 + (Math.random() - 0.5) * 80,
+              cy: Math.min(pos.y, 22) - 60 - Math.random() * 50,
+              tx: 320,
+              ty: 22,
+              born: this.time + i * 0.04,
+              duration: 0.65,
+            });
+          }
+        }
         break;
       case 'dust':
         for (let n = 0; n < 14; n++) this.particles.push(this.dustParticle(pos));
@@ -140,13 +170,16 @@ export class IsoRenderer {
     c.width = VIEW_W;
     c.height = VIEW_H;
     const g = c.getContext('2d');
-    // Cliff faces under the south-east and south-west land edges.
-    for (let i = 0; i < GRID; i++) {
-      for (let j = 0; j < GRID; j++) {
-        if (isWater(i, j)) continue;
-        const { x, y } = tileToScreen(i, j);
-        if (i === GRID - 1) sideFace(g, x, y, +1, '#7a5a3a', '#5e4430');
-        if (j === GRID - 1 || isWater(i, j + 1)) sideFace(g, x, y, -1, '#8b6a45', '#6b4f34');
+    const hasBackdrop = !!this.sprites.valley_backdrop?.img;
+    // Cliff faces under the south-east and south-west land edges (skip if painted backdrop is present).
+    if (!hasBackdrop) {
+      for (let i = 0; i < GRID; i++) {
+        for (let j = 0; j < GRID; j++) {
+          if (isWater(i, j)) continue;
+          const { x, y } = tileToScreen(i, j);
+          if (i === GRID - 1) sideFace(g, x, y, +1, '#7a5a3a', '#5e4430');
+          if (j === GRID - 1 || isWater(i, j + 1)) sideFace(g, x, y, -1, '#8b6a45', '#6b4f34');
+        }
       }
     }
     for (let i = 0; i < GRID; i++) {
@@ -159,6 +192,10 @@ export class IsoRenderer {
         else if (isStony(i, j)) base = shade('#97a06a', r.range(-10, 6));
         else if (isForest(i, j)) base = shade('#5f8f3c', r.range(-10, 6));
         else base = shade('#86b34e', r.range(-12, 10));
+        g.save();
+        if (hasBackdrop) {
+          g.globalAlpha = ROAD.has(key(i, j)) ? 0.88 : 0.22;
+        }
         diamond(g, x, y, TILE_W, TILE_H, base);
         // Soft tile edge so the grid reads without hard lines.
         g.strokeStyle = 'rgba(40,60,20,0.10)';
@@ -180,9 +217,12 @@ export class IsoRenderer {
             g.fillRect(x + r.range(-18, 18), y + r.range(-6, 6), 2, 1);
           }
         }
+        g.restore();
       }
     }
     // Dirt roads.
+    g.save();
+    if (hasBackdrop) g.globalAlpha = 0.88;
     for (const k of ROAD) {
       const [i, j] = k.split(',').map(Number);
       const { x, y } = tileToScreen(i, j);
@@ -190,6 +230,7 @@ export class IsoRenderer {
       g.fillStyle = 'rgba(90,60,30,0.30)';
       for (let n = 0; n < 6; n++) g.fillRect(x + r.range(-16, 16), y + r.range(-5, 5), 2, 2);
     }
+    g.restore();
     // Plaza under the Town Center and the tent.
     for (const [i, j] of [TOWN_CENTER_TILE, RESEARCH_TENT_TILE]) {
       const { x, y } = tileToScreen(i, j);
@@ -221,9 +262,19 @@ export class IsoRenderer {
     const ctx = this.ctx;
     ctx.save();
     ctx.setTransform(this.canvas.width / VIEW_W, 0, 0, this.canvas.height / VIEW_H, 0, 0);
+
+    const inBattle = !!(game.battleState || (game.battleArena && game.battleArena.active) || (game.battle && (game.battle.active || game.battle.state)));
+    if (inBattle) {
+      this.renderBattleArena(ctx, game, realDt);
+      ctx.restore();
+      return;
+    }
+
     this.drawSea(ctx);
     this.drawShallows(ctx);
     ctx.drawImage(this.ground, 0, 0);
+    this.drawCultureAura(ctx, game);
+    this.drawExpansionSectors(ctx, game);
     this.drawPadHighlights(ctx, game);
 
     const items = [];
@@ -241,66 +292,246 @@ export class IsoRenderer {
     this.updateSmoke(game, simDt);
     this.drawParticles(ctx, realDt);
     for (const b of game.buildings) this.drawStatus(ctx, game, b);
-    this.drawPopups(ctx);
+    this.drawPopups(ctx, realDt);
     ctx.restore();
   }
 
   get activeAnimations() {
-    return this.popups.length + this.particles.filter((p) => p.kind !== 'smoke').length + this.bounces.size;
+    return this.popups.length + (this.flyingIcons?.length || 0) + this.particles.filter((p) => p.kind !== 'smoke').length + this.bounces.size;
   }
 
   drawSea(ctx) {
-    const grad = ctx.createLinearGradient(0, 0, 0, VIEW_H);
-    grad.addColorStop(0, '#2c6f8f');
-    grad.addColorStop(1, '#174a6b');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-    ctx.strokeStyle = 'rgba(200,235,255,0.16)';
-    ctx.lineWidth = 1.5;
-    for (let row = 0; row < 18; row++) {
-      const y0 = 20 + row * 30;
-      for (let col = 0; col < 9; col++) {
-        const x0 = ((col * 130 + row * 47 + this.time * 9) % 1100) - 60;
-        const yy = y0 + Math.sin(this.time * 1.3 + col + row) * 3;
+    if (this.sprites.valley_backdrop?.img) {
+      ctx.drawImage(this.sprites.valley_backdrop.img, 0, 0, VIEW_W, VIEW_H);
+      // Animated turquoise waterfall mist particles near (400, 95)
+      for (let i = 0; i < 7; i++) {
+        const mx = 400 + Math.sin(this.time * 2.5 + i * 1.2) * 14;
+        const my = 95 + ((this.time * 30 + i * 16) % 40);
+        const r = 3 + (i % 3) * 2;
+        const alpha = 0.22 + 0.16 * Math.sin(this.time * 3.5 + i);
+        ctx.fillStyle = `rgba(140, 235, 245, ${alpha})`;
         ctx.beginPath();
-        ctx.moveTo(x0, yy);
-        ctx.quadraticCurveTo(x0 + 12, yy - 4, x0 + 24, yy);
-        ctx.stroke();
+        ctx.arc(mx, my, r, 0, Math.PI * 2);
+        ctx.fill();
       }
+      // Gentle river sparkles near (680, 495)
+      for (let i = 0; i < 6; i++) {
+        const sx = 650 + ((i * 26 + this.time * 20) % 75);
+        const sy = 490 + Math.sin(this.time * 2.8 + i * 1.7) * 9;
+        const alpha = 0.35 + 0.35 * Math.sin(this.time * 4.5 + i * 2);
+        ctx.fillStyle = `rgba(235, 255, 255, ${alpha})`;
+        ctx.fillRect(sx, sy, 3, 3);
+      }
+    } else {
+      // Fallback: rich sunlit emerald Alpine Valley gradient (#6eb349 -> #468330)
+      const grad = ctx.createLinearGradient(0, 0, 0, VIEW_H);
+      grad.addColorStop(0, '#6eb349');
+      grad.addColorStop(1, '#468330');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+
+      // Northern limestone cliff polygons (#8d877a)
+      ctx.fillStyle = '#8d877a';
+      ctx.beginPath();
+      ctx.moveTo(310, 0);
+      ctx.lineTo(355, 65);
+      ctx.lineTo(405, 105);
+      ctx.lineTo(465, 75);
+      ctx.lineTo(530, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#7a7469';
+      ctx.beginPath();
+      ctx.moveTo(375, 0);
+      ctx.lineTo(415, 80);
+      ctx.lineTo(455, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      // Cascading turquoise waterfall (#59d8e6)
+      ctx.strokeStyle = '#59d8e6';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.moveTo(408, 15);
+      ctx.lineTo(404, 70);
+      ctx.lineTo(410, 110);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Southern rushing river (#2fa4c7) with stone bridge
+      ctx.fillStyle = '#2fa4c7';
+      ctx.beginPath();
+      ctx.moveTo(560, 460);
+      ctx.bezierCurveTo(620, 475, 710, 495, 830, 540);
+      ctx.lineTo(560, 540);
+      ctx.closePath();
+      ctx.fill();
+
+      // Stone bridge
+      roundRect(ctx, 640, 480, 48, 16, 4, '#78736a');
+      ctx.strokeStyle = '#555048';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(640, 480, 48, 16, 4);
+      ctx.stroke();
+    }
+
+    // 3 drifting translucent cloud shadows (rgba(15, 35, 18, 0.09))
+    for (let c = 0; c < 3; c++) {
+      const cx = ((this.time * 14 + c * 350) % 1250) - 150;
+      const cy = 110 + c * 135 + Math.sin(c * 2) * 25;
+      ctx.fillStyle = 'rgba(15, 35, 18, 0.09)';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, 95, 45, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 4 grazing white sheep near the meadow edges
+    const sheepPos = [
+      { x: 120, y: 375 },
+      { x: 148, y: 395 },
+      { x: 835, y: 190 },
+      { x: 865, y: 215 },
+    ];
+    for (let i = 0; i < sheepPos.length; i++) {
+      const s = sheepPos[i];
+      const bob = Math.sin(this.time * 2.2 + i * 1.5) * 0.8;
+      ctx.fillStyle = '#fbfbfa';
+      ctx.beginPath();
+      ctx.ellipse(s.x, s.y + bob, 8, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      circle(ctx, s.x + 6, s.y + bob - 2, 2.5, '#3a342e');
+      ctx.strokeStyle = '#3a342e';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(s.x - 4, s.y + bob + 4); ctx.lineTo(s.x - 4, s.y + bob + 8);
+      ctx.moveTo(s.x + 3, s.y + bob + 4); ctx.lineTo(s.x + 3, s.y + bob + 8);
+      ctx.stroke();
+    }
+
+    // 3 gliding V-shaped birds
+    for (let b = 0; b < 3; b++) {
+      const bx = ((this.time * 26 + b * 300) % 1160) - 100;
+      const by = 55 + b * 48 + Math.sin(this.time * 1.4 + b) * 12;
+      const flap = Math.sin(this.time * 4.2 + b * 2) * 3;
+      ctx.strokeStyle = 'rgba(40, 50, 35, 0.65)';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(bx - 8, by + flap);
+      ctx.lineTo(bx, by);
+      ctx.lineTo(bx + 8, by + flap);
+      ctx.stroke();
     }
   }
 
-  // Shallow water tiles along the SW edge, with shimmer and moving foam on the shoreline.
+  // Soft wildflower & meadow tufts across the southern meadows
   drawShallows(ctx) {
-    for (let i = 0; i < GRID; i++) {
-      for (let j = 10; j < GRID; j++) {
-        const { x, y } = tileToScreen(i, j);
-        const depth = j - 10;
-        const wave = Math.sin(this.time * 1.6 + i * 0.7 + j * 1.1);
-        diamond(ctx, x, y, TILE_W + 1, TILE_H + 1, depth === 0 ? shade('#4fa9c4', wave * 6) : shade('#3b8db0', wave * 5));
-        ctx.fillStyle = `rgba(255,255,255,${0.10 + 0.08 * wave})`;
-        ctx.fillRect(x - 10 + wave * 4, y - 2, 12, 1.5);
+    const tufts = [
+      { x: 250, y: 440, color: '#f7d75a' },
+      { x: 300, y: 465, color: '#e58cb3' },
+      { x: 370, y: 480, color: '#ffffff' },
+      { x: 440, y: 495, color: '#f7d75a' },
+      { x: 510, y: 485, color: '#e58cb3' },
+      { x: 580, y: 465, color: '#7ad3f7' },
+      { x: 210, y: 420, color: '#ffffff' },
+      { x: 340, y: 445, color: '#f7d75a' },
+    ];
+    for (let idx = 0; idx < tufts.length; idx++) {
+      const tf = tufts[idx];
+      const sway = Math.sin(this.time * 2.2 + idx) * 2;
+      ctx.strokeStyle = '#4e8d35';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(tf.x, tf.y);
+      ctx.lineTo(tf.x - 3 + sway, tf.y - 7);
+      ctx.moveTo(tf.x, tf.y);
+      ctx.lineTo(tf.x + sway * 0.5, tf.y - 9);
+      ctx.moveTo(tf.x, tf.y);
+      ctx.lineTo(tf.x + 3 + sway, tf.y - 7);
+      ctx.stroke();
+      circle(ctx, tf.x + sway * 0.5, tf.y - 9, 2, tf.color);
+    }
+  }
+
+  // Culture Site Adjacency Aura: pulsing lime-green radial diamond around completed tribal_monument
+  drawCultureAura(ctx, game) {
+    const pulse = 0.5 + 0.5 * Math.sin(this.time * 4);
+    const alpha = 0.16 + 0.08 * pulse;
+    const monumentTiles = [];
+    for (const b of game.buildings) {
+      if (b.type === 'tribal_monument' && b.status === 'done') {
+        monumentTiles.push(b.tile);
       }
     }
-    // Foam line along the land edge (between j = 9 and j = 10).
+    if (game.selectedCard === 'tribal_monument') {
+      const pads = game.activePads ? game.activePads() : PADS;
+      for (const p of pads) {
+        if (!game.buildingAt(p.id)) {
+          monumentTiles.push(p.tile);
+        }
+      }
+    }
+    if (monumentTiles.length === 0) return;
+    ctx.save();
+    ctx.setLineDash([8, 6]);
+    ctx.strokeStyle = '#8cff66';
     ctx.lineWidth = 2.5;
-    for (let i = 0; i < GRID; i++) {
-      const a = tileToScreen(i, 9.5);
-      const b = tileToScreen(i + 1, 9.5);
-      const ax = a.x - TILE_W / 2;
-      const off = Math.sin(this.time * 2 + i * 0.9) * 2.2;
-      ctx.strokeStyle = `rgba(255,255,255,${0.55 + 0.25 * Math.sin(this.time * 2.4 + i)})`;
-      ctx.beginPath();
-      ctx.moveTo(ax + off, a.y + off * 0.5 + 2);
-      ctx.lineTo(b.x - TILE_W / 2 + off, b.y + off * 0.5 + 2);
+    for (const tile of monumentTiles) {
+      const { x, y } = tileToScreen(...tile);
+      diamond(ctx, x, y, TILE_W * 5, TILE_H * 5, `rgba(110, 245, 85, ${alpha})`);
+      diamondPath(ctx, x, y, TILE_W * 5, TILE_H * 5);
       ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Checkered 4x4 Expansion Sectors (exp_1 at [1, 6], exp_2 at [9, 4])
+  drawExpansionSectors(ctx, game) {
+    const sectors = [
+      { id: 'exp_1', origin: [0, 5], banner: { x: 110, y: 260, w: 88, h: 26 } },
+      { id: 'exp_2', origin: [8, 2], banner: { x: 762, y: 260, w: 88, h: 26 } },
+    ];
+    for (const sec of sectors) {
+      if (game.expansionsUnlocked?.has(sec.id)) continue;
+      for (let di = 0; di < 4; di++) {
+        for (let dj = 0; dj < 4; dj++) {
+          const ti = sec.origin[0] + di;
+          const tj = sec.origin[1] + dj;
+          const { x, y } = tileToScreen(ti, tj);
+          const col = ((di + dj) % 2 === 0) ? 'rgba(30,75,25,0.32)' : 'rgba(130,220,95,0.22)';
+          diamond(ctx, x, y, TILE_W, TILE_H, col);
+          ctx.strokeStyle = 'rgba(20,55,15,0.20)';
+          ctx.lineWidth = 1;
+          diamondPath(ctx, x, y, TILE_W, TILE_H);
+          ctx.stroke();
+        }
+      }
+      // Floating banner pill (🗺️ Expand)
+      const bob = Math.sin(this.time * 3 + (sec.id === 'exp_1' ? 0 : 1.5)) * 3;
+      const bx = sec.banner.x;
+      const by = sec.banner.y + bob;
+      roundRect(ctx, bx, by, sec.banner.w, sec.banner.h, 13, 'rgba(22, 45, 18, 0.90)');
+      ctx.strokeStyle = '#8cff66';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(bx, by, sec.banner.w, sec.banner.h, 13);
+      ctx.stroke();
+      ctx.fillStyle = '#f0ffd6';
+      ctx.font = 'bold 12px Georgia, serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('🗺️ Expand', bx + sec.banner.w / 2, by + sec.banner.h / 2);
+      ctx.textBaseline = 'alphabetic';
     }
   }
 
   drawPadHighlights(ctx, game) {
     if (!game.selectedCard) return;
     const pulse = 0.5 + 0.5 * Math.sin(this.time * 5);
-    for (const p of PADS) {
+    const pads = game.activePads ? game.activePads() : PADS;
+    for (const p of pads) {
       if (game.buildingAt(p.id)) continue;
       const { x, y } = tileToScreen(...p.tile);
       ctx.save();
@@ -322,7 +553,23 @@ export class IsoRenderer {
   }
 
   spriteKeyFor(game, b) {
-    if (b.type === 'town_center' && game.era !== 'dawn_age') return 'town_center_stone_age';
+    if (b.type === 'town_center') {
+      if (game.era === 'bronze_age') return 'town_center_bronze_age';
+      if (game.era === 'stone_age') return 'town_center_stone_age';
+      return 'town_center';
+    }
+    if (b.type === 'shelter') {
+      return ((b.level || 1) >= 2 && this.sprites.small_home_lv2) ? 'small_home_lv2' : 'shelter';
+    }
+    if (b.type === 'forager_hut') {
+      return ((b.level || 1) >= 2 && this.sprites.rural_farm) ? 'rural_farm' : 'forager_hut';
+    }
+    if (b.type === 'barracks') {
+      return ((b.level || 1) >= 2 && this.sprites.barracks_lv2) ? 'barracks_lv2' : 'barracks';
+    }
+    if (b.type === 'tribal_monument') {
+      return ((b.level || 1) >= 2 && this.sprites.culture_site) ? 'culture_site' : 'tribal_monument';
+    }
     return b.type;
   }
 
@@ -407,6 +654,22 @@ export class IsoRenderer {
     roundRect(ctx, x - bw / 2, y - H - 22, bw, 8, 4, 'rgba(30,20,10,0.75)');
     roundRect(ctx, x - bw / 2 + 1.5, y - H - 20.5, (bw - 3) * p, 5, 2.5, '#f0c24b');
     if (this.fxRand.chance(0.25)) this.particles.push(this.dustParticle({ x, y }));
+
+    // Bright green ⚡ FREE pill on top of scaffolding
+    const chipX = x - 28;
+    const chipY = y - 58;
+    roundRect(ctx, chipX, chipY, 56, 20, 10, '#10b981');
+    ctx.strokeStyle = '#065f46';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(chipX, chipY, 56, 20, 10);
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 11px Georgia, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('⚡ FREE', x, chipY + 10);
+    ctx.textBaseline = 'alphabetic';
   }
 
   // Production timers, ready icons and blocked badges above buildings.
@@ -474,6 +737,20 @@ export class IsoRenderer {
       ctx.textAlign = 'center';
       ctx.fillText(`Lv.${b.level}`, x + 31, y - 50);
     }
+    if (b.cultureBoost) {
+      roundRect(ctx, x - 26, y - 82, 52, 16, 8, '#3bb346');
+      ctx.strokeStyle = '#1d5e23';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.roundRect(x - 26, y - 82, 52, 16, 8);
+      ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 10px Georgia, serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('😊 +20%', x, y - 74);
+      ctx.textBaseline = 'alphabetic';
+    }
     for (const chip of this.chipsFor(game, b)) {
       const cx = chip.x + CHIP / 2;
       const cy = chip.y + CHIP / 2;
@@ -493,8 +770,20 @@ export class IsoRenderer {
   }
 
   chipsFor(game, b) {
-    if (b.status !== 'done' || !b.key.startsWith('pad_')) return [];
     const { x, y } = tileToScreen(...b.tile);
+    if (b.status === 'building') {
+      return [{
+        target_id: 'free_' + b.key,
+        kind: 'free_finish',
+        building_type: b.type,
+        x: x - 28,
+        y: y - 58,
+        w: 56,
+        h: 20,
+        affordable: true,
+      }];
+    }
+    if (b.status !== 'done' || !b.key.startsWith('pad_')) return [];
     const out = [];
     if (b.produces && game.workersPerBuilding > 0) {
       out.push({ target_id: `worker_${b.key}`, kind: 'worker', x: x - 34, y: y + 2, w: CHIP, h: CHIP,
@@ -589,7 +878,7 @@ export class IsoRenderer {
     this.particles = keep;
   }
 
-  drawPopups(ctx) {
+  drawPopups(ctx, dt) {
     const keep = [];
     ctx.textAlign = 'center';
     ctx.font = 'bold 16px Georgia, "Palatino Linotype", serif';
@@ -607,11 +896,35 @@ export class IsoRenderer {
       keep.push(p);
     }
     this.popups = keep;
+
+    // Curved Bezier fly-to-HUD resource arcs
+    const keepIcons = [];
+    for (const fi of (this.flyingIcons || [])) {
+      if (this.time < fi.born) {
+        keepIcons.push(fi);
+        continue;
+      }
+      const t = (this.time - fi.born) / fi.duration;
+      if (t >= 1) continue;
+      const oneMinusT = 1 - t;
+      const px = oneMinusT * oneMinusT * fi.sx + 2 * oneMinusT * t * fi.cx + t * t * fi.tx;
+      const py = oneMinusT * oneMinusT * fi.sy + 2 * oneMinusT * t * fi.cy + t * t * fi.ty;
+      ctx.save();
+      ctx.globalAlpha = t < 0.75 ? 1 : (1 - t) / 0.25;
+      ctx.font = '16px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(fi.icon, px, py);
+      ctx.restore();
+      keepIcons.push(fi);
+    }
+    this.flyingIcons = keepIcons;
   }
 
   // ------------------------------------------------------------ targets
   // Clickable world objects in canvas (= #game-root) pixels.
   worldTargets(game) {
+    if (game.battleState && game.battleState.active) return [];
     const out = [];
     for (const b of game.buildings) {
       const { x, y } = tileToScreen(...b.tile);
@@ -623,10 +936,17 @@ export class IsoRenderer {
                  staffed: b.produces ? !!b.worker : undefined });
       out.push(...this.chipsFor(game, b));
     }
-    for (const p of PADS) {
+    const pads = game.activePads ? game.activePads() : PADS;
+    for (const p of pads) {
       if (game.buildingAt(p.id)) continue;
       const { x, y } = tileToScreen(...p.tile);
       out.push({ target_id: p.id, kind: 'pad', x: x - TILE_W / 2, y: y - TILE_H / 2, w: TILE_W, h: TILE_H });
+    }
+    if (!game.expansionsUnlocked?.has('exp_1')) {
+      out.push({ target_id: 'exp_1', kind: 'expansion', x: 110, y: 260, w: 88, h: 26, affordable: true });
+    }
+    if (!game.expansionsUnlocked?.has('exp_2')) {
+      out.push({ target_id: 'exp_2', kind: 'expansion', x: 762, y: 260, w: 88, h: 26, affordable: true });
     }
     return out;
   }
@@ -638,11 +958,255 @@ export class IsoRenderer {
     const pad = targets.find((t) => t.kind === 'pad'
       && Math.abs(x - (t.x + t.w / 2)) / (TILE_W / 2) + Math.abs(y - (t.y + t.h / 2)) / (TILE_H / 2) <= 1);
     if (pad && game.selectedCard) return pad;
-    const chip = targets.find((t) => (t.kind === 'upgrade' || t.kind === 'worker') && inRect(t, x, y));
+    const chip = targets.find((t) => (t.kind === 'upgrade' || t.kind === 'worker' || t.kind === 'free_finish' || t.kind === 'expansion') && inRect(t, x, y));
     if (chip) return chip;
     const buildings = targets.filter((t) => t.kind === 'building' && inRect(t, x, y))
       .sort((a, b) => (b.ready - a.ready) || (b.y + b.h) - (a.y + a.h));
     return buildings[0] || pad || null;
+  }
+
+  // ------------------------------------------------------------ battle arena
+  renderBattleArena(ctx, game, dt) {
+    const bs = game.battleState || game.battle || game.battleArena;
+    if (!bs) return;
+
+    // 1. Background (arena image or canyon/megalith fallback)
+    if (this.sprites.battle_arena_bg?.img) {
+      ctx.drawImage(this.sprites.battle_arena_bg.img, 0, 0, VIEW_W, VIEW_H);
+    } else {
+      const bgGrad = ctx.createLinearGradient(0, 0, 0, VIEW_H);
+      bgGrad.addColorStop(0, '#4a2416');
+      bgGrad.addColorStop(0.35, '#7c3b22');
+      bgGrad.addColorStop(0.7, '#965b32');
+      bgGrad.addColorStop(1, '#532e16');
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+
+      // Distant canyon cliffs & ancient megaliths
+      ctx.fillStyle = '#3d2015';
+      const pillars = [
+        { x: 110, y: 130, w: 52, h: 180 },
+        { x: 200, y: 160, w: 42, h: 130 },
+        { x: 740, y: 150, w: 46, h: 150 },
+        { x: 825, y: 120, w: 58, h: 190 },
+      ];
+      for (const p of pillars) {
+        roundRect(ctx, p.x, p.y, p.w, p.h, 6, '#3d2015');
+      }
+
+      // Arena dirt floor oval
+      ctx.fillStyle = '#6e4125';
+      ctx.beginPath();
+      ctx.ellipse(480, 370, 430, 135, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#8a5530';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+
+    // Overhead Banner: Stage Name and Wave
+    const stageTitle = bs.stage?.name || `Stage ${bs.stageId || 1}`;
+    roundRect(ctx, VIEW_W / 2 - 150, 18, 300, 36, 18, 'rgba(20, 12, 8, 0.88)');
+    ctx.strokeStyle = '#f0c24b';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(VIEW_W / 2 - 150, 18, 300, 36, 18);
+    ctx.stroke();
+    ctx.fillStyle = '#fff4c2';
+    ctx.font = 'bold 14px Georgia, serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${stageTitle} · Wave ${bs.wave || 1}/${bs.totalWaves || 1}`, VIEW_W / 2, 36);
+    ctx.textBaseline = 'alphabetic';
+
+    // Animation cycles
+    const attackCycle = (this.time * 3.2) % Math.PI;
+    const alliedLunge = Math.sin(attackCycle) * 18;
+    const enemyLunge = -Math.sin(attackCycle + 1.4) * 16;
+    const bobV = Math.sin(this.time * 6) * 3;
+    const bobL = Math.sin(this.time * 6 + 1.3) * 3;
+    const bobE1 = Math.sin(this.time * 5.5 + 0.6) * 3;
+    const bobE2 = Math.sin(this.time * 5.5 + 2.1) * 3;
+    const auraPulse = 0.5 + 0.5 * Math.sin(this.time * 4.5);
+
+    // 2. Allied Heroes (Left Side)
+    // hero_vaelen at (250, 320)
+    const vx = 250 + alliedLunge;
+    const vy = 320 + bobV;
+    // Golden aura ring
+    ctx.save();
+    ctx.strokeStyle = `rgba(245, 195, 75, ${0.45 + 0.35 * auraPulse})`;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(vx, 328, 36, 14, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    // Vaelen Sprite
+    const vSprite = this.sprites.hero_vaelen;
+    if (vSprite?.img) {
+      const w = vSprite.width;
+      const h = vSprite.height;
+      ctx.drawImage(vSprite.img, vx - vSprite.anchor[0] * w, vy - vSprite.anchor[1] * h, w, h);
+    } else {
+      circle(ctx, vx, vy - 24, 20, '#d97706');
+    }
+
+    // Overhead green HP bar for Vaelen / Allies
+    const phpPct = Math.max(0, Math.min(1, bs.playerHp / (bs.playerMaxHp || 1)));
+    roundRect(ctx, 160, 205, 150, 15, 7.5, 'rgba(15, 12, 10, 0.85)');
+    roundRect(ctx, 162, 207, 146 * phpPct, 11, 5.5, '#22c55e');
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 9px Georgia, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${bs.playerHp} / ${bs.playerMaxHp} HP`, 235, 212.5);
+    ctx.textBaseline = 'alphabetic';
+
+    // Rage bar for Vaelen
+    const vRagePct = Math.min(1, (bs.vaelenRage || 0) / 100);
+    roundRect(ctx, 160, 224, 150, 6, 3, 'rgba(15, 12, 10, 0.85)');
+    roundRect(ctx, 161, 225, 148 * vRagePct, 4, 2, vRagePct >= 1 ? '#ffd700' : '#f97316');
+
+    // hero_lyra at (165, 345) if unlocked
+    const lyraUnlocked = !!(game.heroes?.lyra?.unlocked);
+    if (lyraUnlocked) {
+      const lx = 165 + alliedLunge * 0.75;
+      const ly = 345 + bobL;
+      ctx.save();
+      ctx.strokeStyle = `rgba(255, 235, 140, ${0.45 + 0.35 * auraPulse})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.ellipse(lx, 352, 30, 12, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      const lSprite = this.sprites.hero_lyra;
+      if (lSprite?.img) {
+        const w = lSprite.width;
+        const h = lSprite.height;
+        ctx.drawImage(lSprite.img, lx - lSprite.anchor[0] * w, ly - lSprite.anchor[1] * h, w, h);
+      } else {
+        circle(ctx, lx, ly - 20, 16, '#ec4899');
+      }
+
+      // Rage bar for Lyra
+      const lRagePct = Math.min(1, (bs.lyraRage || 0) / 100);
+      roundRect(ctx, 110, 240, 90, 5, 2.5, 'rgba(15, 12, 10, 0.85)');
+      roundRect(ctx, 111, 241, 88 * lRagePct, 3, 1.5, lRagePct >= 1 ? '#ffd700' : '#a855f7');
+    }
+
+    // 3. Enemy Beasts (Right Side)
+    // Overhead red HP bar for Enemies
+    const ehpPct = Math.max(0, Math.min(1, bs.enemyHp / (bs.enemyMaxHp || 1)));
+    roundRect(ctx, 650, 205, 160, 15, 7.5, 'rgba(15, 12, 10, 0.85)');
+    roundRect(ctx, 652, 207, 156 * ehpPct, 11, 5.5, '#ef4444');
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 9px Georgia, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${bs.enemyHp} / ${bs.enemyMaxHp} HP`, 730, 212.5);
+    ctx.textBaseline = 'alphabetic';
+
+    const isBoss = bs.stageId === 'stage_8' || bs.stageId === 'stage_6';
+    if (isBoss) {
+      // boss_shadowclaw
+      const bx = 710 + enemyLunge;
+      const by = 300 + bobE1;
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      ctx.beginPath();
+      ctx.ellipse(bx, 318, 52, 18, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      const bossSprite = this.sprites.boss_shadowclaw;
+      if (bossSprite?.img) {
+        const w = bossSprite.width;
+        const h = bossSprite.height;
+        ctx.drawImage(bossSprite.img, bx - bossSprite.anchor[0] * w, by - bossSprite.anchor[1] * h, w, h);
+      } else {
+        circle(ctx, bx, by - 32, 28, '#7c2d12');
+      }
+    }
+
+    // Enemy beast pack wolves/boars at (670, 315) and (755, 350)
+    const beastSprite = this.sprites.enemy_beast_pack;
+    const beastPos = isBoss
+      ? [{ x: 775 + enemyLunge, y: 350 + bobE2 }]
+      : [{ x: 670 + enemyLunge, y: 315 + bobE1 }, { x: 755 + enemyLunge, y: 350 + bobE2 }];
+
+    for (const bp of beastPos) {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      ctx.beginPath();
+      ctx.ellipse(bp.x, bp.y + 6, 28, 10, 0, 0, Math.PI * 2);
+      ctx.fill();
+      if (beastSprite?.img) {
+        const w = beastSprite.width;
+        const h = beastSprite.height;
+        ctx.drawImage(beastSprite.img, bp.x - beastSprite.anchor[0] * w, bp.y - beastSprite.anchor[1] * h, w, h);
+      } else {
+        circle(ctx, bp.x, bp.y - 18, 18, '#991b1b');
+      }
+    }
+
+    // 4. Dramatic diagonal comic-book slash banner if bs.cutIn is active
+    if (bs.cutIn) {
+      ctx.save();
+      // Dramatic diagonal comic-book slash banner across the canvas
+      ctx.fillStyle = 'rgba(15, 10, 10, 0.90)';
+      ctx.beginPath();
+      ctx.moveTo(0, 175);
+      ctx.lineTo(VIEW_W, 105);
+      ctx.lineTo(VIEW_W, 265);
+      ctx.lineTo(0, 335);
+      ctx.closePath();
+      ctx.fill();
+
+      // Bold golden border accents
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(0, 175); ctx.lineTo(VIEW_W, 105);
+      ctx.moveTo(0, 335); ctx.lineTo(VIEW_W, 265);
+      ctx.stroke();
+
+      // Hero portrait in circular frame
+      const pSprite = this.sprites[bs.cutIn.portrait];
+      if (pSprite?.img) {
+        const pw = 140;
+        const ph = 140;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(215, 235, 60, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.drawImage(pSprite.img, 215 - pw / 2, 235 - ph / 2, pw, ph);
+        ctx.restore();
+        ctx.strokeStyle = '#ffd700';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(215, 235, 60, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Hero name & bold golden ultimate attack text
+      ctx.fillStyle = '#fef08a';
+      ctx.font = 'bold 15px Georgia, serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(bs.cutIn.name?.toUpperCase() || 'HERO', 310, 210);
+
+      ctx.save();
+      ctx.shadowColor = '#f59e0b';
+      ctx.shadowBlur = 18;
+      ctx.fillStyle = '#ffd700';
+      ctx.font = '900 28px Georgia, Impact, sans-serif';
+      ctx.fillText(bs.cutIn.ult || 'ULTIMATE SMASH!', 310, 252);
+      ctx.restore();
+
+      ctx.restore();
+    }
+
+    // Battle particles and popups
+    this.drawParticles(ctx, dt);
+    this.drawPopups(ctx, dt);
   }
 }
 

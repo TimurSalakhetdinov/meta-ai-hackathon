@@ -32,6 +32,10 @@ SHEETS: dict[str, list[str]] = {
         "town_center_stone_age",
     ],
     "preview_settlement_style_3.jpg": ["smelter", "granary", "advisor_welcome", "advisor_hint"],
+    "preview_settlement_style_4.jpg": ["barracks", "rural_farm", "culture_site", "small_home_lv2"],
+    "preview_settlement_style_5.jpg": ["hero_vaelen", "hero_lyra", "enemy_beast_pack", "boss_shadowclaw"],
+    "preview_settlement_style_6.jpg": ["portrait_vaelen", "portrait_lyra", "portrait_archon", "victory_chest"],
+    "preview_settlement_style_7.jpg": ["town_center_bronze_age", "barracks_lv2", "hero_ignis", "hero_aurelius"],
 }
 
 MIN_LUM = 125        # darker pixels are outlines or building, never background

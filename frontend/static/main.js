@@ -3,7 +3,10 @@
 // route (?replay_a=&replay_b=) is handed to replay.js instead.
 
 import { urlParams } from './clock.js';
-import { BUILDINGS, BUILD_ORDER, ENCOUNTERS, ERA_LABEL, Game, RESOURCES } from './game.js';
+import {
+  BUILDINGS, BUILD_ORDER, ALL_BUILD_ORDER, CAMPAIGN_STAGES, ENCOUNTERS, ERA_LABEL, Game,
+  QUESTS, RESOURCES, ALL_RESOURCES, RESOURCE_LABEL,
+} from './game.js';
 import { Sfx, defaultMuted } from './audio.js';
 import { IsoRenderer } from './iso_renderer.js';
 import { loadSprites, spriteUrl } from './sprites.js';
@@ -110,11 +113,19 @@ async function boot() {
     const rect = root.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
+
+    // Handle Build Bar category filter tabs
+    const catBtn = e.target.closest('[data-build-cat]');
+    if (catBtn) {
+      hud.setBuildCategory(catBtn.dataset.buildCat);
+      return;
+    }
+
     const el = e.target.closest('[data-target]');
     let target = el ? el.dataset.target : null;
     if (!target && (e.target === $('world') || e.target === root)) target = renderer.hitTest(game, x, y)?.target_id || null;
-    // A click on a modal backdrop still names what lies underneath, so the game can say the map is blocked.
     if (!target && e.target.classList.contains('modal-backdrop')) target = targetBelow(e.target, e.clientX, e.clientY, game, renderer, x, y);
+
     const outcome = game.click(target || 'empty', x, y);
     if (target === 'btn_mute') sfx.toggle();
     if (outcome.result === 'rejected') sfx.play('reject');
@@ -185,6 +196,10 @@ function publishState(game, renderer) {
     quest_index: game.questIndex,
     quest_claimable: game.questClaimable,
     expedition_unlocked: game.expeditionUnlocked(),
+    heroes_unlocked: game.heroesUnlocked(),
+    squad_power: game.squadPower(),
+    heroes: Object.fromEntries(Object.entries(game.heroes).map(([k, v]) => [k, { level: v.level, unlocked: v.unlocked, power: game.heroStats(k).power }])),
+    battle_active: !!(game.battleState && game.battleState.active),
     battles: game.stats.battles,
     upgrades: game.stats.upgrades,
     techs: [...game.techs],
@@ -205,7 +220,6 @@ function targetBelow(backdrop, cx, cy, game, renderer, x, y) {
   return null;
 }
 
-// Real click at #game-root coordinates (used by the in-browser stub bot).
 function clickAt(root, x, y) {
   const rect = root.getBoundingClientRect();
   const cx = rect.left + x;
@@ -230,9 +244,11 @@ function renderedTargets(game, renderer, config) {
     const id = el.dataset.target;
     const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
     const visible = onScreen(x, y, r.width, r.height) && !!hit && el.contains(hit);
-    const t = { target_id: id, kind: kindOf(id), x: round1(x), y: round1(y), w: round1(r.width), h: round1(r.height),
-                visible, locked: false, affordable: true, computed_salience: 'medium', highlighted: guide === id,
-                label: (el.getAttribute('title') || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60) };
+    const t = {
+      target_id: id, kind: kindOf(id), x: round1(x), y: round1(y), w: round1(r.width), h: round1(r.height),
+      visible, locked: false, affordable: true, computed_salience: 'medium', highlighted: guide === id,
+      label: (el.getAttribute('title') || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60),
+    };
     if (id.startsWith('card_')) {
       const st = game.cardStatus(id.slice(5));
       t.locked = !!st.locked;
@@ -247,19 +263,28 @@ function renderedTargets(game, renderer, config) {
       t.computed_salience = st.affordable ? 'high' : 'low';
     } else if (id === 'btn_research') {
       t.computed_salience = config.research_button_salience;
+    } else if (id === 'btn_heroes' || id === 'btn_expedition') {
+      t.computed_salience = game.stepIndex >= 1 ? 'high' : 'low';
+    } else if (id === 'btn_hero_levelup') {
+      const h = game.heroes[game.selectedHero];
+      t.affordable = h && h.unlocked && game.resources.food >= 10 * h.level;
+      t.computed_salience = t.affordable ? 'high' : 'medium';
     } else if (id === game.featureTarget) {
       const st = game.featureStatus();
       t.affordable = !!st.affordable;
       t.cooldown = st.cooldown ? round1(st.cooldown) : 0;
-      // The pulse and NEW! ribbon clear after the first use, as badges do in live games.
       const sal = game.feature.button_salience;
       t.computed_salience = sal === 'high_pulse' && game.featureUses > 0 ? 'high' : sal;
       t.is_new = sal === 'high_pulse' && game.featureUses === 0;
-    } else if (id.startsWith('encounter_')) {
-      t.cleared = game.encountersCleared.has(id);
+    } else if (id.startsWith('encounter_') || id.startsWith('stage_')) {
+      const s = CAMPAIGN_STAGES.find((x) => x.id === id || x.legacyId === id);
+      const isCleared = game.encountersCleared.has(id) || (s && (game.encountersCleared.has(s.id) || (s.legacyId && game.encountersCleared.has(s.legacyId))));
+      t.cleared = !!isCleared;
       t.affordable = !t.cleared && !game.missing(game.expeditionCosts());
       t.computed_salience = t.affordable ? 'high' : 'low';
-    } else if (['btn_advisor_ok', 'btn_close_research', 'btn_claim_quest', 'btn_close_expedition'].includes(id)) {
+    } else if (id.startsWith('btn_arena_')) {
+      t.computed_salience = 'high';
+    } else if (['btn_advisor_ok', 'btn_close_research', 'btn_claim_quest', 'btn_close_expedition', 'btn_close_heroes', 'btn_close_quests', 'btn_battle_continue', 'btn_victory_continue', 'btn_defeat_heroes', 'btn_start_arena', 'btn_campaign_heroes', 'btn_open_quests', 'btn_quest_ledger'].includes(id)) {
       t.computed_salience = 'high';
     } else {
       t.computed_salience = 'low';
@@ -269,14 +294,13 @@ function renderedTargets(game, renderer, config) {
   for (const w of renderer.worldTargets(game)) {
     const cx = rect.left + w.x + w.w / 2;
     const cy = rect.top + w.y + w.h / 2;
-    // Visible only if a click at the centre would actually reach this target.
     const visible = onScreen(w.x, w.y, w.w, w.h) && document.elementFromPoint(cx, cy) === canvas
       && renderer.hitTest(game, w.x + w.w / 2, w.y + w.h / 2)?.target_id === w.target_id;
     out.push({
       ...w, x: round1(w.x), y: round1(w.y), visible, locked: false,
       affordable: w.kind === 'pad' ? !!game.selectedCard : (w.kind === 'upgrade' ? w.affordable : true),
       computed_salience: w.kind === 'pad' ? (game.selectedCard ? 'high' : 'low')
-        : (w.ready || (w.kind === 'worker' && !w.staffed) ? 'high' : 'low'),
+        : (w.ready || (w.kind === 'worker' && !w.staffed) || w.kind === 'free' ? 'high' : 'low'),
       highlighted: guide === w.target_id,
       label: worldLabel(w),
     });
@@ -284,7 +308,6 @@ function renderedTargets(game, renderer, config) {
   return out;
 }
 
-// Optional content is revealed with a NEW! ribbon from the handoff step on.
 function isNewContent(game, type) {
   return !!BUILDINGS[type].optional && game.stepIndex >= 2 && !game.cardStatus(type).locked
     && !game.buildings.some((b) => b.type === type);
@@ -292,6 +315,8 @@ function isNewContent(game, type) {
 
 function worldLabel(w) {
   if (w.kind === 'pad') return `Building plot ${w.target_id.slice(4)}`;
+  if (w.kind === 'free') return `Instant Finish ${w.target_id.slice(5)}`;
+  if (w.kind === 'expansion') return `Expand territory (${w.target_id})`;
   if (w.kind === 'upgrade') return `Upgrade ${w.building_type} to Lv.${w.level + 1}`;
   if (w.kind === 'worker') return `${w.staffed ? 'Unassign' : 'Assign'} worker (${w.building_type})`;
   return w.level > 1 ? `${w.building_type} Lv.${w.level}` : w.building_type;
@@ -300,7 +325,8 @@ function worldLabel(w) {
 function kindOf(id) {
   if (id.startsWith('card_')) return 'build_card';
   if (id.startsWith('tech_')) return 'tech';
-  if (id.startsWith('encounter_')) return 'encounter';
+  if (id.startsWith('encounter_') || id.startsWith('stage_')) return 'encounter';
+  if (id.startsWith('btn_arena_')) return 'arena';
   if (id.startsWith('btn_feature_')) return 'feature';
   return 'button';
 }
@@ -310,6 +336,14 @@ function round1(v) {
 }
 
 // ------------------------------------------------------------------- HUD
+const CATEGORY_MAP = {
+  all: null,
+  homes: ['shelter'],
+  production: ['forager_hut', 'woodcutter_hut', 'stone_quarry', 'smelter'],
+  military: ['barracks'],
+  culture: ['granary', 'tribal_monument'],
+};
+
 class Hud {
   constructor(game, config, sfx) {
     this.game = game;
@@ -321,87 +355,186 @@ class Hud {
     this.sig = '';
     this.inspectorOn = false;
     this.toastTimer = null;
+    this.buildCategory = 'all';
+
     document.documentElement.style.setProperty('--card-scale', config.build_button_scale);
     const research = $('btn_research');
-    research.className = `research sal-${config.research_button_salience}`;
+    if (research) research.className = `dock-btn research-btn sal-${config.research_button_salience}`;
     $('welcome-text').textContent = game.advisorText();
-    $('cards').innerHTML = BUILD_ORDER.map((type) => `
-      <button class="card" data-target="card_${type}" title="${BUILDINGS[type].label}">
+
+    this.renderCards();
+    if (game.feature) this.buildFeatureCard(game.feature);
+    this.initCampaign();
+    this.initQuestsLedger();
+  }
+
+  setBuildCategory(cat) {
+    this.buildCategory = cat;
+    for (const btn of document.querySelectorAll('[data-build-cat]')) {
+      btn.classList.toggle('active', btn.dataset.buildCat === cat);
+    }
+    this.sig = '';
+    this.updateCards();
+  }
+
+  renderCards() {
+    $('cards').innerHTML = ALL_BUILD_ORDER.map((type) => `
+      <button class="card" data-target="card_${type}" data-btype="${type}" title="${BUILDINGS[type].label}" ${type === 'barracks' ? 'hidden' : ''}>
         <img src="${spriteUrl(type)}" alt="">
         <span class="c-name">${BUILDINGS[type].label}</span>
         <span class="c-cost"></span>
         <span class="c-lock" hidden></span>
       </button>`).join('');
-    if (game.feature) this.buildFeatureCard(game.feature);
-    const ex = game.expeditionCosts();
-    $('expedition-cost').textContent = `Each battle costs ${costText(ex) || 'nothing'} · win +6 RP, +15 Stone`;
-    $('encounters').innerHTML = ENCOUNTERS.map((e) => `
-      <button class="encounter" data-target="${e.id}" title="${e.label}">
-        <span class="e-ico">${e.icon}</span><span>${e.label}</span><small>${costText(ex) || 'Free'}</small>
-      </button>`).join('');
+  }
+
+  initCampaign() {
+    const ex = this.game.expeditionCosts();
+    const encountersEl = $('encounters');
+    if (encountersEl) {
+      encountersEl.innerHTML = ENCOUNTERS.map((e) => `
+        <button class="encounter" data-target="${e.id}" title="${e.label}">
+          <span class="e-ico">${e.icon}</span><span>${e.label}</span><small>${costText(ex) || 'Free'}</small>
+        </button>`).join('');
+    }
+
+    const grid = $('campaign-stages-grid');
+    if (grid) {
+      grid.innerHTML = CAMPAIGN_STAGES.map((s) => `
+        <button class="stage-node-card encounter ${s.reqPower ? 'level-check' : ''}" data-target="${s.legacyId || s.id}" id="stage-card-${s.id}">
+          <div class="node-header">
+            <span class="node-num">${s.name}</span>
+            <span class="node-stars" id="stars-${s.id}">☆☆☆</span>
+          </div>
+          <div class="node-body">
+            <div class="node-enemies">${s.enemies}</div>
+            <div class="node-power">Enemy Power: <b>${s.enemyPower}</b></div>
+            <div class="node-reward">Loot: ${costText(s.reward)}</div>
+          </div>
+          <div class="node-tap-hint">⚡ Tap to Battle</div>
+        </button>`).join('');
+    }
+  }
+
+  initQuestsLedger() {
+    const list = $('quests-ledger-list');
+    if (!list) return;
+    list.innerHTML = QUESTS.map((q, idx) => `
+      <div class="quest-ledger-row" id="ledger-q-${q.id}">
+        <div class="ql-num">Chapter ${idx + 1}</div>
+        <div class="ql-content">
+          <h4>${q.title}</h4>
+          <ul class="ql-objs" id="ledger-objs-${q.id}">
+            ${q.objectives.map(([label]) => `<li>${label}</li>`).join('')}
+          </ul>
+          <div class="ql-reward">Reward: ${costText(q.reward)}</div>
+        </div>
+        <div class="ql-status" id="ledger-status-${q.id}">Pending</div>
+      </div>`).join('');
   }
 
   update() {
     const g = this.game;
     const res = g.roundedResources();
-    for (const r of RESOURCES) {
+
+    // Resources HUD
+    for (const r of ALL_RESOURCES) {
       const el = $(`res-${r}`);
+      if (!el) continue;
       if (this.prev[r] !== res[r]) {
         el.querySelector('b').textContent = res[r];
-        if (this.prev[r] !== undefined && r !== 'rp') bump(el);
+        if (this.prev[r] !== undefined && !['rp', 'coins', 'scrolls', 'tokens', 'stamina'].includes(r)) bump(el);
         this.prev[r] = res[r];
       }
       el.classList.toggle('low', (r === 'wood' || r === 'food') && res[r] < 20);
     }
+
     const workers = `${g.workersFree}/${g.workersTotal}`;
-    if (this.prev.workers !== workers) { $('res-workers').querySelector('b').textContent = workers; this.prev.workers = workers; }
+    if (this.prev.workers !== workers) {
+      const wEl = $('res-workers');
+      if (wEl) wEl.querySelector('b').textContent = workers;
+      this.prev.workers = workers;
+    }
     if (this.prev.score !== g.score) {
-      $('res-score').querySelector('b').textContent = g.score;
-      if (this.prev.score !== undefined) bump($('res-score'));
+      const sEl = $('res-score');
+      if (sEl) {
+        sEl.querySelector('b').textContent = g.score;
+        if (this.prev.score !== undefined) bump(sEl);
+      }
       this.prev.score = g.score;
     }
+
     $('btn_speed').textContent = `${g.clock.speed}x`;
     $('era-name').textContent = ERA_LABEL[g.era];
     $('era-banner').classList.toggle('stone', g.era !== 'dawn_age');
     $('era-banner').classList.toggle('bronze', g.era === 'bronze_age');
+
     const stepLabel = { onb_01_shelter: 'Step 1/3', onb_02_forager: 'Step 2/3', onb_03_handoff: 'Step 3/3', free_play: 'Free play' };
     $('step-chip').textContent = g.achieved ? ERA_LABEL[g.era] : stepLabel[g.step_id];
     const text = g.advisorText();
     if ($('advisor-text').textContent !== text) $('advisor-text').textContent = text;
     $('advisor').querySelector('.bubble').classList.toggle('hinting', !!g.hint);
+
     const mood = g.advisorMood();
     if (mood !== this.portrait) {
       this.portrait = mood;
       $('advisor-portrait').src = `/static/assets/sprites/advisor_${mood}.png`;
       $('advisor').classList.toggle('hint', mood === 'hint');
     }
+
     $('btn_mute').textContent = this.sfx.muted ? '\u{1F507}' : '\u{1F50A}';
     $('btn_mute').classList.toggle('on', !this.sfx.muted);
     window.__SFX_MUTED__ = this.sfx.muted;
+
+    // Modals
     $('welcome-modal').hidden = g.modal !== 'welcome';
     $('research-modal').hidden = g.modal !== 'research';
     $('expedition-modal').hidden = g.modal !== 'expedition';
+    $('heroes-modal').hidden = g.modal !== 'heroes';
+    $('quests-modal').hidden = g.modal !== 'quests';
+
+    // Action Dock
+    $('btn_heroes').hidden = !g.heroesUnlocked();
     $('btn_expedition').hidden = !g.expeditionUnlocked();
+
     if (g.feature) this.updateFeatureCard();
     this.updateQuest();
-    if (g.modal === 'expedition') this.updateEncounters();
+    if (g.modal === 'expedition') this.updateCampaignModal();
+    if (g.modal === 'heroes') this.updateHeroesModal();
+    if (g.modal === 'quests') this.updateQuestsModal();
+    this.updateBattleHud();
     this.updateCards();
     this.updateArrow();
     if (this.inspectorOn) this.placeInspectTags();
+
+    // Sfx music switcher
+    this.sfx.setMusicTheme?.(g.battleState?.active ? 'battle' : 'valley');
   }
 
   updateCards() {
     const g = this.game;
     const res = g.roundedResources();
-    const sig = JSON.stringify([res, g.selectedCard, [...g.techs], g.stepIndex, g.workersFree]);
+    const sig = JSON.stringify([res, g.selectedCard, [...g.techs], g.stepIndex, g.workersFree, this.buildCategory]);
     if (sig === this.sig) return;
     this.sig = sig;
-    for (const type of BUILD_ORDER) {
+
+    const allowed = CATEGORY_MAP[this.buildCategory] || null;
+
+    for (const type of ALL_BUILD_ORDER) {
       const el = document.querySelector(`[data-target="card_${type}"]`);
+      if (!el) continue;
+      if (allowed && !allowed.includes(type)) {
+        el.hidden = true;
+        continue;
+      }
+      if (type === 'barracks' && this.buildCategory === 'all') {
+        el.hidden = true;
+        continue;
+      }
+      el.hidden = false;
       const st = g.cardStatus(type);
       const costs = BUILDINGS[type].costs(this.config);
       el.querySelector('.c-cost').innerHTML = Object.entries(costs).filter(([, v]) => v > 0)
-        .map(([r, v]) => `<span class="${res[r] < v ? 'short' : ''}">${v} ${r === 'wood' ? '\u{1FAB5}' : r === 'food' ? '\u{1F35E}' : '\u{1FAA8}'}</span>`)
+        .map(([r, v]) => `<span class="${(res[r] ?? 0) < v ? 'short' : ''}">${v} ${r === 'wood' ? '\u{1FAB5}' : r === 'food' ? '\u{1F35E}' : '\u{1FAA8}'}</span>`)
         .join(' ');
       const lock = el.querySelector('.c-lock');
       lock.hidden = !st.locked;
@@ -425,14 +558,16 @@ class Hud {
 
   updateQuest() {
     const g = this.game;
+    const ledgerBtn = $('btn_open_quests') || $('btn_quest_ledger');
+    if (ledgerBtn) ledgerBtn.hidden = !g.heroesUnlocked();
     const q = g.quest;
     const sig = JSON.stringify([g.questIndex, g.questClaimable, q && q.objectives.map(([, fn]) => fn(g))]);
     if (sig === this.questSig) return;
     this.questSig = sig;
     const card = $('quest-card');
     if (!q) {
-      $('quest-title').textContent = 'All chapters complete';
-      $('quest-objectives').innerHTML = '';
+      $('quest-title').textContent = 'All 6 Chapters Complete 👑';
+      $('quest-objectives').innerHTML = '<li class="ok">Empire Ascendant!</li>';
       $('quest-fill').style.width = '100%';
       $('btn_claim_quest').hidden = true;
       card.classList.remove('done');
@@ -446,7 +581,158 @@ class Hud {
     card.classList.toggle('done', g.questClaimable);
   }
 
-  // PM text reaches the page here, so every field goes in through textContent or a checked URL.
+  updateCampaignModal() {
+    const g = this.game;
+    $('campaign-squad-power').textContent = g.squadPower();
+    $('campaign-stamina').textContent = `${Math.floor(g.resources.stamina ?? 100)}/100`;
+
+    for (const s of CAMPAIGN_STAGES) {
+      const card = $(`stage-card-${s.id}`);
+      if (!card) continue;
+      const cleared = g.encountersCleared.has(s.id) || (s.legacyId && g.encountersCleared.has(s.legacyId));
+      card.classList.toggle('cleared', !!cleared);
+      const starsEl = $(`stars-${s.id}`);
+      if (starsEl) starsEl.textContent = cleared ? '⭐⭐⭐' : '☆☆☆';
+      const hintEl = card.querySelector('.node-tap-hint');
+      if (hintEl) hintEl.textContent = cleared ? '✅ Cleared' : (s.reqPower && g.squadPower() < s.reqPower ? `⚠️ Power: ${g.squadPower()}/${s.reqPower}` : '⚡ Tap to Battle');
+    }
+  }
+
+  updateHeroesModal() {
+    const g = this.game;
+    $('heroes-total-power').textContent = g.squadPower();
+
+    // Roster list
+    const rosterEl = $('heroes-roster');
+    if (rosterEl) {
+      rosterEl.innerHTML = Object.values(g.heroes).map((h) => {
+        const stats = g.heroStats(h.id);
+        const isSel = g.selectedHero === h.id;
+        return `
+          <button class="roster-card ${isSel ? 'active' : ''} ${h.unlocked ? '' : 'locked'}"
+                  data-target="btn_select_hero_${h.id}" title="${h.name}">
+            <img src="/static/assets/sprites/${h.portrait}.png" alt="" class="r-avatar" onerror="this.src='/static/assets/sprites/advisor_welcome.png'">
+            <div class="r-meta">
+              <span class="r-name">${h.name}</span>
+              <span class="r-sub">${h.unlocked ? `Lv.${h.level} &middot; ⚔️ ${stats.power}` : '🔒 Locked'}</span>
+            </div>
+          </button>`;
+      }).join('');
+    }
+
+    // Showcase hero
+    const sel = g.heroes[g.selectedHero] || g.heroes.vaelen;
+    const stats = g.heroStats(sel.id);
+    $('showcase-name').textContent = sel.name;
+    $('showcase-title').textContent = sel.title;
+    $('showcase-role').textContent = sel.role;
+    $('showcase-stars').textContent = '★'.repeat(sel.stars);
+    $('showcase-portrait').src = `/static/assets/sprites/${sel.portrait}.png`;
+    $('showcase-portrait').onerror = () => { $('showcase-portrait').src = '/static/assets/sprites/advisor_welcome.png'; };
+    $('showcase-ult-name').textContent = `⚡ ${sel.ultName}`;
+    $('showcase-ult-desc').textContent = sel.ultDesc;
+
+    // Attributes matrix
+    $('stat-hp').textContent = stats.hp;
+    $('stat-atk').textContent = stats.atk;
+    $('stat-def').textContent = stats.def;
+    $('stat-power').textContent = stats.power;
+    $('stat-level').textContent = `Lv.${sel.level} / ${sel.maxLevel}`;
+
+    const costFood = 10 * sel.level;
+    const costScrolls = 5 * sel.level;
+    $('hero-upgrade-cost').textContent = `Cost: ${costFood} 🌾 Food ${costScrolls > 0 ? `+ ${costScrolls} 📜 Scrolls` : ''}`;
+
+    const canUpgrade = sel.unlocked && sel.level < sel.maxLevel && g.resources.food >= costFood;
+    const lvlBtn = $('btn_hero_levelup');
+    if (lvlBtn) {
+      lvlBtn.disabled = !canUpgrade;
+      lvlBtn.textContent = sel.level >= sel.maxLevel ? 'Max Rank' : `⚔️ Train Lv.${sel.level + 1} (+15 Score)`;
+    }
+  }
+
+  updateQuestsModal() {
+    const g = this.game;
+    for (const [idx, q] of QUESTS.entries()) {
+      const row = $(`ledger-q-${q.id}`);
+      if (!row) continue;
+      const isComplete = q.objectives.every(([, fn]) => fn(g));
+      const isPast = g.questIndex > idx;
+      const statusEl = $(`ledger-status-${q.id}`);
+      if (statusEl) {
+        if (isPast) statusEl.textContent = '✅ Completed';
+        else if (isComplete) statusEl.textContent = '🎁 Claimable';
+        else if (g.questIndex === idx) statusEl.textContent = 'Active';
+        else statusEl.textContent = 'Locked';
+      }
+      row.classList.toggle('done', isPast || isComplete);
+      row.classList.toggle('active', g.questIndex === idx);
+    }
+  }
+
+  updateBattleHud() {
+    const g = this.game;
+    const bs = g.battleState;
+    const hud = $('battle-hud');
+    if (!bs) {
+      hud.hidden = true;
+      $('battle-victory-modal').hidden = true;
+      $('battle-defeat-modal').hidden = true;
+      return;
+    }
+
+    hud.hidden = false;
+    $('battle-stage-name').textContent = bs.stage?.name || 'Campaign Battle';
+    $('battle-wave-text').textContent = `WAVE ${bs.wave || 1}/${bs.totalWaves || 1}`;
+
+    const alliedPct = Math.max(0, Math.min(100, Math.round((bs.playerHp / (bs.playerMaxHp || 1)) * 100)));
+    const enemyPct = Math.max(0, Math.min(100, Math.round((bs.enemyHp / (bs.enemyMaxHp || 1)) * 100)));
+    $('battle-allied-hp-fill').style.width = `${alliedPct}%`;
+    $('battle-enemy-hp-fill').style.width = `${enemyPct}%`;
+    $('battle-allied-hp-text').textContent = `${Math.max(0, Math.round(bs.playerHp))}/${bs.playerMaxHp}`;
+    $('battle-enemy-hp-text').textContent = `${Math.max(0, Math.round(bs.enemyHp))}/${bs.enemyMaxHp}`;
+
+    $('btn_battle_speed').textContent = `${bs.speed || 1}x`;
+    $('btn_battle_auto').classList.toggle('active', !!bs.auto);
+
+    // Rage fills
+    $('rage-fill-vaelen').style.width = `${bs.vaelenRage || 0}%`;
+    $('rage-fill-lyra').style.width = `${bs.lyraRage || 0}%`;
+    $('btn_ult_vaelen').classList.toggle('ready', (bs.vaelenRage || 0) >= 100);
+    $('btn_ult_lyra').classList.toggle('ready', (bs.lyraRage || 0) >= 100);
+
+    // Cut-in
+    const cutin = $('battle-cutin');
+    if (bs.cutIn) {
+      cutin.hidden = false;
+      $('cutin-hero').textContent = bs.cutIn.name.toUpperCase();
+      $('cutin-ult').textContent = bs.cutIn.ult;
+      $('cutin-img').src = `/static/assets/sprites/${bs.cutIn.portrait}.png`;
+      $('cutin-img').onerror = () => { $('cutin-img').src = '/static/assets/sprites/advisor_welcome.png'; };
+    } else {
+      cutin.hidden = true;
+    }
+
+    // Overlays
+    const vicModal = $('battle-victory-modal');
+    const defModal = $('battle-defeat-modal');
+    if (bs.outcome === 'victory') {
+      vicModal.hidden = false;
+      defModal.hidden = true;
+      const lootEl = $('victory-loot');
+      if (lootEl && bs.stage?.reward) {
+        lootEl.innerHTML = Object.entries(bs.stage.reward)
+          .map(([r, a]) => `<span class="loot-pill">+${a} ${RESOURCE_LABEL[r] || r}</span>`).join(' ');
+      }
+    } else if (bs.outcome === 'defeat') {
+      vicModal.hidden = true;
+      defModal.hidden = false;
+    } else {
+      vicModal.hidden = true;
+      defModal.hidden = true;
+    }
+  }
+
   buildFeatureCard(f) {
     const el = document.createElement('button');
     el.id = 'feature-card';
@@ -496,17 +782,6 @@ class Hud {
     }
   }
 
-  updateEncounters() {
-    const g = this.game;
-    const short = !!g.missing(g.expeditionCosts());
-    for (const e of ENCOUNTERS) {
-      const el = document.querySelector(`[data-target="${e.id}"]`);
-      el.classList.toggle('cleared', g.encountersCleared.has(e.id));
-      el.classList.toggle('short', short);
-      if (g.encountersCleared.has(e.id)) el.querySelector('small').textContent = 'Victory!';
-    }
-  }
-
   updateArrow() {
     const arrow = $('hint-arrow');
     const id = this.game.modal === 'welcome' ? null : this.game.guideTarget();
@@ -528,9 +803,9 @@ class Hud {
       el.classList.add('flash');
     }
     if (fx.type === 'achievement' && fx.achievement_id === 'bronze_age_mastery') {
-      this.toast('\u{1F3C6} Bronze Age Mastery', 'Bronze tools for every hut · a new age begins');
+      this.toast('\u{1F3C6} Bronze Age Mastery', 'Bronze weapons & tools for every hut · an Empire has risen');
     } else if (fx.type === 'achievement') {
-      this.toast('\u{1F3C6} First achievement unlocked', 'Stone Age Awakening · your tribe enters a new era');
+      this.toast('\u{1F3C6} First achievement unlocked', 'Stone Age Awakening · your empire enters a new era');
     }
   }
 
@@ -542,7 +817,6 @@ class Hud {
     this.toastTimer = setTimeout(() => { el.hidden = true; }, 6000);
   }
 
-  // Config Inspector: shows the four patchable levers over the live game.
   toggleInspector(force) {
     this.inspectorOn = force ?? !this.inspectorOn;
     const panel = $('inspector');
@@ -617,6 +891,6 @@ function emojiIcon(icon) {
 }
 
 function costText(costs) {
-  const icon = { food: '\u{1F35E}', wood: '\u{1FAB5}', stone: '\u{1FAA8}', rp: '\u{1F4DC}' };
-  return Object.entries(costs).filter(([, v]) => v > 0).map(([r, v]) => `${v} ${icon[r]}`).join(' ');
+  const icon = { food: '\u{1F35E}', wood: '\u{1FAB5}', stone: '\u{1FAA8}', rp: '\u{1F4DC}', coins: '\u{1FA99}', scrolls: '\u{1F4DC}', tokens: '\u{1F5FA}\u{FE0F}' };
+  return Object.entries(costs || {}).filter(([, v]) => v > 0).map(([r, v]) => `${v} ${icon[r] || r}`).join(' ');
 }

@@ -144,6 +144,14 @@ def stub_diagnosis(summary: dict[str, Any], events: list[dict[str, Any]],
         hypotheses.append({"id": "wood_shortfall", "confidence": 0.8, "evidence": (
             f"{wood_short} insufficient_wood rejections at {where}; optional Woodcutter Hut "
             f"{'was' if built_woodcutter else 'was not'} selected before the required tech.")})
+    battles_lost = [e for e in events if e.get("event_type") == "battle_lost"]
+    free_play_battles_lost = [e for e in battles_lost if e.get("step_id") == "free_play" or where == "free_play"]
+    if free_play_battles_lost:
+        stages = [e.get("payload", {}).get("stage_id") for e in free_play_battles_lost if e.get("payload", {}).get("stage_id")]
+        stage_str = f" at {', '.join(sorted(set(stages)))}" if stages else ""
+        hypotheses.append({"id": "combat_wall_underleveled_heroes", "confidence": 0.85, "evidence": (
+            f"{len(free_play_battles_lost)} battle_lost event(s){stage_str} in free_play; squad power was "
+            f"insufficient for combat encounters. Heroes need level-ups in Heroes Hall.")})
     if not hypotheses:
         hypotheses.append({"id": "unclear_next_step", "confidence": 0.4, "evidence": (
             f"{summary.get('stuck_events', 0)} stuck events at {where} without a dominant rejection reason.")})
@@ -153,9 +161,12 @@ def stub_diagnosis(summary: dict[str, Any], events: list[dict[str, Any]],
         levers += ["lock_optional_builds_until_step", "starting_wood"]
     if "low_research_salience" in ids:
         levers += ["research_button_salience", "idle_hint_delay_sec"]
+    if "combat_wall_underleveled_heroes" in ids:
+        levers += ["starting_food", "forager_food_yield"]
     if not levers:
         levers = ["idle_hint_delay_sec"]
     names = {"low_research_salience": "low Research salience", "wood_shortfall": "a wood shortfall",
+             "combat_wall_underleveled_heroes": "an under-leveled hero combat wall",
              "unclear_next_step": "an unclear next step"}
     text = " plus ".join(names[h["id"]] for h in hypotheses)
     return {"diagnosis": f"Players stall at {where}: {text}.", "hypotheses": hypotheses, "suggested_levers": levers}
@@ -168,10 +179,14 @@ def draw_stuck_frame(png: bytes, targets: list[dict[str, Any]]) -> tuple[bytes, 
     font = ImageFont.load_default()
     by_id = {t["target_id"]: t for t in targets}
     focus = list(FOCUS_TARGETS)
-    features = sorted(t for t in by_id if t.startswith("btn_feature_"))
-    if features:
-        # The feature button under test displaces the Woodcutter card as the distractor to watch.
-        focus = [features[0] if t == "card_woodcutter_hut" else t for t in focus]
+    combat_recovery = [tid for tid in ("btn_defeat_heroes", "btn_hero_levelup", "btn_heroes", "btn_battle_continue") if tid in by_id]
+    if "btn_defeat_heroes" in by_id or "btn_hero_levelup" in by_id:
+        focus = combat_recovery[:3]
+    else:
+        features = sorted(t for t in by_id if t.startswith("btn_feature_"))
+        if features:
+            # The feature button under test displaces the Woodcutter card as the distractor to watch.
+            focus = [features[0] if t == "card_woodcutter_hut" else t for t in focus]
     masks = []
     for rank, (tid, color) in enumerate(zip(focus, FOCUS_COLORS), start=1):
         t = by_id.get(tid)
