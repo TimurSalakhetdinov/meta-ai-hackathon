@@ -152,3 +152,9 @@ Many short, independent sessions, not one long run. One pair is a demo, not evid
   - Fixed: the tech tree nodes clipped their last line, and the dashed edges showed through the text of locked nodes. The crest and the pill wrapped onto a second line. The decree emblem said "Generated via Muse Image" in stub mode; it now says "Procedural stub emblem". The rework rationale was cut off. Live Chronicle STUCK rows were dark red text on red. The replay labelled arm A "base config" when it ran `patch_001`. The split replay button left out `&dev=1` for stub runs and got refused. Approve and Summon now scroll the next step into view.
   - New test: `tests/test_feature_studio_ui.py` clicks the Feature Studio flow in the dock (forge, approve, playtest, HURTS, rework, approve, playtest, POSITIVE) with the fake playtester. It fails on page or console errors and on horizontal overflow in `#right-dock`.
   - Known: the app is a fixed 1280x540 layout, so a 1400x800 window shows empty space. Left as is, because the bot click coordinates and the clip tests depend on it.
+- 2026-10-28 (Claude Code, `main`): Final polish of the feature studio, merged `claude/pm-feature-studio` into `main`. 76 tests pass on both branches at $0 Meta spend.
+  - Each persona now voices its own first-use and repeat-use line for a feature. Personas without a match keep the generic line.
+  - The rework tones a `high_pulse` button down to `medium` when it moves the feature to free play. The schema has no `high` level.
+  - The Council Report keeps the onboarding loop (`patch_001`) and its A/B below the feature report in a collapsible section. The Forge hints to approve `patch_001` first when a feature has no baseline.
+  - The dock UI test allows the 404s for a missing run analysis and A/B summary, which render as notes. Any other failed response still fails the test.
+  - Argon review round 7 is in `docs/hackathon/argon-review-log.md`.
