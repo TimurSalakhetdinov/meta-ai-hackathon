@@ -157,7 +157,7 @@ export class Sfx {
       'harvest_food', 'harvest_wood', 'harvest_stone', 'harvest_coins', 'research_select',
       'dock_heroes', 'dock_campaign', 'dock_research', 'dock_upgrades', 'claim_reward', 'ambient_wind', 'upgrade'];
     for (const n of NAMES) {
-      fetch(`/static/assets/audio/sfx/${n}.mp3?v=9`)
+      fetch(`/static/assets/audio/sfx/${n}.mp3?v=10`)
         .then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
         .then((data) => new Promise((ok, fail) => this.ctx.decodeAudioData(data, ok, fail)))
         .then((buf) => { this.sfxFiles[n] = buf; })
@@ -167,7 +167,7 @@ export class Sfx {
 
   _playSfxFile(name, bus) {
     const ALIAS = {
-      ui: 'click', place: 'build', food: 'harvest', harvest_food: 'harvest',
+      ui: 'click', place: 'build', food: 'harvest_food',
       coins: 'coin', harvest_coin: 'coin', speedup: 'free_finish', instant_finish: 'free_finish',
       research: 'unlock', levelup: 'hero_levelup', sword_clash: 'hit', slash: 'hit',
       attack: 'hit', beast_roar: 'roar', sabertooth: 'roar', ult_stomp: 'hero_ult',

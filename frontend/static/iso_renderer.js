@@ -380,7 +380,7 @@ export class IsoRenderer {
       // painted river (bottom right, under the bridge) so the water moves.
       const riverPts = [[-10, 368], [140, 394], [279, 429], [454, 471], [593, 492], [698, 464], [758, 442], [812, 420], [872, 392], [962, 356]];
       const riverPoint = (t) => {
-        const seg = Math.min(riverPts.length - 2, Math.floor(t * (riverPts.length - 1)));
+        const seg = Math.max(0, Math.min(riverPts.length - 2, Math.floor(t * (riverPts.length - 1))));
         const lt = t * (riverPts.length - 1) - seg;
         const [ax, ay] = riverPts[seg];
         const [bx, by] = riverPts[seg + 1];
@@ -413,7 +413,7 @@ export class IsoRenderer {
       }
       ctx.setLineDash([]);
       for (let i = 0; i < 9; i++) {
-        const t = (this.time * 0.055 + i / 9) % 1;
+        const t = (((this.time * 0.055 + i / 9) % 1) + 1) % 1;
         const p = riverPoint(t);
         // Foam vanishes well before the bridge and reappears after it.
         if (p.x > 745 && p.x < 858 && p.y > 375 && p.y < 455) continue;

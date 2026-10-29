@@ -7,8 +7,8 @@ import {
   BUILDINGS, BUILD_ORDER, ALL_BUILD_ORDER, CAMPAIGN_STAGES, ENCOUNTERS, ERA_LABEL, Game,
   QUESTS, RESOURCES, ALL_RESOURCES, RESOURCE_LABEL, TECHS, UPGRADABLE_TYPES,
 } from './game.js';
-import { Sfx, defaultMuted } from './audio.js?v=7';
-import { IsoRenderer } from './iso_renderer.js?v=11';
+import { Sfx, defaultMuted } from './audio.js?v=12';
+import { IsoRenderer } from './iso_renderer.js?v=13';
 import { loadSprites, spriteUrl } from './sprites.js?v=10';
 import { TechTreeView } from './tech_tree.js';
 import { initOverlay } from './overlay.js';
