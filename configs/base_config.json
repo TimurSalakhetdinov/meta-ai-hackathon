@@ -50,10 +50,12 @@
   "build_button_scale": 1.0,
   "idle_hint_delay_sec": 15.0,
   "build_time_sec": 2.0,
-  "forager_cycle_sec": 4.0,
-  "woodcutter_cycle_sec": 10.0,
-  "quarry_cycle_sec": 6.0,
-  "smelter_cycle_sec": 8.0,
+  "forager_cycle_sec": 12.0,
+  "woodcutter_cycle_sec": 20.0,
+  "quarry_cycle_sec": 15.0,
+  "smelter_cycle_sec": 20.0,
   "first_achievement_target_score": 100,
-  "bronze_achievement_target_score": 220
+  "bronze_achievement_target_score": 220,
+  "bronze_unlock_min_sim_sec": 1200.0,
+  "hero_training_sec": 20.0
 }

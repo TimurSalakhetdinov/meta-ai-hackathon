@@ -1,23 +1,25 @@
-// 7-node Tech Tree modal. Nodes are buttons with data-target="tech_*"; clicks
+// 8-node Tech Tree modal. Nodes are buttons with data-target="tech_*"; clicks
 // are routed through main.js like every other click in #game-root.
 
 import { RESOURCE_LABEL, TECHS, TECH_ORDER } from './game.js';
 
-// Four columns; each chain sits on one row so its arrows run straight.
-const COL = [0, 205, 410, 615];
+// Five narrower columns; each chain sits on one row so its arrows run straight.
+// The era chain runs along the bottom row and Irrigation (a Bronze Age tech) is last.
+const COL = [0, 158, 316, 474, 632];
 const ROW = [0, 132, 264];
 const NODE_POS = {
   tech_toolmaking: [COL[0], ROW[1]],
   tech_woodworking: [COL[1], ROW[0]],
   tech_baskets: [COL[1], ROW[1]],
   tech_masonry: [COL[1], ROW[2]],
-  tech_irrigation: [COL[2], ROW[1]],
+  tech_construction: [COL[2], ROW[0]],
   tech_stone_age: [COL[2], ROW[2]],
   tech_bronze_age: [COL[3], ROW[2]],
+  tech_irrigation: [COL[4], ROW[2]],
 };
-const NODE_W = 164;
+const NODE_W = 142;
 const NODE_H = 112;
-const TREE_W = COL[3] + NODE_W;
+const TREE_W = COL[4] + NODE_W;
 const TREE_H = ROW[2] + NODE_H;
 
 // True if `req` is already implied by another requirement of `id` (e.g. Toolmaking -> Masonry -> Stone Age).
@@ -48,7 +50,7 @@ export class TechTreeView {
   flashRejected(id, game) {
     const st = game.techStatus(id);
     const msg = !st.available
-      ? `Learn ${TECHS[st.requires].label} first`
+      ? (st.reason === 'too_early' ? 'The Bronze Age opens later in the game' : `Learn ${TECHS[st.requires].label} first`)
       : st.missing ? `Need ${st.missing.required} ${RESOURCE_LABEL[st.missing.resource]} · have ${Math.floor(st.missing.available)}` : '';
     this.flash = { id, msg, until: performance.now() + 2500 };
     this.signature = '';
@@ -99,7 +101,9 @@ export class TechTreeView {
       cost = Object.entries(st.costs).filter(([, v]) => v > 0)
         .map(([r, v]) => `<span class="${res[r] < v ? 'short' : ''}">${v} ${RESOURCE_LABEL[r]}</span>`).join(' · ');
       // Shorten the lock label ("Stone Age Awakening" -> "Stone Age") so it fits the node.
-      if (!st.available) cost = `\u{1F512} ${TECHS[st.requires].label.replace(/ (Awakening|Dawn)$/, '')}`;
+      if (!st.available) cost = st.reason === 'too_early'
+        ? `\u{1F512} Opens at ${Math.floor((st.unlocksAtSec || 0) / 60)} min`
+        : `\u{1F512} ${TECHS[st.requires].label.replace(/ (Awakening|Dawn)$/, '')}`;
     }
     if (this.flash?.id === id && performance.now() < this.flash.until) {
       cls += ' shake';

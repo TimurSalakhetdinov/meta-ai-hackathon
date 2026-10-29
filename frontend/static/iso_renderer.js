@@ -84,6 +84,7 @@ const FALLBACK_STYLE = {
   granary:               { w: 30, d: 30, h: 24, wall: '#c8a464', roof: '#9a6a32', roofH: 20 },
   smelter:               { w: 32, d: 30, h: 22, wall: '#8d7f72', roof: '#b0602e', roofH: 16 },
   barracks:              { w: 46, d: 46, h: 28, wall: '#9a7b56', roof: '#a3302a', roofH: 14 },
+  hero_arena:            { w: 48, d: 48, h: 30, wall: '#a87f52', roof: '#8a5a30', roofH: 16 },
 };
 const CHIP = 18;
 
@@ -236,20 +237,12 @@ export class IsoRenderer {
       diamond(g, x, y, TILE_W * 1.5, TILE_H * 1.5, '#c2a173');
       diamond(g, x, y, TILE_W * 1.3, TILE_H * 1.3, '#cfb084');
     }
-    // Pad plots: stone rim with packed earth.
-    PADS.forEach((p, idx) => {
+    // No fixed plot boxes: placement is free, so the meadow stays natural.
+    // A soft packed-earth tint under the fixed starter plots keeps the first
+    // guided builds readable without a checkerboard of numbered boxes.
+    PADS.forEach((p) => {
       const { x, y } = tileToScreen(...p.tile);
-      diamond(g, x, y, TILE_W * 0.96, TILE_H * 0.96, '#8d7f6b');
-      diamond(g, x, y, TILE_W * 0.82, TILE_H * 0.82, '#c7a878');
-      g.fillStyle = 'rgba(70,50,30,0.25)';
-      for (let n = 0; n < 8; n++) {
-        const a = (n / 8) * Math.PI * 2;
-        g.fillRect(x + Math.cos(a) * 28 - 1, y + Math.sin(a) * 14 - 1, 3, 2);
-      }
-      g.font = 'bold 10px Georgia, serif';
-      g.textAlign = 'center';
-      g.fillStyle = 'rgba(70,45,20,0.55)';
-      g.fillText(String(idx + 1), x, y + 4);
+      diamond(g, x, y, TILE_W * 0.82, TILE_H * 0.82, 'rgba(199,168,120,0.35)');
     });
     return c;
   }
@@ -374,16 +367,6 @@ export class IsoRenderer {
       ctx.stroke();
     }
 
-    // 3 drifting translucent cloud shadows (rgba(15, 35, 18, 0.09))
-    for (let c = 0; c < 3; c++) {
-      const cx = ((this.time * 14 + c * 350) % 1250) - 150;
-      const cy = 110 + c * 135 + Math.sin(c * 2) * 25;
-      ctx.fillStyle = 'rgba(15, 35, 18, 0.09)';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, 95, 45, 0.2, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
     // 4 grazing white sheep near the meadow edges
     const sheepPos = [
       { x: 120, y: 375 },
@@ -461,14 +444,8 @@ export class IsoRenderer {
         monumentTiles.push(b.tile);
       }
     }
-    if (game.selectedCard === 'tribal_monument') {
-      const pads = game.activePads ? game.activePads() : PADS;
-      for (const p of pads) {
-        if (!game.buildingAt(p.id)) {
-          monumentTiles.push(p.tile);
-        }
-      }
-    }
+    // No aura preview over every free tile while placing the monument;
+    // the aura shows once the monument stands.
     if (monumentTiles.length === 0) return;
     ctx.save();
     ctx.setLineDash([8, 6]);
@@ -485,10 +462,21 @@ export class IsoRenderer {
 
   drawPadHighlights(ctx, game) {
     if (!game.selectedCard) return;
+    // Free placement: one soft golden wash over the whole buildable meadow
+    // (borderless tile fills merge into a single glow, no checkerboard), and
+    // only the guide target gets an outline.
     const pulse = 0.5 + 0.5 * Math.sin(this.time * 5);
     const pads = game.activePads ? game.activePads() : PADS;
+    ctx.fillStyle = `rgba(255,238,170,${0.05 + 0.03 * pulse})`;
     for (const p of pads) {
       if (game.buildingAt(p.id)) continue;
+      const { x, y } = tileToScreen(...p.tile);
+      diamondPath(ctx, x, y, TILE_W, TILE_H);
+      ctx.fill();
+    }
+    const guide = game.guideTarget ? game.guideTarget() : null;
+    for (const p of pads) {
+      if (p.id !== guide || game.buildingAt(p.id)) continue;
       const { x, y } = tileToScreen(...p.tile);
       ctx.save();
       ctx.shadowColor = '#ffd75e';
@@ -498,13 +486,6 @@ export class IsoRenderer {
       diamondPath(ctx, x, y, TILE_W * 0.96, TILE_H * 0.96);
       ctx.stroke();
       ctx.restore();
-      ctx.fillStyle = `rgba(255,236,160,${0.18 + 0.15 * pulse})`;
-      diamondPath(ctx, x, y, TILE_W * 0.82, TILE_H * 0.82);
-      ctx.fill();
-      ctx.fillStyle = '#fff6d0';
-      ctx.font = 'bold 18px Georgia, serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('+', x, y + 6);
     }
   }
 
@@ -520,6 +501,7 @@ export class IsoRenderer {
     if (b.type === 'forager_hut') {
       return ((b.level || 1) >= 2 && this.sprites.rural_farm) ? 'rural_farm' : 'forager_hut';
     }
+    if (b.type === 'hero_arena') return 'hero_arena';
     if (b.type === 'barracks') {
       return ((b.level || 1) >= 2 && this.sprites.barracks_lv2) ? 'barracks_lv2' : 'barracks';
     }
@@ -632,6 +614,17 @@ export class IsoRenderer {
   drawStatus(ctx, game, b) {
     if (b.status !== 'done') return;
     this.drawBadges(ctx, game, b);
+    // A hero training at the Arena shows a countdown badge over the roof.
+    if (b.type === 'hero_arena' && game.heroTraining) {
+      const { x, y } = tileToScreen(...b.tile);
+      const left = Math.max(0, Math.ceil(game.heroTraining.completeAt - game.clock.t));
+      roundRect(ctx, x - 52, y - 88, 104, 20, 10, 'rgba(60,35,90,0.92)');
+      ctx.fillStyle = '#e8dcff';
+      ctx.font = 'bold 11px Georgia, serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`⚔️ Training ${left}s`, x, y - 74);
+      return;
+    }
     if (!b.produces) return;
     const { x, y } = tileToScreen(...b.tile);
     const top = y - 78;
@@ -680,19 +673,10 @@ export class IsoRenderer {
     ctx.stroke();
   }
 
-  // Level badge plus the small upgrade and worker chips under a building.
+  // Upgrade and worker chips under a building. The level shows only in the
+  // brief "Lv.X!" popup at upgrade time; no permanent badge stays on the building.
   drawBadges(ctx, game, b) {
     const { x, y } = tileToScreen(...b.tile);
-    if ((b.level || 1) > 1) {
-      roundRect(ctx, x + 14, y - 62, 34, 16, 8, '#f0c24b');
-      ctx.strokeStyle = '#7a5410';
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(x + 14.5, y - 61.5, 33, 15);
-      ctx.fillStyle = '#3d2706';
-      ctx.font = 'bold 10px Georgia, serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(`Lv.${b.level}`, x + 31, y - 50);
-    }
     if (b.cultureBoost) {
       roundRect(ctx, x - 26, y - 82, 52, 16, 8, '#3bb346');
       ctx.strokeStyle = '#1d5e23';
@@ -741,14 +725,18 @@ export class IsoRenderer {
     }
     if (b.status !== 'done' || !b.key.startsWith('pad_')) return [];
     const out = [];
-    if (b.produces && game.workersPerBuilding > 0) {
+    // The worker sign is an action prompt: it shows only while the building has
+    // no worker, and clicking it assigns one. A staffed building shows no sign.
+    if (b.produces && game.workersPerBuilding > 0 && !b.worker) {
       out.push({ target_id: `worker_${b.key}`, kind: 'worker', x: x - 34, y: y + 2, w: CHIP, h: CHIP,
-                 staffed: !!b.worker, building_type: b.type });
+                 staffed: false, building_type: b.type });
     }
+    // The upgrade chip shows only when the upgrade can actually be used now:
+    // research unlocked and affordable. Otherwise it stays hidden.
     const up = game.upgradeStatus(b);
-    if (up.available) {
+    if (up.available && up.affordable) {
       out.push({ target_id: `upgrade_${b.key}`, kind: 'upgrade', x: x + 16, y: y + 2, w: CHIP, h: CHIP,
-                 level: up.level, affordable: !!up.affordable, building_type: b.type });
+                 level: up.level, affordable: true, building_type: b.type });
     }
     return out;
   }
@@ -756,13 +744,14 @@ export class IsoRenderer {
   updateVillagers(game, simDt) {
     const wanted = new Set();
     for (const b of game.buildings) {
-      if (b.status !== 'done' || !b.worker || !ROUTES[b.routeKey]) continue;
+      if (b.status !== 'done' || !b.worker) continue;
       wanted.add(b.key);
       if (!this.villagers.has(b.key)) {
-        const pts = ROUTES[b.routeKey].map(([i, j]) => tileToScreen(i, j));
+        // Free-placed buildings have no canned route: walk the grid from Town Center.
+        const pts = (ROUTES[b.routeKey] || routeTiles(b.tile)).map(([i, j]) => tileToScreen(i, j));
         const r = this.fxRand;
         this.villagers.set(b.key, {
-          pts, s: r.range(0, 0.3), dir: 1, pause: 0, x: pts[0].x, y: pts[0].y,
+          pts, s: r.range(0, 0.3), dir: 1, pause: 0, inside: 0, x: pts[0].x, y: pts[0].y,
           tunic: r.pick(['#a8432f', '#3e6fa8', '#6b8d2f', '#8a5aa8', '#c07a2a']),
           carry: b.produces, phase: r.range(0, 6),
         });
@@ -771,9 +760,11 @@ export class IsoRenderer {
     for (const k of [...this.villagers.keys()]) if (!wanted.has(k)) this.villagers.delete(k);
     for (const v of this.villagers.values()) {
       const segs = v.pts.length - 1;
+      // Inside the building: hidden at the doorway for a spell, then walks back out.
+      if (v.inside > 0) { v.inside -= simDt; if (v.inside <= 0) v.dir = -1; continue; }
       if (v.pause > 0) { v.pause -= simDt; continue; }
       v.s += (v.dir * simDt * 0.55) / Math.max(1, segs);
-      if (v.s >= 1) { v.s = 1; v.dir = -1; v.pause = 1.2; }
+      if (v.s >= 1) { v.s = 1; v.inside = 2.4; }
       if (v.s <= 0) { v.s = 0; v.dir = 1; v.pause = 1.5; }
       const f = v.s * segs;
       const n = Math.min(segs - 1, Math.floor(f));
@@ -907,13 +898,17 @@ export class IsoRenderer {
     const targets = this.worldTargets(game);
     const pad = targets.find((t) => t.kind === 'pad'
       && Math.abs(x - (t.x + t.w / 2)) / (TILE_W / 2) + Math.abs(y - (t.y + t.h / 2)) / (TILE_H / 2) <= 1);
-    if (pad && game.selectedCard) return pad;
     const chip = targets.find((t) => (t.kind === 'upgrade' || t.kind === 'worker' || t.kind === 'free_finish' || t.kind === 'expansion') && inRect(t, x, y));
     if (chip) return chip;
     // The floating harvest bubble sits above the building box; clicking it harvests.
     const bubble = targets.find((t) => t.kind === 'building' && t.ready
       && Math.hypot(x - (t.x + t.w / 2), y - (t.y + t.h - 14 - 78)) <= 20);
     if (bubble) return bubble;
+    // A ready building under the pointer wins over the free tile behind it,
+    // even in placement mode (free tiles are everywhere now).
+    const readyBuilding = targets.find((t) => t.kind === 'building' && t.ready && inRect(t, x, y));
+    if (readyBuilding) return readyBuilding;
+    if (pad && game.selectedCard) return pad;
     const buildings = targets.filter((t) => t.kind === 'building' && inRect(t, x, y))
       .sort((a, b) => (b.ready - a.ready) || (b.y + b.h) - (a.y + a.h));
     return buildings[0] || pad || null;
@@ -1165,8 +1160,13 @@ export class IsoRenderer {
 }
 
 function drawVillager(ctx, v, time) {
+  if (v.inside > 0) return; // inside the building, out of sight
   const step = v.moving ? Math.sin(time * 10 + v.phase) : 0;
   const { x, y } = v;
+  // Fade at the doorway so the villager slips into the building instead of
+  // reversing on the spot at its centre.
+  ctx.save();
+  if (v.s > 0.9) ctx.globalAlpha = Math.max(0, Math.min(1, (1 - v.s) / 0.1));
   ctx.fillStyle = 'rgba(0,0,0,0.25)';
   ctx.beginPath();
   ctx.ellipse(x, y + 1, 5, 2, 0, 0, Math.PI * 2);
@@ -1188,6 +1188,7 @@ function drawVillager(ctx, v, time) {
     ctx.textAlign = 'center';
     ctx.fillText(RESOURCE_ICON[v.carry], x + 5 * v.facing, y - 15 - Math.abs(step));
   }
+  ctx.restore();
 }
 
 function drawProceduralBuilding(ctx, type, pos, scale = 1) {

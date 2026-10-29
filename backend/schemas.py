@@ -115,12 +115,14 @@ class GameConfig(BaseModel):
     # 4. Pacing
     idle_hint_delay_sec: float = Field(15.0, ge=1.0, le=60.0)
     build_time_sec: float = Field(2.0, ge=0.5, le=15.0)
-    forager_cycle_sec: float = Field(4.0, ge=1.0, le=30.0)
-    woodcutter_cycle_sec: float = Field(5.0, ge=1.0, le=30.0)
-    quarry_cycle_sec: float = Field(6.0, ge=1.0, le=30.0)
-    smelter_cycle_sec: float = Field(8.0, ge=1.0, le=60.0)
+    forager_cycle_sec: float = Field(12.0, ge=1.0, le=30.0)
+    woodcutter_cycle_sec: float = Field(20.0, ge=1.0, le=30.0)
+    quarry_cycle_sec: float = Field(15.0, ge=1.0, le=30.0)
+    smelter_cycle_sec: float = Field(20.0, ge=1.0, le=60.0)
     first_achievement_target_score: int = Field(100, ge=50, le=500)
     bronze_achievement_target_score: int = Field(220, ge=100, le=1000)
+    bronze_unlock_min_sim_sec: float = Field(1200.0, ge=0, le=3600)
+    hero_training_sec: float = Field(20.0, ge=1.0, le=300.0)
     # One PM feature from the feature studio. null = no feature.
     feature_plugin: Optional[FeaturePlugin] = None
 

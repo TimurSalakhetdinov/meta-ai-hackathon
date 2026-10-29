@@ -7,7 +7,7 @@ Reviewed with Gemini 4 Argon over five rounds (see [`hackathon/argon-review-log.
 ## 1. Goals and non-goals
 
 **Goals by the end of Oct 29 (Claude Code 2-day Game-First Sprint)**
-1. A high-craft, original, config-driven **2.5D isometric historical city-builder** covering three guided onboarding steps (`onb_01_shelter`, `onb_02_forager`, `onb_03_handoff`) and rich early free play (`free_play`: population/worker management, 4 resources, 7 building types, a 5-node visual Tech Tree modal, and an Era Upgrade from *Dawn Age* to *Stone Age* for `first_achievement`).
+1. A high-craft, original, config-driven **2.5D isometric historical city-builder** covering three guided onboarding steps (`onb_01_shelter`, `onb_02_forager`, `onb_03_handoff`) and rich early free play (`free_play`: population/worker management, 4 resources, 7 building types, an 8-node visual Tech Tree modal, and an Era Upgrade from *Dawn Age* to *Stone Age* for `first_achievement`).
 2. Hybrid visual pipeline: isometric diamond grid (`12x12` tiles) with animated water shorelines, terrain props, walking villagers, scaffolding-to-building construction stages, floating resource popups, F2P strategy UI chrome (stone/gold/parchment HUD, Advisor portrait modal, Build carousel, Tech Tree modal), loading transparent PNG sprites (`frontend/static/assets/sprites/`, generated via Gemini Pro / Antigravity at `$0` Meta API cost) with rich procedural isometric Canvas/SVG fallback.
 3. A validated config system (`backend/config_service.py`): immutable base config plus flat patches, with a human approval gate and audit log.
 4. Deterministic runs: seeded randomness (`mulberry32`) and a simulation clock with a speed factor (`?speed=1..4`).
@@ -55,7 +55,7 @@ flowchart LR
 
 | Component | Location | Responsibility |
 |---|---|---|
-| Game frontend | `frontend/static/` | 2.5D isometric settlement canvas (Dawn of Empires: 3 eras *Dawn → Stone → Bronze Age*, 7 buildable buildings + Town Center with Lv.1–3 upgrades, 7 techs, 6-Chapter Quests, 8-Stage Campaign battles with Stage 6 Sabertooth Wall, Live 2.5D Tactical Battle Arena with Ultimate cut-ins, Hero Hall Lv.1–7, Territory Expansions `exp_1`/`exp_2`, Sacred Obelisk +20% Culture aura, `⚡ FREE` instant-finish, dual-engine soundtrack (committed synth WAV loops, optional MusicGen regeneration) + SFX, worker assignment, and custom `FeaturePlugin` button). Emits raw events. Exposes `window.__GAME_STATE__` and `window.__GAME_DEBUG__.getRenderedTargets()`. |
+| Game frontend | `frontend/static/` | 2.5D isometric settlement canvas (Dawn of Empires: 3 eras *Dawn → Stone → Bronze Age*, 8 buildable buildings + Town Center with Lv.1–3 upgrades, 8 techs, 6-Chapter Quests, 8-Stage Campaign battles with Stage 6 Sabertooth Wall, Live 2.5D Tactical Battle Arena with Ultimate cut-ins, Hero Hall Lv.1–7, Territory Expansions `exp_1`/`exp_2`, Sacred Obelisk +20% Culture aura, `⚡ FREE` instant-finish, dual-engine soundtrack (committed synth WAV loops, optional MusicGen regeneration) + SFX, worker assignment, and custom `FeaturePlugin` button). Emits raw events. Exposes `window.__GAME_STATE__` and `window.__GAME_DEBUG__.getRenderedTargets()`. |
 | Right dock (Architect's Council) | `frontend/static/overlay.js` | **Telemetry Pill** (top: step id, time to first action, onboarding checklist) and **Architect's Council** studio (`📜 Feature Forge` for free-text PM feature prototyping + approval gate + 5-persona guild selector, `🏛️ Council Report` with 1-click `HURTS` / `POSITIVE` switcher + SAM 3.1 `6.76x` onboarding diagnosis, and `👁️ Live Chronicle` with `[▶ Watch Bot Play]`). Lives outside the `960x540` bot clip. |
 | Replay player | `frontend/static/replay.js` | `/?replay_a=<run>&replay_b=<run>&speed=4`: side-by-side playback from recorded artifacts on one timeline, no API calls. Refuses runs whose `provider_mode` is not `meta` unless `?dev=1`. |
 | Config & patch service | `backend/config_service.py` | Loads `configs/base_config.json`, applies patches (including `FeaturePlugin`), validates with Pydantic, enforces the approval gate, writes `audit_log.jsonl`. |
@@ -110,7 +110,7 @@ To achieve a high-craft historical F2P strategy game look (*Dawn Age → Stone A
 - **Isometric Diamond Grid (`12x12` tiles):** Standard 2:1 isometric projection (`tileW = 64, tileH = 32`) centered in the `960x540` `#game-root` viewport.
 - **Layered Painter's Algorithm:**
   1. **Terrain & Water Layer:** Lush grass tiles with subtle seeded color variation, river/coastline along the south-west edge with animated shoreline water ripples, forest clusters on the north edge, stone outcrops on the east edge, and cobbled/dirt road tiles connecting building pads to the central **Town Center**.
-  2. **Buildable Pads (8 fixed isometric footprints):** Clearly outlined isometric plots with warm hover/tutorial highlights so SAM 3.1 segments each pad cleanly without camera panning.
+  2. **Free building placement:** Buildings go on any open meadow tile. The forest corner and cliffs stay blocked. There are no numbered plot boxes. Placement shows one soft meadow glow over the buildable tiles, with an outline only on the guide target.
   3. **Hybrid Sprite + Procedural Isometric Renderer:** `sprites.js` loads transparent PNG sprites from `frontend/static/assets/sprites/` (generated via Gemini Pro / Antigravity at `$0` Meta API cost and background-stripped via `scripts/cutout_sprites.py`). If any sprite is not yet on disk, `iso_renderer.js` renders a detailed multi-layered isometric structure (stone foundations, timber walls, pitched roofs, drop shadows, animated details) so the game always looks complete and sharp.
   4. **Juicy Construction & Living World:**
      - **Construction stages:** Placing a building spawns wooden scaffolding, rising dust particles, and an isometric progress bar for `build_time_sec`, finishing with a scale-bounce animation.
@@ -118,19 +118,24 @@ To achieve a high-craft historical F2P strategy game look (*Dawn Age → Stone A
      - **Harvest & Feedback:** Production buildings show a radial/bar progress indicator and a bobbing collect icon (`🍞`, `🪵`, `🪨`, `📜`) when ready, plus floating `+20 Food` / `-30 Wood` combat-text popups on click.
   5. **F2P Strategy Chrome (DOM over Canvas, spaced ≥16 px for SAM 3.1):**
      - **Top Resource & Era HUD:** Ornate stone-and-gold bar showing **Era Banner** (*Dawn Age* → *Stone Age*), **Food**, **Wood**, **Stone**, **Research Points (RP)**, **Population (`Workers Free / Total`)**, and **Settlement Score**.
-     - **Advisor Portrait Modal:** Character portrait card (top-left) with speech bubble, active quest step, and contextual hint glow when `idle_hint_delay_sec` expires.
+     - **Advisor Portrait Modal:** Character portrait card (top-left) with speech bubble, active quest step, and contextual hint glow when `idle_hint_delay_sec` expires. Elder Kaelen advisor messages are spoken via browser speech synthesis in a low, slow voice. Speech is silent in bot runs and when muted.
      - **Bottom Build & Action Bar:** Illustrated building cards with resource cost badges, lock states, and the **Research / Tech Tree** button (whose visual style responds to `research_button_salience`: `"low"` = small muted icon-only button in the corner; `"medium"` = standard labeled card; `"high_pulse"` = large gold-bordered pulsing button with badge).
-     - **Visual Tech Tree Modal (`tech_tree.js`):** Connected node graph showing 5 technologies across two tiers:
-       1. `tech_toolmaking` (**Basic Toolmaking** — required to finish `onb_03_handoff`, unlocks Storehouse/Monument & +25% gathering).
-       2. `tech_woodworking` (**Woodworking** — reduces wood building costs by 20% and boosts Woodcutter output).
-       3. `tech_baskets` (**Foraging Baskets** — boosts Forager Hut output by +50%).
-       4. `tech_masonry` (**Masonry** — unlocks **Stone Quarry** and stone construction).
-       5. `tech_stone_age` (**Stone Age Awakening** — upgrades the settlement from *Dawn Age* to *Stone Age*, upgrades the Town Center visual, and grants a major score bonus toward `first_achievement`).
+     - **Visual Tech Tree Modal (`tech_tree.js`):** Connected node graph showing 8 technologies. The window is draggable by its header.
+       1. `tech_toolmaking` (**Basic Toolmaking**: required to finish `onb_03_handoff`, unlocks Storehouse/Monument & +25% gathering).
+       2. `tech_woodworking` (**Woodworking**: reduces wood building costs by 20% and boosts Woodcutter output).
+       3. `tech_baskets` (**Foraging Baskets**: boosts Forager Hut output by +50%).
+       4. `tech_masonry` (**Masonry**: unlocks **Stone Quarry** and stone construction).
+       5. `tech_construction` (**Sturdy Construction**: unlocks building upgrades to Lv.2).
+       6. `tech_stone_age` (**Stone Age Awakening**: upgrades the settlement from *Dawn Age* to *Stone Age*, upgrades the Town Center visual, grants a major score bonus toward `first_achievement`, and gates building upgrades to Lv.3).
+       7. `tech_bronze_age` (**Bronze Age Dawn**: requires every earlier Dawn/Stone research and a 20-minute sim timer, `bronze_unlock_min_sim_sec`).
+       8. `tech_irrigation` (**Irrigation**: a Bronze Age tech, placed last).
 
 ### Gameplay Loop & Strategic Depth (20-Minute Window)
 - **4 Resources + Population/Workers:**
   - **Food**, **Wood**, **Stone**, **Research Points (RP)**.
-  - **Population / Worker Assignment:** Each **Shelter** increases max population (`+2 workers`). Production buildings (**Forager Hut**, **Woodcutter Hut**, **Stone Quarry**, **Research Academy**) require `1 free worker` to operate (configurable via `worker_required_per_building`). Players/personas can build extra Shelters or toggle workers between buildings if they hit a population cap.
+  - **Population / Worker Assignment:** Each **Shelter** increases max population (`+2 workers`). Production buildings (**Forager Hut**, **Woodcutter Hut**, **Stone Quarry**, **Research Academy**) require `1 free worker` to operate (configurable via `worker_required_per_building`). Players/personas can build extra Shelters or toggle workers between buildings if they hit a population cap. A producer built with no free worker starts unstaffed. Its worker sign shows only while unstaffed, and a tap on the sign assigns a worker.
+  - **Production cycles:** Food every 12s (`forager_cycle_sec`), wood every 20s (`woodcutter_cycle_sec`), stone every 15s (`quarry_cycle_sec`), and smelter output every 20s (`smelter_cycle_sec`).
+  - **Upgrades:** A separate **Upgrades** menu (dock button) lists buildings that can upgrade. The on-building upgrade chip appears only when the upgrade is usable. No permanent Lv badge stays on a building.
 - **7 Building Types:**
   1. `town_center`: Pre-built central landmark (upgrades visually upon reaching *Stone Age*).
   2. `shelter`: Costs Wood; provides `+2` Population and passive settlement score.
@@ -168,9 +173,12 @@ The "Dawn of Empires" overhaul elevates the browser game into a modern, full-ble
 - **Curved Bezier Fly-to-HUD FX:** Harvesting resources spawns 6 flying particles (`this.flyingIcons`) following quadratic/cubic Bezier trajectories from the source building to the exact top-HUD resource counter, complete with trailing sparkles.
 
 ### 5. Hero Roster & Level-Up Hall (`frontend/static/game.js`, `🛡️ Heroes` Modal)
-- **Playable Champions:**
-  - **Commander Vaelen** (Infantry Vanguard Tank): High health and armor; ultimate ability *"Earthshatter Stomp"* deals 160% AoE shockwave damage and stuns enemies.
-  - **Sun-Priestess Lyra** (Mystic Healer): Unlocked by clearing Campaign Stage 2 or researching Stone Age; ultimate ability *"Solar Salve"* restores +45% max HP and grants a Golden Sun Shield.
+- **Playable Champions:** Hero ids are unchanged. Portraits are new stone-age bust portraits.
+  - **Bera the Shield-Hunter** (`vaelen`, Infantry Vanguard Tank): High health and armor; ultimate ability *"Earthshatter Stomp"* deals 160% AoE shockwave damage and stuns enemies.
+  - **Sunweaver Lyra** (`lyra`, Mystic Healer): Unlocked by clearing Campaign Stage 2 or researching Stone Age; ultimate ability *"Solar Salve"* restores +45% max HP and grants a Golden Sun Shield.
+  - **Ember-Keeper Ignis** (`ignis`).
+  - **Tor the Stone-Breaker** (`aurelius`).
+- **Heroes' Arena:** A separate building that needs a Barracks. Hero level-ups are timed training at the Arena (`hero_training_sec`), never instant.
 - **Progression & Power Formula:**
   - Hero Level-Up (Lv.1–7) spends Food + Hero Scrolls/Coins.
   - Stats scale per level: `power = Math.round(hp * 0.45 + atk * 2.2 + def * 1.8) + (abilityLevel - 1) * 35`.
@@ -178,9 +186,10 @@ The "Dawn of Empires" overhaul elevates the browser game into a modern, full-ble
   - Emits `hero_leveled` telemetry with `{hero_id, level, squad_power}`.
 
 ### 6. 8-Stage Ancient Wilds Campaign Map (`CAMPAIGN_STAGES`)
+- **Presentation:** Stages are medallion nodes on a dotted trail over the campaign map backdrop (`campaign_map_bg.jpg`).
 - **Progressive Campaign Nodes:**
   1. *Misty River Crossing* (Power 120, 1 wave, starter encounter)
-  2. *Sunlit Glade Ambush* (Power 165, unlocks Sun-Priestess Lyra + Expansion Token)
+  2. *Sunlit Glade Ambush* (Power 165, unlocks Sunweaver Lyra + Expansion Token)
   3. *Megalithic Ruins* (Power 240, 2 waves)
   4. *Whispering Pine Gorge* (Power 310, 2 waves)
   5. *Quarry Ridge Outpost* (Power 390, 2 waves, awards 2nd Expansion Token)
@@ -261,10 +270,13 @@ class GameConfig(BaseModel):
     # 4. Pacing
     idle_hint_delay_sec: float = Field(15.0, ge=1.0, le=60.0)
     build_time_sec: float = Field(2.0, ge=0.5, le=15.0)
-    forager_cycle_sec: float = Field(4.0, ge=1.0, le=30.0)
-    woodcutter_cycle_sec: float = Field(5.0, ge=1.0, le=30.0)
-    quarry_cycle_sec: int | float = Field(6.0, ge=1.0, le=30.0)
+    forager_cycle_sec: float = Field(12.0, ge=1.0, le=30.0)
+    woodcutter_cycle_sec: float = Field(20.0, ge=1.0, le=30.0)
+    quarry_cycle_sec: int | float = Field(15.0, ge=1.0, le=30.0)
+    smelter_cycle_sec: float = Field(20.0, ge=1.0, le=60.0)
     first_achievement_target_score: int = Field(100, ge=50, le=500)
+    bronze_unlock_min_sim_sec: float = Field(1200.0, ge=0, le=3600)
+    hero_training_sec: float = Field(20.0, ge=1.0, le=300.0)
 
 class GameConfigPatch(BaseModel):   # same fields, all optional, extra="forbid"
     ...
@@ -309,7 +321,7 @@ The game emits **raw events only**. `stuck` is derived on the Python side with a
   - `battle_lost`: Emitted when squad HP drops to 0 in tactical combat (e.g., rushing Stage 6 Sabertooth Canyon); carries `{"stage_id": "...", "enemy_power": N, "squad_power": N, "wave": N}`. Classified as non-progress by `_is_progress()`. Triggers the `combat_wall_underleveled_heroes` hypothesis in the Analyst agent diagnosis.
   - `hero_leveled`: Emitted upon Hero level-up; carries `{"hero_id": "...", "level": N, "squad_power": N}`. Classified as progress and tracked in the `hero_levelups` summary metric.
   - `territory_expanded`: Emitted when unlocking Expansion Sector `exp_1` or `exp_2`; carries `{"sector_id": "...", "unlocked_pads": [...]}`. Classified as progress.
-  - `hero_unlocked`: Emitted when unlocking Sun-Priestess Lyra (via Stage 2 clear or Stone Age discovery); carries `{"hero_id": "..."}`.
+  - `hero_unlocked`: Emitted when unlocking Sunweaver Lyra (via Stage 2 clear or Stone Age discovery); carries `{"hero_id": "..."}`.
   - `battle_won`: Emitted upon conquering a campaign stage; carries `{"stage_id": "...", "stars": N, "rewards": {...}}`.
   - `quest_claimed`: Emitted when claiming rewards from the 6-Chapter Quest Ledger.
 - Derived event (Python): `stuck`, tagged with `analysis_version`.

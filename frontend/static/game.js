@@ -25,7 +25,7 @@ const REJECTION_SHOW_SEC = 6;
 const FEATURE_INTRO_SHOW_SEC = 6;
 export const PRODUCER_TYPES = ['forager_hut', 'woodcutter_hut', 'stone_quarry', 'smelter'];
 export const UPGRADABLE_TYPES = ['shelter', 'forager_hut', 'woodcutter_hut', 'barracks', 'stone_quarry', 'smelter', 'granary'];
-const UPGRADE_TECH = { 2: 'tech_toolmaking', 3: 'tech_stone_age' };
+const UPGRADE_TECH = { 2: 'tech_construction', 3: 'tech_stone_age' };
 
 // +50% output, population and score per level above Lv.1.
 export const levelFactor = (level) => 1 + 0.5 * ((level || 1) - 1);
@@ -52,6 +52,11 @@ export const BUILDINGS = {
     label: 'Barracks', blurb: 'Trains Heroes & Scrolls', score: 20, optional: true,
     costs: () => ({ wood: 25, food: 15 }),
   },
+  hero_arena: {
+    label: "Heroes' Arena", blurb: 'Heroes train here over time', score: 20, optional: true,
+    requiresBuilding: 'barracks',
+    costs: () => ({ wood: 40, stone: 25 }),
+  },
   stone_quarry: {
     label: 'Stone Quarry', blurb: 'Cuts stone', score: 10, produces: 'stone', requiresTech: 'tech_masonry',
     costs: (c) => ({ wood: c.quarry_wood_cost, food: c.quarry_food_cost }),
@@ -74,7 +79,7 @@ export const BUILDINGS = {
   },
 };
 export const BUILD_ORDER = ['shelter', 'forager_hut', 'woodcutter_hut', 'stone_quarry', 'granary', 'smelter', 'tribal_monument'];
-export const ALL_BUILD_ORDER = ['shelter', 'forager_hut', 'woodcutter_hut', 'barracks', 'stone_quarry', 'granary', 'smelter', 'tribal_monument'];
+export const ALL_BUILD_ORDER = ['shelter', 'forager_hut', 'woodcutter_hut', 'barracks', 'hero_arena', 'stone_quarry', 'granary', 'smelter', 'tribal_monument'];
 
 export const TECHS = {
   tech_toolmaking: {
@@ -102,20 +107,26 @@ export const TECHS = {
     effect: 'Enter the Stone Age. Upgrades the Town Center.',
     costs: (c) => ({ food: c.research_stone_age_food_cost, stone: c.research_stone_age_stone_cost, rp: c.research_stone_age_rp_cost }),
   },
+  tech_construction: {
+    label: 'Sturdy Construction', icon: '🏗️', requires: ['tech_toolmaking'], score: 10,
+    effect: 'Unlocks building upgrades to Lv.2.',
+    costs: (c) => ({ wood: c.research_masonry_wood_cost, rp: c.research_tier2_rp_cost }),
+  },
   tech_irrigation: {
-    label: 'Irrigation', icon: '\u{1F33E}', requires: ['tech_baskets'], score: 15,
+    label: 'Irrigation', icon: '\u{1F33E}', requires: ['tech_bronze_age'], score: 15,
     effect: 'Another +50% Forager yield.',
     costs: (c) => ({ food: c.research_irrigation_food_cost, stone: c.research_irrigation_stone_cost, rp: c.research_tier3_rp_cost }),
   },
   tech_bronze_age: {
-    label: 'Bronze Age Dawn', icon: '\u{1F525}', requires: ['tech_stone_age', 'tech_masonry'], score: 60,
+    // The Bronze Age opens only once every earlier research is done.
+    label: 'Bronze Age Dawn', icon: '\u{1F525}', requires: ['tech_toolmaking', 'tech_woodworking', 'tech_baskets', 'tech_masonry', 'tech_construction', 'tech_stone_age'], score: 60,
     effect: 'Cast bronze. Enter the Bronze Age.',
     costs: (c) => ({ food: c.research_bronze_age_food_cost, wood: c.research_bronze_age_wood_cost,
                      stone: c.research_bronze_age_stone_cost, rp: c.research_bronze_age_rp_cost }),
   },
 };
 export const TECH_ORDER = ['tech_toolmaking', 'tech_woodworking', 'tech_baskets', 'tech_masonry', 'tech_stone_age',
-  'tech_irrigation', 'tech_bronze_age'];
+  'tech_construction', 'tech_bronze_age', 'tech_irrigation'];
 
 export const ERA_LABEL = { dawn_age: 'Dawn Age', stone_age: 'Stone Age', bronze_age: 'Bronze Age' };
 
@@ -161,7 +172,7 @@ export const QUESTS = [
   {
     id: 'chapter_5', title: 'Chapter V: Breaking the Sabertooth Wall',
     objectives: [
-      ['Level Commander Vaelen to Lv.3+', (g) => (g.heroes?.vaelen?.level || 1) >= 3],
+      ['Level Bera to Lv.3+', (g) => (g.heroes?.vaelen?.level || 1) >= 3],
       ['Conquer Stage 6: Sabertooth Canyon', (g) => g.encountersCleared.has('stage_6')],
       ['Build Barracks or Smelter', (g) => g.hasBuilt('barracks') || g.hasBuilt('smelter')],
     ],
@@ -270,42 +281,43 @@ export class Game {
     // Heroes Roster
     this.heroes = {
       vaelen: {
-        id: 'vaelen', name: 'Commander Vaelen', title: 'Spartan Vanguard',
-        role: 'Infantry Melee Tank', stars: 3, unlocked: true, level: 1, maxLevel: 7,
+        id: 'vaelen', name: 'Bera the Shield-Hunter', title: 'Shield of the Tribe',
+        role: 'Hide Shield & Bone Spear', stars: 3, unlocked: true, level: 1, maxLevel: 7,
         baseHp: 180, baseAtk: 28, baseDef: 18,
         ultName: 'Earthshatter Stomp',
         ultDesc: 'Deals 160% AoE shockwave damage to all enemies and stuns for 1.5s.',
         sprite: 'hero_vaelen', portrait: 'portrait_vaelen',
       },
       lyra: {
-        id: 'lyra', name: 'Sun-Priestess Lyra', title: 'Oracle of the Dawn',
-        role: 'Mystic Cavalry Healer', stars: 2, unlocked: false, level: 1, maxLevel: 7,
+        id: 'lyra', name: 'Sunweaver Lyra', title: 'Voice of the Dawn',
+        role: 'Reed Sun-Disc Healer', stars: 2, unlocked: false, level: 1, maxLevel: 7,
         baseHp: 130, baseAtk: 24, baseDef: 12,
         ultName: 'Solar Salve',
         ultDesc: 'Restores +45% max HP to all allied Heroes and grants a Golden Sun Shield.',
         sprite: 'hero_lyra', portrait: 'portrait_lyra',
       },
       ignis: {
-        id: 'ignis', name: 'Pyromancer Ignis', title: 'Flame of the Wilds',
-        role: 'Ranged AoE Mage', stars: 4, unlocked: false, level: 1, maxLevel: 7,
+        id: 'ignis', name: 'Ember-Keeper Ignis', title: 'Keeper of the First Fire',
+        role: 'Clay Fire Pot Caster', stars: 4, unlocked: false, level: 1, maxLevel: 7,
         baseHp: 110, baseAtk: 38, baseDef: 10,
-        ultName: 'Meteor Conflagration',
-        ultDesc: 'Summons a blazing meteorite dealing 220% magic damage.',
-        sprite: 'hero_vaelen', portrait: 'portrait_archon',
+        ultName: 'Ember Storm',
+        ultDesc: 'Hurls the sacred fire pot, raining embers for 220% damage.',
+        sprite: 'hero_ignis', portrait: 'portrait_ignis',
       },
       aurelius: {
-        id: 'aurelius', name: 'Centurion Aurelius', title: 'Imperator Rex',
-        role: 'Elite Commander', stars: 5, unlocked: false, level: 1, maxLevel: 7,
+        id: 'aurelius', name: 'Tor the Stone-Breaker', title: 'Breaker of Stone',
+        role: 'Stone Maul Brute', stars: 5, unlocked: false, level: 1, maxLevel: 7,
         baseHp: 220, baseAtk: 34, baseDef: 24,
-        ultName: 'Phalanx Charge',
-        ultDesc: 'Commands an invincible phalanx charge knocking back all foes.',
-        sprite: 'hero_vaelen', portrait: 'portrait_archon',
+        ultName: 'Mountain Smash',
+        ultDesc: 'Slams his stone maul down, knocking back all foes.',
+        sprite: 'hero_aurelius', portrait: 'portrait_aurelius',
       },
     };
     this.selectedHero = 'vaelen';
 
     // Live 2.5D Battle Arena
     this.battleState = null;
+    this.heroTraining = null;
 
     const w = this.workersPerBuilding;
     this.buildings = [
@@ -324,6 +336,20 @@ export class Game {
     }
     if (this.expansionsUnlocked.has('exp_2')) {
       pads.push({ id: 'pad_11', tile: [9, 3] }, { id: 'pad_12', tile: [9, 6] });
+    }
+    // Free placement: every open meadow tile can be built on, not just the
+    // fixed plots. Fixed pads come first so guided builds keep their layout;
+    // forest (north corner), cliffs (east) and the town tiles stay unbuildable.
+    const covered = new Set(pads.map((p) => p.tile.join(',')));
+    covered.add(TOWN_CENTER_TILE.join(','));
+    covered.add(RESEARCH_TENT_TILE.join(','));
+    for (let i = 0; i < 12; i++) {
+      for (let j = 0; j < 12; j++) {
+        if (covered.has(`${i},${j}`)) continue;
+        if (i + j <= 3) continue;          // forest corner
+        if (i >= 10 && j <= 4) continue;   // stony cliffs
+        pads.push({ id: `tile_${i}_${j}`, tile: [i, j] });
+      }
     }
     return pads;
   }
@@ -469,6 +495,8 @@ export class Game {
         return this.buildings.some((b) => PRODUCER_TYPES.includes(b.type) && b.worker)
           ? 'We need a free Worker! Build a Small Home or tap a hut to reassign one.'
           : 'Need more Workers! Build a Small Home first.';
+      case 'requires_arena': return "Heroes train at the Heroes' Arena, Chief. Build one first (it needs a Barracks).";
+      case 'training_busy': return 'Training is already under way at the Arena, Chief.';
       case 'modal_blocking_map': return 'Close the scroll first, Chief. The valley is behind it.';
       case 'card_selection_blocking_harvest': return 'Put down the build card first (tap it again), then collect.';
       case 'locked': return r.lock ? `${r.lock}, Chief.` : 'That is still locked, Chief.';
@@ -505,15 +533,17 @@ export class Game {
     if (spec.requiresTech && !this.techs.has(spec.requiresTech)) {
       return { locked: true, reason: 'locked', lock: `Needs ${TECHS[spec.requiresTech].label}` };
     }
+    if (spec.requiresBuilding && !this.hasBuilt(spec.requiresBuilding)) {
+      return { locked: true, reason: 'locked', lock: `Needs ${BUILDINGS[spec.requiresBuilding].label}` };
+    }
     if (spec.optional && this.optionalLocked()) {
       return { locked: true, reason: 'locked', lock: 'Finish training first' };
     }
     const costs = spec.costs(this.config);
     const missing = this.missing(costs);
     if (missing) return { locked: false, affordable: false, reason: `insufficient_${missing.resource}`, missing, costs };
-    if (spec.produces && this.workersFree < this.workersPerBuilding) {
-      return { locked: false, affordable: false, reason: 'no_free_worker', costs };
-    }
+    // Producers may be built with no free worker: they start unstaffed and
+    // their worker sign prompts the assignment once a worker is free.
     return { locked: false, affordable: true, costs };
   }
 
@@ -523,6 +553,11 @@ export class Game {
     const missingReq = spec.requires.find((r) => !this.techs.has(r));
     const costs = spec.costs(this.config);
     if (missingReq) return { available: false, reason: 'requires_prerequisite', requires: missingReq, costs };
+    // Only one era upgrade in the first 20 minutes: Bronze waits for the timer.
+    if (id === 'tech_bronze_age' && this.clock.t < this.config.bronze_unlock_min_sim_sec) {
+      return { available: false, reason: 'too_early', requires: 'tech_stone_age',
+               unlocksAtSec: this.config.bronze_unlock_min_sim_sec, costs };
+    }
     const missing = this.missing(costs);
     if (missing) return { available: true, affordable: false, reason: `insufficient_${missing.resource}`, missing, costs };
     return { available: true, affordable: true, costs };
@@ -587,6 +622,28 @@ export class Game {
       if (hut) return hut.ready ? `building_${hut.key}` : null;
       return this.buildGuide('forager_hut');
     }
+    // Onboarding runs through Chapter II (the Stone Age): keep the arrow on the
+    // current quest objective until the first achievement, like the tutorial steps.
+    if (this.step_id === 'free_play' && this.quest
+        && (this.quest.id === 'chapter_1' || this.quest.id === 'chapter_2')) {
+      if (this.questClaimable) return 'btn_claim_quest';
+      const next = this.quest.objectives.find(([, fn]) => !fn(this));
+      if (next) {
+        const label = next[0];
+        // Only point at an action the player can actually take right now;
+        // otherwise the arrow loops on an unaffordable card or tech while
+        // the player should be gathering the missing resource first.
+        const buildArrow = (type) => (this.selectedCard === type || this.cardStatus(type).affordable)
+          ? this.buildGuide(type) : null;
+        const researchArrow = (tech) => this.modal === 'research' ? tech
+          : (this.techStatus(tech).affordable ? 'btn_research' : null);
+        if (label.includes('Woodcutter')) return buildArrow('woodcutter_hut');
+        if (label.includes('Stone Quarry')) return buildArrow('stone_quarry');
+        if (label.includes('Masonry')) return researchArrow('tech_masonry');
+        if (label.includes('Stone Age')) return researchArrow('tech_stone_age');
+        if (label.includes('Toolmaking')) return researchArrow('tech_toolmaking');
+      }
+    }
     return this.hint ? this.hint.target_id : null;
   }
 
@@ -631,10 +688,19 @@ export class Game {
     return total;
   }
 
+  // Level-ups are training, not a button click: the hero walks to the Heroes'
+  // Arena and trains for a while; the level lands when training completes.
   levelUpHero(heroId, reject) {
     const h = this.heroes[heroId];
     if (!h || !h.unlocked) return { result: 'noop' };
     if (h.level >= h.maxLevel) return { result: 'noop' };
+    const arena = this.buildings.find((b) => b.type === 'hero_arena' && b.status === 'done');
+    if (!arena) {
+      return reject ? reject('requires_arena', { hero_id: h.id }) : { result: 'rejected' };
+    }
+    if (this.heroTraining) {
+      return reject ? reject('training_busy', { hero_id: this.heroTraining.heroId }) : { result: 'rejected' };
+    }
     const costFood = 10 * h.level;
     const costScrolls = 5 * h.level;
     if (this.resources.food < costFood) {
@@ -644,15 +710,30 @@ export class Game {
     if (this.resources.scrolls >= costScrolls) {
       this.resources.scrolls -= costScrolls;
     }
+    const duration = this.config.hero_training_sec * (h.level + 1);
+    this.heroTraining = { heroId: h.id, arenaKey: arena.key, completeAt: this.clock.t + duration, duration };
+    this.emit('hero_training_started', { hero_id: h.id, duration_sec: Math.round(duration) });
+    this.onFx({ type: 'sfx', sound: 'build' });
+    this.onFx({ type: 'popup', tile: arena.tile, text: `${h.name} is training…`, color: '#ffe08a', lift: 96 });
+    return { result: 'advanced' };
+  }
+
+  completeHeroTraining() {
+    const tr = this.heroTraining;
+    if (!tr) return;
+    this.heroTraining = null;
+    const h = this.heroes[tr.heroId];
+    if (!h) return;
     h.level += 1;
     this.stats.hero_levelups = (this.stats.hero_levelups || 0) + 1;
     this.featureScore += 15;
-    const stats = this.heroStats(heroId);
+    const stats = this.heroStats(tr.heroId);
+    const arena = this.buildingAt(tr.arenaKey);
     this.emit('hero_leveled', { hero_id: h.id, level: h.level, squad_power: this.squadPower() });
     this.onFx({ type: 'sfx', sound: 'hero_levelup' });
-    this.onFx({ type: 'sparkle', tile: TOWN_CENTER_TILE, key: 'town_center' });
-    this.onFx({ type: 'popup', tile: TOWN_CENTER_TILE, text: `${h.name} Lv.${h.level}! ⚔️ Power ${stats.power}`, color: '#ffd75e', lift: 110 });
-    return { result: 'advanced' };
+    if (arena) this.onFx({ type: 'sparkle', tile: arena.tile, key: arena.key });
+    this.onFx({ type: 'popup', tile: arena ? arena.tile : TOWN_CENTER_TILE,
+      text: `${h.name} Lv.${h.level}! ⚔️ Power ${stats.power}`, color: '#ffd75e', lift: 110 });
   }
 
   // -------------------------------------------------------------- clock
@@ -725,15 +806,18 @@ export class Game {
     const tent = this.buildings.find((b) => b.type === 'research_tent');
     if (tent && (tent.worker || this.workersPerBuilding === 0)) this.resources.rp += (c.research_tent_rp_per_min * dt) / 60;
 
-    // Unlock Sun-Priestess Lyra on clearing stage 2 / megalithic ruins OR researching toolmaking / stone age
+    // Unlock Sunweaver Lyra on clearing stage 2 / megalithic ruins OR researching toolmaking / stone age
     if (!this.heroes.lyra.unlocked) {
       if (this.encountersCleared.has('stage_2') || this.encountersCleared.has('encounter_megalithic_ruins')
           || this.techs.has('tech_toolmaking') || this.techs.has('tech_stone_age')) {
         this.heroes.lyra.unlocked = true;
-        this.onFx({ type: 'popup', tile: TOWN_CENTER_TILE, text: '✨ Hero Unlocked: Sun-Priestess Lyra!', color: '#ffd75e', lift: 130 });
+        this.onFx({ type: 'popup', tile: TOWN_CENTER_TILE, text: '✨ Hero Unlocked: Sunweaver Lyra!', color: '#ffd75e', lift: 130 });
         this.onFx({ type: 'sfx', sound: 'unlock' });
       }
     }
+
+    // Hero training at the Arena completes over time, not on the click.
+    if (this.heroTraining && now >= this.heroTraining.completeAt) this.completeHeroTraining();
 
     // Live 2.5D Battle Arena simulation
     if (this.battleState && this.battleState.active) {
@@ -918,7 +1002,7 @@ export class Game {
     const bs = this.battleState;
     if (heroId === 'vaelen') {
       bs.vaelenRage = 0;
-      bs.cutIn = { heroId: 'vaelen', name: 'Commander Vaelen', ult: 'EARTHSHATTER STOMP!', portrait: 'portrait_vaelen' };
+      bs.cutIn = { heroId: 'vaelen', name: 'Bera the Shield-Hunter', ult: 'EARTHSHATTER STOMP!', portrait: 'portrait_vaelen' };
       bs.cutInUntil = this.clock.t + 0.9;
       const dmg = Math.round(this.heroStats('vaelen').atk * 2.8);
       bs.enemyHp = Math.max(0, bs.enemyHp - dmg);
@@ -927,7 +1011,7 @@ export class Game {
     }
     if (heroId === 'lyra' && this.heroes.lyra.unlocked) {
       bs.lyraRage = 0;
-      bs.cutIn = { heroId: 'lyra', name: 'Sun-Priestess Lyra', ult: 'SOLAR SALVE!', portrait: 'portrait_lyra' };
+      bs.cutIn = { heroId: 'lyra', name: 'Sunweaver Lyra', ult: 'SOLAR SALVE!', portrait: 'portrait_lyra' };
       bs.cutInUntil = this.clock.t + 0.9;
       const heal = Math.round(bs.playerMaxHp * 0.45);
       bs.playerHp = Math.min(bs.playerMaxHp, bs.playerHp + heal);
@@ -1088,11 +1172,24 @@ export class Game {
       return this.claimQuest() ? { result: 'advanced' } : { result: 'noop' };
     }
 
-    // Modal blocking map
-    if (this.modal && MAP_PREFIXES.some((p) => target_id.startsWith(p))) {
+    // Building upgrades menu
+    if (target_id === 'btn_upgrades') {
+      this.modal = 'upgrades';
+      this.selectedCard = null;
+      return { result: 'ui' };
+    }
+    if (target_id === 'btn_close_upgrades') {
+      if (this.modal !== 'upgrades') return { result: 'noop' };
+      this.modal = null;
+      return { result: 'ui' };
+    }
+
+    // Modal blocking map (the upgrades menu may use its own upgrade buttons)
+    if (this.modal && !(this.modal === 'upgrades' && target_id.startsWith('upgrade_'))
+        && MAP_PREFIXES.some((p) => target_id.startsWith(p))) {
       return reject('modal_blocking_map', { modal: this.modal });
     }
-    if (this.modal) return { result: 'noop' };
+    if (this.modal && !(this.modal === 'upgrades' && target_id.startsWith('upgrade_'))) return { result: 'noop' };
 
     // Feature Plugin
     if (this.featureTarget && target_id === this.featureTarget) {
@@ -1173,13 +1270,10 @@ export class Game {
     if (target_id.startsWith('building_')) {
       const b = this.buildings.find((x) => `building_${x.key}` === target_id);
       if (!b) return { result: 'noop' };
-      if (b.status === 'building') {
-        b.completeAt = this.clock.t;
-        this.completeBuilding(b);
-        this.onFx({ type: 'sfx', sound: 'free_finish' });
-        this.onFx({ type: 'sparkle', tile: b.tile, key: b.key });
-        return { result: 'advanced' };
-      }
+      // Still under construction: no harvest and no instant finish from clicking
+      // the building itself (the ⚡ FREE chip is the only instant finish). It
+      // starts producing only after construction completes, plus a full cycle.
+      if (b.status === 'building') return { result: 'noop' };
       if (!b.ready) return { result: 'noop' };
       if (this.selectedCard) {
         if (!this.config.clear_selection_on_harvest) {
@@ -1209,7 +1303,10 @@ export class Game {
     this.buildings.push({
       key: pad.id, type, tile: pad.tile, status: 'building', routeKey: pad.id,
       placedAt: this.clock.t, completeAt: this.clock.t + this.config.build_time_sec,
-      worker: spec.produces ? this.workersPerBuilding : 0, produces: spec.produces || null,
+      // A producer starts staffed only when a worker is actually free; otherwise
+      // it waits unstaffed until the player taps its worker sign.
+      worker: spec.produces && this.workersFree >= this.workersPerBuilding ? this.workersPerBuilding : 0,
+      produces: spec.produces || null,
       cycleStart: 0, ready: false, blockedReason: null, level: 1,
     });
     this.selectedCard = null;
@@ -1396,6 +1493,9 @@ export class Game {
       squad_power: this.squadPower(),
       expansions_unlocked: [...this.expansionsUnlocked],
       battle_active: !!(this.battleState && this.battleState.active),
+      hero_training: this.heroTraining
+        ? { hero_id: this.heroTraining.heroId, remaining_sec: Math.max(0, Math.round(this.heroTraining.completeAt - this.clock.t)) }
+        : null,
       buildings: this.buildings.filter((b) => b.key.startsWith('pad_'))
         .map((b) => ({ key: b.key, type: b.type, level: b.level || 1, worker: b.worker, status: b.status,
                        blocked_reason: b.blockedReason || null })),

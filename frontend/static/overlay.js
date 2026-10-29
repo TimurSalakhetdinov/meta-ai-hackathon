@@ -130,7 +130,8 @@ class Overlay {
 
   renderStepper() {
     const f = this.feature;
-    const reachable = { 1: true, 2: !!f, 3: f?.status === 'approved', 4: true };
+    // Step 4 (Report) unlocks only once a playtest has actually run this session.
+    const reachable = { 1: true, 2: !!f, 3: f?.status === 'approved', 4: !!this.reportPatch };
     const done = { 1: !!f, 2: ['approved', 'rejected'].includes(f?.status), 3: !!this.reportPatch, 4: false };
     const current = this.tab === 'report' ? 4 : this.tab === 'forge' ? this.step : 0;
     document.querySelectorAll('#stepper .step-btn').forEach((b) => {
@@ -768,13 +769,9 @@ class Overlay {
       if (r.ok) demos = await r.json();
     } catch { /* no switcher */ }
     if (!report) {
-      // No live playtest this session: open the pre-baked naive demo so the
-      // HURTS → POSITIVE story is one click away at $0 cost on a fresh clone.
-      const first = demos.find((d) => d.source === 'demo');
-      if (first) report = await this.fetchStudioReport(first.patch_id);
-    }
-    if (!report) {
-      el.innerHTML = `<div class="note">No feature playtested yet. Start at step 1. Below: the analyst's diagnosis of the onboarding.</div>
+      // No playtest has run yet: no report to show, and no recorded demo
+      // report as a placeholder. The Report step unlocks after step 3.
+      el.innerHTML = `<div class="note">No playtest has run yet. Run a playtest at step 3 first; its report opens here. Below: the analyst's diagnosis of the onboarding.</div>
         <div id="report-loop"></div><div class="section-h">Onboarding fix A/B</div><div id="report-ab"></div>`;
       await this.renderAnalyst();
       await this.renderAb();

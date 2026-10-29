@@ -71,6 +71,6 @@ def test_dock_outside_clip_and_targets_inside(server: Server, browser: Any, quer
 
     d.click("btn_research")
     techs = [t for t in _check_targets(d) if t["kind"] == "tech"]
-    assert len(techs) == 7
+    assert len(techs) == 8
     assert not d.errors, d.errors
     page.close()

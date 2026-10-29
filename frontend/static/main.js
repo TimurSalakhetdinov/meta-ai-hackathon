@@ -5,7 +5,7 @@
 import { urlParams } from './clock.js';
 import {
   BUILDINGS, BUILD_ORDER, ALL_BUILD_ORDER, CAMPAIGN_STAGES, ENCOUNTERS, ERA_LABEL, Game,
-  QUESTS, RESOURCES, ALL_RESOURCES, RESOURCE_LABEL,
+  QUESTS, RESOURCES, ALL_RESOURCES, RESOURCE_LABEL, TECHS, UPGRADABLE_TYPES,
 } from './game.js';
 import { Sfx, defaultMuted } from './audio.js';
 import { IsoRenderer } from './iso_renderer.js';
@@ -18,6 +18,31 @@ const SPEEDS = [1, 2, 4];
 const $ = (id) => document.getElementById(id);
 
 const params = urlParams();
+
+// Elder Kaelen's voice: an old Viking narrator (browser speech synthesis,
+// deepest male voice available, slow and low) pronounces each new advisor
+// message. Silent in bot runs and replays, and under the mute button.
+const kaelenVoice = {
+  last: '',
+  unlocked: false,
+  speak(text) {
+    if (!text || text === this.last) return;
+    this.last = text;
+    if (!this.unlocked || !('speechSynthesis' in window)) return;
+    if (window.__SFX_MUTED__ || params.bot || params.replayA || params.replayB) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    const voices = speechSynthesis.getVoices();
+    u.voice = voices.find((v) => /^en[-_]GB/i.test(v.lang) && /male|daniel|arthur|brian/i.test(v.name))
+      || voices.find((v) => /^en[-_]GB/i.test(v.lang))
+      || voices.find((v) => /^en/i.test(v.lang)) || null;
+    u.pitch = 0.55;
+    u.rate = 0.82;
+    u.volume = 0.9;
+    speechSynthesis.speak(u);
+  },
+};
+window.addEventListener('pointerdown', () => { kaelenVoice.unlocked = true; }, { once: true });
 
 // The layout is a fixed 1280x540 stage (bots and screenshots rely on it).
 // Scale it to fit the window; all game coordinates stay in stage pixels.
@@ -123,6 +148,30 @@ async function boot() {
   const hud = new Hud(game, config, sfx);
   const techView = new TechTreeView($('tech-tree'), $('tech-rp'));
   fxHandlers.push((fx) => hud.onFx(fx));
+
+  // The Tech Tree window can be dragged by its header (e.g. to the right,
+  // out of the way of the map). Rendered targets follow the moved box.
+  {
+    const modal = document.querySelector('#research-modal .tech-modal');
+    const head = modal?.querySelector('.tech-head');
+    if (modal && head) {
+      head.style.cursor = 'grab';
+      let drag = null;
+      head.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('button')) return;
+        const m = /translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(modal.style.transform || '');
+        drag = { x: e.clientX, y: e.clientY, tx: m ? +m[1] : 0, ty: m ? +m[2] : 0 };
+        head.setPointerCapture(e.pointerId);
+      });
+      head.addEventListener('pointermove', (e) => {
+        if (!drag) return;
+        const tx = Math.max(-560, Math.min(560, drag.tx + e.clientX - drag.x));
+        const ty = Math.max(-200, Math.min(200, drag.ty + e.clientY - drag.y));
+        modal.style.transform = `translate(${tx}px, ${ty}px)`;
+      });
+      head.addEventListener('pointerup', () => { drag = null; });
+    }
+  }
 
   const root = $('game-root');
   const getTargets = () => renderedTargets(game, renderer, config);
@@ -371,7 +420,7 @@ const CATEGORY_MAP = {
   all: null,
   homes: ['shelter'],
   production: ['forager_hut', 'woodcutter_hut', 'stone_quarry', 'smelter'],
-  military: ['barracks'],
+  military: ['barracks', 'hero_arena'],
   culture: ['granary', 'tribal_monument'],
 };
 
@@ -446,18 +495,21 @@ class Hud {
 
     const grid = $('campaign-stages-grid');
     if (grid) {
-      grid.innerHTML = CAMPAIGN_STAGES.map((s) => `
-        <button class="stage-node-card encounter ${s.reqPower ? 'level-check' : ''}" data-target="${s.legacyId || s.id}" id="stage-card-${s.id}">
-          <div class="node-header">
-            <span class="node-num">${s.name}</span>
-            <span class="node-stars" id="stars-${s.id}">☆☆☆</span>
-          </div>
-          <div class="node-body">
-            <div class="node-enemies">${s.enemies}</div>
-            <div class="node-power">Enemy Power: <b>${s.enemyPower}</b></div>
-            <div class="node-reward">Loot: ${costText(s.reward)}</div>
-          </div>
-          <div class="node-tap-hint">⚡ Tap to Battle</div>
+      // A proper campaign map: stage medallions on a winding trail over the
+      // painted province backdrop, not a grid of cards.
+      const POS = [[7, 68], [19, 34], [33, 62], [45, 28], [58, 58], [69, 30], [81, 55], [92, 22]];
+      const trail = POS.map(([x, y]) => `${x},${y}`).join(' ');
+      grid.innerHTML = `<svg class="map-trail" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <polyline points="${trail}" fill="none" stroke="rgba(90,55,20,0.55)" stroke-width="3" stroke-dasharray="1 7" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+          <polyline points="${trail}" fill="none" stroke="rgba(255,240,200,0.8)" stroke-width="3" stroke-dasharray="1 7" stroke-linecap="round" vector-effect="non-scaling-stroke" transform="translate(0.35,0.5)"/>
+        </svg>`
+        + CAMPAIGN_STAGES.map((s, i) => `
+        <button class="map-node ${s.reqPower ? 'level-check' : ''} ${i === CAMPAIGN_STAGES.length - 1 ? 'boss' : ''}" data-target="${s.legacyId || s.id}" id="stage-card-${s.id}"
+                style="left:${POS[i][0]}%;top:${POS[i][1]}%" title="${s.name} — ${s.enemies}, Power ${s.enemyPower}, Loot: ${costText(s.reward)}">
+          <span class="node-stars" id="stars-${s.id}">☆☆☆</span>
+          <span class="node-medal">${i + 1}</span>
+          <span class="node-label"><b>${s.name.replace(/^\d+\.\s*/, '').replace(/^BOSS:\s*/, '')}</b><small>${s.enemies} · ⚔️ ${s.enemyPower}</small></span>
+          <span class="node-tap-hint">⚡ Tap to Battle</span>
         </button>`).join('');
     }
   }
@@ -523,7 +575,11 @@ class Hud {
     const stepLabel = { onb_01_shelter: 'Step 1/3', onb_02_forager: 'Step 2/3', onb_03_handoff: 'Step 3/3', free_play: 'Free play' };
     $('step-chip').textContent = g.achieved ? ERA_LABEL[g.era] : stepLabel[g.step_id];
     const text = g.advisorText();
-    if ($('advisor-text').textContent !== text) $('advisor-text').textContent = text;
+    if ($('advisor-text').textContent !== text) {
+      $('advisor-text').textContent = text;
+      kaelenVoice.speak(text);
+    }
+    if (window.__SFX_MUTED__ && 'speechSynthesis' in window && speechSynthesis.speaking) speechSynthesis.cancel();
     $('advisor').querySelector('.bubble').classList.toggle('hinting', !!g.hint);
 
     const mood = g.advisorMood();
@@ -545,6 +601,7 @@ class Hud {
     $('expedition-modal').hidden = g.modal !== 'expedition';
     $('heroes-modal').hidden = g.modal !== 'heroes';
     $('quests-modal').hidden = g.modal !== 'quests';
+    $('upgrades-modal').hidden = g.modal !== 'upgrades';
 
     // Action Dock
     $('btn_heroes').hidden = !g.heroesUnlocked();
@@ -555,6 +612,7 @@ class Hud {
     if (g.modal === 'expedition') this.updateCampaignModal();
     if (g.modal === 'heroes') this.updateHeroesModal();
     if (g.modal === 'quests') this.updateQuestsModal();
+    if (g.modal === 'upgrades') this.updateUpgradesModal();
     this.updateBattleHud();
     this.updateCards();
     this.updateArrow();
@@ -562,6 +620,33 @@ class Hud {
 
     // Sfx music switcher
     this.sfx.setMusicTheme?.(g.battleState?.active ? 'battle' : 'valley');
+  }
+
+  // Separate upgrade menu: every standing building that can grow, its next
+  // level and cost. The on-building chip stays for one-tap upgrades.
+  updateUpgradesModal() {
+    const g = this.game;
+    const rows = g.buildings.filter((b) => b.status === 'done' && UPGRADABLE_TYPES.includes(b.type));
+    const sig = JSON.stringify(rows.map((b) => [b.key, b.level, g.upgradeStatus(b).affordable, g.upgradeStatus(b).available])
+      .concat([g.roundedResources(), [...g.techs]]));
+    if (sig === this.upgradeSig) return;
+    this.upgradeSig = sig;
+    const costText = (costs) => Object.entries(costs || {}).filter(([, v]) => v > 0)
+      .map(([r, v]) => `${v} ${RESOURCE_LABEL[r]}`).join(' · ');
+    $('upgrade-list').innerHTML = rows.length ? rows.map((b) => {
+      const st = g.upgradeStatus(b);
+      const name = BUILDINGS[b.type].label;
+      if (st.reason === 'max_level') {
+        return `<div class="upgrade-row"><span class="u-name">${name} <small>Lv.${b.level}</small></span><span class="u-state">Max level</span></div>`;
+      }
+      if (!st.available) {
+        return `<div class="upgrade-row"><span class="u-name">${name} <small>Lv.${b.level}</small></span><span class="u-state">🔒 Learn ${TECHS[st.requires].label} first</span></div>`;
+      }
+      const btn = st.affordable
+        ? `<button class="gold-btn" data-target="upgrade_${b.key}">Upgrade · ${costText(st.costs)}</button>`
+        : `<span class="u-state">Need ${costText(st.costs)}</span>`;
+      return `<div class="upgrade-row"><span class="u-name">${name} <small>Lv.${b.level} → Lv.${(b.level || 1) + 1}</small></span>${btn}</div>`;
+    }).join('') : '<p class="u-empty">No buildings yet. Build something first.</p>';
   }
 
   updateCards() {
@@ -581,7 +666,7 @@ class Hud {
         el.hidden = true;
         continue;
       }
-      if (type === 'barracks' && this.buildCategory === 'all') {
+      if ((type === 'barracks' || type === 'hero_arena') && this.buildCategory === 'all') {
         el.hidden = true;
         continue;
       }
@@ -657,9 +742,13 @@ class Hud {
     const g = this.game;
     $('heroes-total-power').textContent = g.squadPower();
 
-    // Roster list
+    // Roster list. Rebuild only when it actually changes: rebuilding every
+    // frame replaces the buttons under the pointer and swallows their clicks.
     const rosterEl = $('heroes-roster');
-    if (rosterEl) {
+    const rosterSig = JSON.stringify(Object.values(g.heroes)
+      .map((h) => [h.id, h.level, h.unlocked, g.selectedHero === h.id, g.heroStats(h.id).power]));
+    if (rosterEl && rosterSig !== this.rosterSig) {
+      this.rosterSig = rosterSig;
       rosterEl.innerHTML = Object.values(g.heroes).map((h) => {
         const stats = g.heroStats(h.id);
         const isSel = g.selectedHero === h.id;
@@ -698,11 +787,14 @@ class Hud {
     const costScrolls = 5 * sel.level;
     $('hero-upgrade-cost').textContent = `Cost: ${costFood} 🌾 Food ${costScrolls > 0 ? `+ ${costScrolls} 📜 Scrolls` : ''}`;
 
-    const canUpgrade = sel.unlocked && sel.level < sel.maxLevel && g.resources.food >= costFood;
+    const training = g.heroTraining;
+    const canUpgrade = sel.unlocked && sel.level < sel.maxLevel && g.resources.food >= costFood && !training;
     const lvlBtn = $('btn_hero_levelup');
     if (lvlBtn) {
       lvlBtn.disabled = !canUpgrade;
-      lvlBtn.textContent = sel.level >= sel.maxLevel ? 'Max Rank' : `⚔️ Train Lv.${sel.level + 1} (+15 Score)`;
+      lvlBtn.textContent = training
+        ? `⚔️ Training at the Arena… ${Math.max(0, Math.ceil(training.completeAt - g.clock.t))}s`
+        : sel.level >= sel.maxLevel ? 'Max Rank' : `⚔️ Train at Arena · Lv.${sel.level + 1} (+15 Score)`;
     }
   }
 
@@ -876,7 +968,8 @@ class Hud {
     if (!t) { arrow.hidden = true; return; }
     arrow.hidden = false;
     arrow.style.left = `${t.x + t.w / 2 - 14}px`;
-    arrow.style.top = `${Math.max(46, t.y - 30)}px`;
+    // Float well clear of the target so the bob never covers the house or card it points at.
+    arrow.style.top = `${Math.max(46, t.y - 48)}px`;
   }
 
   afterClick() {}

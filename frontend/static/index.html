@@ -68,6 +68,9 @@
         <button id="btn_research" data-target="btn_research" class="dock-btn research-btn sal-low" title="Research">
           <span class="d-ico">&#x1F4DC;</span><span class="d-label">Research</span>
         </button>
+        <button id="btn_upgrades" data-target="btn_upgrades" class="dock-btn upgrades-btn" title="Building Upgrades">
+          <span class="d-ico">&#x2B06;&#xFE0F;</span><span class="d-label">Upgrades</span>
+        </button>
       </div>
 
       <div id="hint-arrow" class="hint-arrow" hidden></div>
@@ -96,6 +99,17 @@
             <button id="btn_close_research" class="close-btn" data-target="btn_close_research" title="Close">&times;</button>
           </div>
           <div id="tech-tree" class="tech-tree"></div>
+        </div>
+      </div>
+
+      <!-- Building Upgrades Modal -->
+      <div id="upgrades-modal" class="modal-backdrop" hidden>
+        <div class="modal upgrades-modal">
+          <div class="tech-head">
+            <h2>Building Upgrades</h2>
+            <button id="btn_close_upgrades" class="close-btn" data-target="btn_close_upgrades" title="Close">&times;</button>
+          </div>
+          <div id="upgrade-list" class="upgrade-list"></div>
         </div>
       </div>
 
@@ -132,8 +146,8 @@
               <div class="showcase-card">
                 <div class="hero-stars" id="showcase-stars">⭐⭐⭐</div>
                 <img id="showcase-portrait" class="showcase-img" src="/static/assets/sprites/portrait_vaelen.png" alt="">
-                <h3 id="showcase-name">Commander Vaelen</h3>
-                <div class="hero-title" id="showcase-title">Spartan Vanguard</div>
+                <h3 id="showcase-name">Bera the Shield-Hunter</h3>
+                <div class="hero-title" id="showcase-title">Shield of the Tribe</div>
                 <div class="hero-role-tag" id="showcase-role">Infantry Melee Tank</div>
                 <div class="ult-card">
                   <div class="ult-title" id="showcase-ult-name">⚡ Earthshatter Stomp</div>
@@ -240,7 +254,7 @@
             <div class="defeat-icon">💀</div>
             <h2>SQUAD DEFEATED!</h2>
             <p class="defeat-desc">Wave 3's Lv.4 Sabertooths broke through! Required Combat Power: <b>460</b>.</p>
-            <div class="defeat-tip">Advisor Tip: Level up Commander Vaelen and Sun-Priestess Lyra to Lv.3+ in the Heroes Hall!</div>
+            <div class="defeat-tip">Advisor Tip: Level up Bera and Sunweaver Lyra to Lv.3+ in the Heroes Hall!</div>
             <div class="defeat-actions">
               <button id="btn_defeat_heroes" class="gold-btn defeat-heroes-btn" data-target="btn_defeat_heroes">🛡️ Level Up Your Team</button>
               <button class="return-btn" data-target="btn_battle_continue">Return to Valley</button>

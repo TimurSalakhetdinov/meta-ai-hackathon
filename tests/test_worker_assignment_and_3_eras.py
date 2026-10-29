@@ -17,7 +17,7 @@ from tests.e2e import Driver, Server, browser, run_server  # noqa: F401  (pytest
 SPEED = 8
 RICH = {
     "starting_wood": 500, "starting_food": 500, "starting_stone": 500, "starting_workers": 4,
-    "research_tent_rp_per_min": 120.0,
+    "research_tent_rp_per_min": 120.0, "bronze_unlock_min_sim_sec": 0,
 }
 
 
@@ -50,25 +50,39 @@ def _open(d: Driver, rich_server: Server, run_id: str) -> None:
     d.grind_until(lambda s: s["step_id"] == "onb_03_handoff")
 
 
-def test_worker_toggle_pauses_and_resumes(rich_server: Server, browser: Any) -> None:  # noqa: F811
-    d = Driver(browser.new_page(viewport={"width": 1280, "height": 540}))
-    _open(d, rich_server, "p2_workers")
-    pad = _pad_of(d, "forager_hut")
-    target = d.target(f"building_{pad}")
-    assert target["staffed"] is True
+@pytest.fixture(scope="module")
+def scarce_worker_server(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Server]:
+    with run_server(tmp_path_factory.mktemp("scarce"), {**RICH, "starting_workers": 1, "shelter_pop_gain": 1}) as srv:
+        yield srv
 
+
+def test_worker_sign_assigns_a_worker(scarce_worker_server: Server, browser: Any) -> None:  # noqa: F811
+    d = Driver(browser.new_page(viewport={"width": 1280, "height": 540}))
+    _open(d, scarce_worker_server, "p2_workers")
+    # The first hut took the last free worker; a second hut is placed unstaffed.
+    pad = d.build("forager_hut")
+    # The hut was placed with no free worker: it waits unstaffed and the sign shows.
+    hut = next(b for b in d.state()["buildings"] if b["key"] == pad)
+    assert hut["worker"] == 0
+    assert d.target(f"building_{pad}")["staffed"] is False
+    d.grind_until(lambda s: next(b for b in s["buildings"] if b["key"] == pad)["status"] == "done", timeout=10)
+    assert d.target(f"worker_{pad}") is not None
+    d.grind_until(lambda s: next(b for b in s["buildings"] if b["key"] == pad)["blocked_reason"]
+                  == "Unstaffed (tap to assign worker)", timeout=5)
+
+    # Still no free worker (the Research Tent holds the only one): the tap is refused.
     d.click(f"worker_{pad}")
     hut = next(b for b in d.state()["buildings"] if b["key"] == pad)
     assert hut["worker"] == 0
-    d.grind_until(lambda s: next(b for b in s["buildings"] if b["key"] == pad)["blocked_reason"]
-                  == "Unstaffed (tap to assign worker)", timeout=5)
-    assert d.target(f"building_{pad}")["staffed"] is False
-    assert d.target(f"worker_{pad}")["computed_salience"] == "high"
 
+    # A second Small Home frees a worker; the sign now assigns it and production resumes.
+    d.build("shelter")
+    d.grind_until(lambda s: s["workers_free"] >= 1, timeout=10)
     d.click(f"worker_{pad}")
     hut = next(b for b in d.state()["buildings"] if b["key"] == pad)
     assert hut["worker"] == 1
-    d.grind_until(lambda s: next(b for b in s["buildings"] if b["key"] == pad)["blocked_reason"] is None, timeout=5)
+    d.grind_until(lambda s: next(b for b in s["buildings"] if b["key"] == pad)["blocked_reason"] is None, timeout=10)
+    assert d.target(f"worker_{pad}") is None  # staffed: the sign vanishes
     assert not d.errors, d.errors
 
 
@@ -95,13 +109,19 @@ def test_three_eras_upgrades_quests_and_battles(rich_server: Server, browser: An
     st = d.state()
     assert st["quest_index"] == 1 and st["resources"]["food"] >= food + 20
 
-    # Upgrade the forager hut to Lv.2.
+    # Upgrades are a research unlock now: Sturdy Construction first, then Lv.2
+    # through the separate Upgrades menu (the on-building chip stays as well).
+    _research(d, "tech_construction")
     pad = _pad_of(d, "forager_hut")
     score = d.state()["score"]
+    d.click("btn_upgrades")
+    assert d.state()["modal_open"] == "upgrades"
     d.click(f"upgrade_{pad}")
     st = d.state()
     assert next(b for b in st["buildings"] if b["key"] == pad)["level"] == 2
     assert st["score"] > score
+    d.click("btn_close_upgrades")
+    assert d.state()["modal_open"] is None
     # Lv.3 needs the Stone Age: the chip is gone until then.
     assert d.target(f"upgrade_{pad}") is None
 
@@ -140,7 +160,12 @@ def test_three_eras_upgrades_quests_and_battles(rich_server: Server, browser: An
     for enc in ("encounter_megalithic_ruins", "encounter_quarry_ridge"):
         d.click("btn_expedition")
         d.click(enc)
+    # The Bronze Age now requires every earlier (Dawn/Stone) research first;
+    # Irrigation is a Bronze Age tech and comes after it.
+    for tech in ("tech_woodworking", "tech_baskets"):
+        _research(d, tech)
     _research(d, "tech_bronze_age")
+    _research(d, "tech_irrigation")
     st = d.grind_until(lambda s: s["bronze_achieved"], timeout=20)
     assert st["era"] == "bronze_age" and st["score"] >= 220
     d.end_session()

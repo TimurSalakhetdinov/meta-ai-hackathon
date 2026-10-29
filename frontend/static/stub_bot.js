@@ -35,7 +35,7 @@ const PRODUCERS = { card_woodcutter_hut: 'woodcutter_hut', card_stone_quarry: 's
 const PRODUCES = { forager_hut: 'food', woodcutter_hut: 'wood', stone_quarry: 'stone', smelter: 'stone' };
 const TECH_PRIORITY = [
   'tech_toolmaking', 'tech_stone_age', 'tech_masonry', 'tech_bronze_age', 'tech_baskets',
-  'tech_woodworking', 'tech_irrigation',
+  'tech_woodworking', 'tech_irrigation', 'tech_construction',
 ];
 
 // Persona-specific think-aloud lines
@@ -58,7 +58,7 @@ const DEFEAT_LINES = {
 const HERO_LEVELUP_LINES = {
   impatient_newcomer: () => 'Leveled up! Bigger stats, harder hits, let us smash things!',
   optimizer: () => 'Hero promoted: Squad power increased past the combat stat check threshold.',
-  first_time_casual: () => 'Commander Vaelen grew stronger! The village is safer now.',
+  first_time_casual: () => 'Bera grew stronger! The village is safer now.',
   curious_explorer: () => 'New ability unlocked in the Heroes Hall! Look at those glowing constellations.',
   cautious_hoarder: () => 'Spent surplus Food on hero training while keeping our stockpile intact.',
 };
@@ -183,6 +183,9 @@ export class StubBot {
 
   decide(targets, owned = new Set()) {
     const p = this.policy;
+    // The research cooldown ticks once per decision, including guided ones;
+    // otherwise it never lapses while the bot follows arrows and harvests.
+    if (this.researchCooldown > 0) this.researchCooldown -= 1;
     const by = (id) => targets.find((t) => t.target_id === id);
     const r = () => this.rng();
     const state = window.__GAME_STATE__ || {};
@@ -209,11 +212,11 @@ export class StubBot {
     // Battle arena active ultimates
     const ultVaelen = by('btn_ult_vaelen');
     if (ultVaelen && !ultVaelen.locked && !ultVaelen.cooldown) {
-      return { target: ultVaelen, thought: '⚡ Commander Vaelen Rage 100%! Unleash Earthshatter Stomp!', mood: 'engaged' };
+      return { target: ultVaelen, thought: '⚡ Bera Rage 100%! Unleash Earthshatter Stomp!', mood: 'engaged' };
     }
     const ultLyra = by('btn_ult_lyra');
     if (ultLyra && !ultLyra.locked && !ultLyra.cooldown) {
-      return { target: ultLyra, thought: '✨ Sun-Priestess Lyra Rage 100%! Cast Solar Salve to heal allies!', mood: 'engaged' };
+      return { target: ultLyra, thought: '✨ Sunweaver Lyra Rage 100%! Cast Solar Salve to heal allies!', mood: 'engaged' };
     }
 
     // Heroes Hall modal open
@@ -344,7 +347,17 @@ export class StubBot {
       this.featureUses += 1;
       return { target: feature, thought, mood: 'curious' };
     }
-    if (guided && r() < p.follow_tutorial) {
+    // During the guided tutorial steps the arrow is the lesson: always follow
+    // it. The same holds in free play while the Chapter I/II quest arrow is
+    // showing (until the first achievement): that chain is the measured path,
+    // and wandering off it idles into stuck aborts. Persona variance
+    // (follow_tutorial) applies after the first achievement.
+    const onOnboarding = !!state.step_id && state.step_id.startsWith('onb_');
+    const onQuestArrow = state.step_id === 'free_play' && !state.achieved && (state.quest_index ?? 9) <= 1;
+    // Just closed the tree to save up: do not follow the Research arrow back
+    // in until the cooldown lapses and the scarce resource is gathered.
+    const savingPause = guided?.target_id === 'btn_research' && this.researchCooldown > 0;
+    if (guided && !savingPause && (onOnboarding || onQuestArrow || r() < p.follow_tutorial)) {
       return { target: guided, thought: `The advisor's arrow points at ${shortLabel(guided)}. Follow it.` };
     }
 
@@ -353,7 +366,10 @@ export class StubBot {
     // so an unbuilt one pulls harder and other spending waits for it.
     // Only once the advisor stops pointing at things (free play).
     const tutorialActive = targets.some((t) => t.highlighted);
-    const missingProducer = (t) => !tutorialActive && PRODUCERS[t.target_id] && !owned.has(PRODUCERS[t.target_id]);
+    const missingProducer = (t) => {
+      const res = PRODUCERS[t.target_id.slice(5)];
+      return !tutorialActive && !!res && ![...owned].some((type) => PRODUCES[type] === res);
+    };
     const producerOpen = targets.some((t) => t.kind === 'build_card' && !t.locked && missingProducer(t));
     // Era goal in free play: Masonry unlocks the Quarry, then Stone Age Awakening
     // ends the run. Without an explicit goal the bot spends its wood on shelters
@@ -368,10 +384,21 @@ export class StubBot {
     const res = state.resources || {};
     const scarce = this.savingFor === 'tech_masonry' ? 'wood'
       : this.savingFor ? ['food', 'wood', 'stone'].sort((x, y) => (res[x] ?? 0) - (res[y] ?? 0))[0] : null;
+    // An unstaffed producer with no free worker: a Small Home comes first,
+    // otherwise the worker sign just refuses and the bot loops on it.
+    const unstaffed = targets.some((t) => t.kind === 'worker' && !t.staffed);
+    if (unstaffed && (state.workers_free ?? 1) <= 0) {
+      const home = targets.find((t) => t.target_id === 'card_shelter' && !t.locked && t.affordable);
+      if (home) return { target: home, thought: 'No free worker for the new building. Build a Small Home first.' };
+    }
+
     const options = ready.map((t) => ({ t, w: (0.3 + p.harvest * 0.9) * (PRODUCES[t.building_type] === scarce ? 3 : 1), why: 'harvest' }));
     for (const t of targets) {
       const sal = SALIENCE[t.computed_salience] ?? 0.2;
       if (t.kind === 'build_card' && !t.locked) {
+        // While saving for the era tech, never spend clicks or resources on
+        // side buildings; gather the scarce resource instead.
+        if (this.savingFor && !missingProducer(t) && !t.highlighted) continue;
         let w = 0.2 + p.prefer_build * 0.6 + p.salience_weight * sal + (t.highlighted ? 0.6 : 0);
         if (t.target_id === 'card_tribal_monument' && p.culture_adjacency && state.achieved) w *= 2.5;
         if (missingProducer(t)) w *= 4;
@@ -395,6 +422,9 @@ export class StubBot {
         if (!t.highlighted) w *= 1 - p.wait_when_unsure * 0.8;
         options.push({ t, w, why: 'feature' });
       } else if (t.target_id === 'btn_expedition') {
+        // No campaign detours before the first achievement: the era chain
+        // (Masonry, Quarry, Stone Age) is the measured path and steps are finite.
+        if (!state.achieved) continue;
         options.push({ t, w: 0.08 + p.salience_weight * 0.25, why: 'expedition' });
       } else if (t.target_id === 'btn_heroes' && state.achieved) {
         const w = (p.level_heroes ? 0.35 : 0.05) + (p.explore_modals ? 0.35 : 0);
@@ -409,7 +439,6 @@ export class StubBot {
         options.push({ t, w, why: 'research' });
       }
     }
-    if (this.researchCooldown > 0) this.researchCooldown -= 1;
     const waitW = 0.15 + p.wait_when_unsure * 0.6;
     const total = options.reduce((s, o) => s + o.w, 0) + waitW;
     let roll = r() * total;
@@ -489,7 +518,7 @@ function optionThought(o, bot) {
   if (o.why === 'staff') return `The ${pretty(o.t.building_type)} has no worker. Send someone back to it.`;
   if (o.why === 'upgrade') return `${o.t.label} is affordable. Upgrade it.`;
   if (o.why === 'expedition') return 'Crossed swords on the map. What is out there?';
-  if (o.why === 'heroes') return 'The Heroes Hall has training options. Inspect Commander Vaelen and Priestess Lyra.';
+  if (o.why === 'heroes') return 'The Heroes Hall has training options. Inspect Bera and Sunweaver Lyra.';
   if (o.why === 'quest_ledger') return 'Open the 6-Chapter Questlines Ledger to read the realm lore.';
   return o.t.computed_salience === 'high' ? `${name} has a shiny NEW! ribbon. Build it.` : `Build a ${name}.`;
 }
