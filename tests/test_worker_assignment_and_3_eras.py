@@ -135,12 +135,16 @@ def test_three_eras_upgrades_quests_and_battles(rich_server: Server, browser: An
     assert any(e["payload"]["reason"] == "modal_blocking_map" for e in d.events("action_rejected"))
     d.click("btn_close_research")
 
-    # Expedition: win one battle (free_play unlock, Food cost).
+    # Expedition: a stage tap opens the pre-battle screen; the fight is a
+    # live arena battle, never an instant resolve.
     d.click("btn_expedition")
     st = d.state()
     d.click("encounter_misty_river")
-    after = d.state()
-    assert after["battles"] == 1 and after["modal_open"] is None
+    assert d.state()["modal_open"] == "prebattle"
+    d.click("btn_fight")
+    assert d.state()["modal_open"] is None and d.state()["battle_active"]
+    after = d.grind_until(lambda s: s["battles"] == 1, timeout=30)
+    d.click("btn_victory_continue")
     assert after["resources"]["stone"] == st["resources"]["stone"] + 15
 
     # Stone Age.
@@ -158,8 +162,12 @@ def test_three_eras_upgrades_quests_and_battles(rich_server: Server, browser: An
     d.click(f"upgrade_{pad}")
     assert next(b for b in d.state()["buildings"] if b["key"] == pad)["level"] == 3
     for enc in ("encounter_megalithic_ruins", "encounter_quarry_ridge"):
+        before = d.state()["battles"]
         d.click("btn_expedition")
         d.click(enc)
+        d.click("btn_fight")
+        d.grind_until(lambda s: s["battles"] == before + 1, timeout=30)
+        d.click("btn_victory_continue")
     # The Bronze Age now requires every earlier (Dawn/Stone) research first;
     # Irrigation is a Bronze Age tech and comes after it.
     for tech in ("tech_woodworking", "tech_baskets"):

@@ -318,6 +318,7 @@ export class Game {
     // Live 2.5D Battle Arena
     this.battleState = null;
     this.heroTraining = null;
+    this.preBattle = null;
 
     const w = this.workersPerBuilding;
     this.buildings = [
@@ -833,19 +834,19 @@ export class Game {
           bs.playerHp = Math.max(0, bs.playerHp - Math.round(bs.playerMaxHp * 0.65));
           this.onFx({ type: 'sfx', sound: 'reject' });
         } else {
-          const vStats = this.heroStats('vaelen');
-          const lStats = this.heroes.lyra.unlocked ? this.heroStats('lyra') : null;
-          const alliedDmg = Math.round(((vStats?.atk || 28) + (lStats?.atk || 0)) * (0.85 + Math.random() * 0.3));
-          const enemyDmg = Math.round((bs.stage.enemyPower / (bs.totalWaves * 3.5)) * (0.8 + Math.random() * 0.4));
+          const deployed = bs.deployed || ['vaelen'];
+          const atkSum = deployed.reduce((n, id) => n + (this.heroStats(id)?.atk || 0), 0);
+          const alliedDmg = Math.round(atkSum * (0.9 + Math.random() * 0.2));
+          const enemyDmg = Math.round((bs.stage.enemyPower / bs.totalWaves) * 0.11 * (0.85 + Math.random() * 0.3));
           bs.enemyHp = Math.max(0, bs.enemyHp - alliedDmg);
           bs.playerHp = Math.max(0, bs.playerHp - enemyDmg);
-          bs.vaelenRage = Math.min(100, bs.vaelenRage + 15);
-          bs.lyraRage = Math.min(100, bs.lyraRage + 12);
+          if (deployed.includes('vaelen')) bs.vaelenRage = Math.min(100, bs.vaelenRage + 15);
+          if (deployed.includes('lyra')) bs.lyraRage = Math.min(100, bs.lyraRage + 12);
         }
 
         if (bs.auto) {
-          if (bs.vaelenRage >= 100) this.triggerUltimate('vaelen');
-          else if (bs.lyraRage >= 100 && this.heroes.lyra.unlocked) this.triggerUltimate('lyra');
+          if (bs.vaelenRage >= 100 && (bs.deployed || []).includes('vaelen')) this.triggerUltimate('vaelen');
+          else if (bs.lyraRage >= 100 && (bs.deployed || []).includes('lyra')) this.triggerUltimate('lyra');
         }
 
         if (bs.playerHp <= 0) {
@@ -967,18 +968,20 @@ export class Game {
   }
 
   // ------------------------------------------------------------ Combat Arena
-  startBattleArena(stageId) {
+  startBattleArena(stageId, deployed = null) {
     const stage = CAMPAIGN_STAGES.find((s) => s.id === stageId || s.legacyId === stageId);
     if (!stage) return false;
-    const vaelenStats = this.heroStats('vaelen');
-    const lyraStats = this.heroes.lyra.unlocked ? this.heroStats('lyra') : null;
-    const playerMaxHp = (vaelenStats?.hp || 180) + (lyraStats ? lyraStats.hp : 0);
-    const enemyMaxHp = Math.round(stage.enemyPower * 1.5);
+    const squad = (deployed && deployed.length ? deployed : ['vaelen', ...(this.heroes.lyra.unlocked ? ['lyra'] : [])])
+      .filter((id) => this.heroes[id]?.unlocked);
+    if (!squad.length) return false;
+    const playerMaxHp = squad.reduce((n, id) => n + (this.heroStats(id)?.hp || 0), 0);
+    const enemyMaxHp = Math.round(stage.enemyPower * 1.2);
     this.battleState = {
       active: true,
       outcome: null,
       stageId: stage.id,
       stage,
+      deployed: squad,
       wave: 1,
       totalWaves: stage.waves,
       playerHp: playerMaxHp,
@@ -1090,7 +1093,47 @@ export class Game {
     }
     if (target_id.startsWith('encounter_') || target_id.startsWith('stage_')) {
       if (this.modal !== 'expedition') return { result: 'noop' };
-      return this.battle(target_id, reject);
+      // A stage tap opens the pre-battle screen (deployment + rewards);
+      // the fight itself is the live arena, never an instant resolve.
+      const stage = CAMPAIGN_STAGES.find((s) => s.id === target_id || s.legacyId === target_id);
+      if (!stage || this.encountersCleared.has(stage.id)) return { result: 'noop' };
+      this.preBattle = {
+        stageId: stage.id,
+        deployed: ['vaelen', ...(this.heroes.lyra.unlocked ? ['lyra'] : [])],
+      };
+      this.modal = 'prebattle';
+      return { result: 'ui' };
+    }
+    if (target_id === 'btn_close_prebattle') {
+      if (this.modal !== 'prebattle') return { result: 'noop' };
+      this.preBattle = null;
+      this.modal = 'expedition';
+      return { result: 'ui' };
+    }
+    if (target_id.startsWith('btn_deploy_')) {
+      const heroId = target_id.slice('btn_deploy_'.length);
+      if (this.modal !== 'prebattle' || !this.preBattle || !this.heroes[heroId]?.unlocked) return { result: 'noop' };
+      const i = this.preBattle.deployed.indexOf(heroId);
+      if (i >= 0) this.preBattle.deployed.splice(i, 1);
+      else this.preBattle.deployed.push(heroId);
+      return { result: 'ui' };
+    }
+    if (target_id === 'btn_fight') {
+      if (this.modal !== 'prebattle' || !this.preBattle) return { result: 'noop' };
+      const stage = CAMPAIGN_STAGES.find((s) => s.id === this.preBattle.stageId);
+      if (!stage || !this.preBattle.deployed.length) return { result: 'noop' };
+      const costs = this.expeditionCosts();
+      const missing = this.missing(costs);
+      if (missing) {
+        return reject(`insufficient_${missing.resource}`, { encounter: stage.id,
+          [`${missing.resource}_available`]: missing.available, [`${missing.resource}_required`]: missing.required });
+      }
+      this.pay(costs, TOWN_CENTER_TILE);
+      const deployed = [...this.preBattle.deployed];
+      this.preBattle = null;
+      this.modal = null;
+      this.startBattleArena(stage.id, deployed);
+      return { result: 'advanced' };
     }
     if (target_id.startsWith('btn_arena_')) {
       const stageId = target_id.slice(10);

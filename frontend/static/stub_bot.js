@@ -232,6 +232,12 @@ export class StubBot {
       return { target: by('btn_close_heroes'), thought: 'Heroes inspected. Return to the valley.' };
     }
 
+    // Pre-battle deployment screen: the squad is picked, so charge in.
+    const fightBtn = by('btn_fight');
+    if (fightBtn && !fightBtn.locked) {
+      return { target: fightBtn, thought: 'Squad deployed. Fight!', mood: 'engaged' };
+    }
+
     // Expedition / Campaign modal open: fight one battle or leave.
     const enc = targets.filter((t) => (t.kind === 'encounter' || t.target_id.startsWith('stage_') || t.target_id.startsWith('encounter_')) && !t.cleared);
     if (by('btn_close_expedition')) {

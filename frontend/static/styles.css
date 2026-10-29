@@ -252,6 +252,22 @@ button { font: inherit; cursor: pointer; }
   background: linear-gradient(var(--gold-hi), var(--gold)); border: 2px solid #fff3c4; box-shadow: 0 3px 0 #6b4f17;
 }
 
+.prebattle-modal { width: 560px; max-height: 474px; padding: 14px 18px; overflow-y: auto; }
+.pb-enemies { font: 700 14px var(--ui); color: #6a3a14; margin: 8px 0; }
+.pb-powers { display: flex; gap: 18px; font: 600 13px var(--ui); color: var(--ink); margin: 6px 0; }
+.pb-row { display: flex; gap: 10px; font: 600 13px var(--ui); color: var(--ink); margin: 4px 0; }
+.pb-label { font: 800 11px var(--ui); letter-spacing: .06em; text-transform: uppercase; color: #8a6a30; margin-top: 10px; }
+.pb-deploy { display: flex; gap: 12px; margin: 8px 0 14px; }
+.pb-hero { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 150px; padding: 10px;
+  border-radius: 12px; border: 2px solid #b08b4a; background: linear-gradient(#fffaf0, #f0dcae); cursor: pointer; font-family: inherit; }
+.pb-hero img { width: 74px; height: 74px; object-fit: cover; border-radius: 50%; border: 2px solid #c9a35a; }
+.pb-hero span { font: 700 12px var(--ui); color: var(--ink); text-align: center; }
+.pb-hero em { font: 700 10px var(--ui); font-style: normal; color: #8a6a30; }
+.pb-hero.on { border-color: #5f9a3a; box-shadow: 0 0 10px rgba(120,200,80,.65); }
+.pb-hero:disabled { opacity: .45; cursor: default; }
+.pb-fight { width: 100%; font-size: 17px; padding: 12px; }
+.pb-fight:disabled { opacity: .5; }
+
 .upgrades-modal { width: 520px; max-height: 474px; padding: 14px 18px; overflow-y: auto; }
 .upgrade-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .upgrade-row { display: flex; align-items: center; justify-content: space-between; gap: 12px;

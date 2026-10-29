@@ -53,6 +53,41 @@ function routeTiles(to) {
   return out;
 }
 
+// Path from the Town Center to a building's doorstep, around other buildings
+// (BFS on the grid; building tiles are walls except the destination itself).
+// The last hop lands on the tile in front of the building, never through it.
+function findRoute(game, building) {
+  const start = TOWN_CENTER_TILE;
+  const goal = building.tile;
+  const blocked = new Set();
+  for (const b of game.buildings) {
+    if (b === building || !b.tile) continue;
+    blocked.add(b.tile.join(','));
+  }
+  blocked.delete(goal.join(','));
+  blocked.delete(start.join(','));
+  // Doorstep: the neighbouring tile with the lowest screen position (front).
+  const doors = [[goal[0] + 1, goal[1]], [goal[0], goal[1] + 1], [goal[0] + 1, goal[1] + 1]]
+    .filter(([i, j]) => i >= 0 && j >= 0 && i < 12 && j < 12 && !blocked.has(`${i},${j}`));
+  const door = doors.length ? doors[doors.length - 1] : goal;
+  const queue = [[start]];
+  const seen = new Set([start.join(',')]);
+  while (queue.length) {
+    const path = queue.shift();
+    const [ci, cj] = path[path.length - 1];
+    if (ci === door[0] && cj === door[1]) return [...path, goal];
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const ni = ci + di;
+      const nj = cj + dj;
+      const k = `${ni},${nj}`;
+      if (ni < 0 || nj < 0 || ni >= 12 || nj >= 12 || seen.has(k) || blocked.has(k)) continue;
+      seen.add(k);
+      queue.push([...path, [ni, nj]]);
+    }
+  }
+  return routeTiles(goal); // hemmed in: fall back to the straight road
+}
+
 const ALL_ROUTED_PADS = [
   ...PADS,
   ...EXPANSION_PADS.exp_1,
@@ -746,14 +781,22 @@ export class IsoRenderer {
     for (const b of game.buildings) {
       if (b.status !== 'done' || !b.worker) continue;
       wanted.add(b.key);
-      if (!this.villagers.has(b.key)) {
-        // Free-placed buildings have no canned route: walk the grid from Town Center.
-        const pts = (ROUTES[b.routeKey] || routeTiles(b.tile)).map(([i, j]) => tileToScreen(i, j));
+      // Routes are recomputed when the settlement changes, so villagers
+      // path around new buildings instead of walking through them.
+      const signature = game.buildings.length;
+      const existing = this.villagers.get(b.key);
+      if (!existing || existing.signature !== signature) {
+        const tiles = findRoute(game, b);
+        const pts = tiles.map(([i, j]) => tileToScreen(i, j));
+        // The walk ends at the front door (bottom edge of the sprite),
+        // not at the building's centre.
+        pts[pts.length - 1] = { x: pts[pts.length - 1].x, y: pts[pts.length - 1].y + 16 };
         const r = this.fxRand;
         this.villagers.set(b.key, {
-          pts, s: r.range(0, 0.3), dir: 1, pause: 0, inside: 0, x: pts[0].x, y: pts[0].y,
-          tunic: r.pick(['#a8432f', '#3e6fa8', '#6b8d2f', '#8a5aa8', '#c07a2a']),
-          carry: b.produces, phase: r.range(0, 6),
+          pts, signature, s: existing ? existing.s : r.range(0, 0.3), dir: existing ? existing.dir : 1,
+          pause: 0, inside: 0, x: pts[0].x, y: pts[0].y,
+          tunic: existing ? existing.tunic : r.pick(['#a8432f', '#3e6fa8', '#6b8d2f', '#8a5aa8', '#c07a2a']),
+          carry: b.produces, phase: existing ? existing.phase : r.range(0, 6),
         });
       }
     }

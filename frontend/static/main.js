@@ -602,6 +602,7 @@ class Hud {
     $('heroes-modal').hidden = g.modal !== 'heroes';
     $('quests-modal').hidden = g.modal !== 'quests';
     $('upgrades-modal').hidden = g.modal !== 'upgrades';
+    $('prebattle-modal').hidden = g.modal !== 'prebattle';
 
     // Action Dock
     $('btn_heroes').hidden = !g.heroesUnlocked();
@@ -613,6 +614,7 @@ class Hud {
     if (g.modal === 'heroes') this.updateHeroesModal();
     if (g.modal === 'quests') this.updateQuestsModal();
     if (g.modal === 'upgrades') this.updateUpgradesModal();
+    if (g.modal === 'prebattle') this.updatePreBattleModal();
     this.updateBattleHud();
     this.updateCards();
     this.updateArrow();
@@ -647,6 +649,42 @@ class Hud {
         : `<span class="u-state">Need ${costText(st.costs)}</span>`;
       return `<div class="upgrade-row"><span class="u-name">${name} <small>Lv.${b.level} → Lv.${(b.level || 1) + 1}</small></span>${btn}</div>`;
     }).join('') : '<p class="u-empty">No buildings yet. Build something first.</p>';
+  }
+
+  // Pre-battle screen: enemy, power check, rewards, cost, and deployment.
+  updatePreBattleModal() {
+    const g = this.game;
+    const pb = g.preBattle;
+    if (!pb) return;
+    const stage = CAMPAIGN_STAGES.find((s) => s.id === pb.stageId);
+    if (!stage) return;
+    const costText = (costs) => Object.entries(costs || {}).filter(([, v]) => v > 0)
+      .map(([r, v]) => `${v} ${RESOURCE_LABEL[r]}`).join(' · ');
+    $('prebattle-title').textContent = stage.name;
+    $('prebattle-enemies').textContent = `${stage.enemies} · ${stage.waves} wave${stage.waves > 1 ? 's' : ''}`;
+    $('prebattle-enemy-power').textContent = stage.enemyPower;
+    const deployedPower = pb.deployed.reduce((n, id) => n + g.heroStats(id).power, 0);
+    $('prebattle-squad-power').textContent = deployedPower;
+    const verdict = $('prebattle-verdict');
+    const enough = deployedPower >= (stage.reqPower || stage.enemyPower);
+    verdict.textContent = enough ? '✓ Your squad is ready' : `⚠️ Recommended power ${stage.reqPower || stage.enemyPower}`;
+    verdict.style.color = enough ? '#2f6a1a' : '#b03a1e';
+    $('prebattle-rewards').textContent = costText(stage.reward);
+    $('prebattle-cost').textContent = costText(g.expeditionCosts());
+    const sig = JSON.stringify([pb.stageId, pb.deployed, g.heroes.lyra.unlocked]);
+    if (sig !== this.pbSig) {
+      this.pbSig = sig;
+      $('prebattle-deploy').innerHTML = ['vaelen', 'lyra'].map((id) => {
+        const h = g.heroes[id];
+        const on = pb.deployed.includes(id);
+        return `<button class="pb-hero ${on ? 'on' : ''}" data-target="btn_deploy_${id}" ${h.unlocked ? '' : 'disabled'}>
+          <img src="/static/assets/sprites/${h.portrait}.png" alt="" onerror="this.src='/static/assets/sprites/advisor_welcome.png'">
+          <span>${h.name.split(' ')[0]} <small>Lv.${h.level} · ⚔️ ${g.heroStats(id).power}</small></span>
+          <em>${h.unlocked ? (on ? '⚔️ Deployed' : 'Tap to deploy') : '🔒 Locked'}</em>
+        </button>`;
+      }).join('');
+    }
+    $('btn_fight').disabled = !pb.deployed.length;
   }
 
   updateCards() {

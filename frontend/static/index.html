@@ -130,6 +130,27 @@
         </div>
       </div>
 
+      <!-- Pre-Battle Deployment Modal -->
+      <div id="prebattle-modal" class="modal-backdrop" hidden>
+        <div class="modal prebattle-modal">
+          <div class="tech-head">
+            <h2 id="prebattle-title">Stage</h2>
+            <button id="btn_close_prebattle" class="close-btn" data-target="btn_close_prebattle" title="Back to the map">&times;</button>
+          </div>
+          <p id="prebattle-enemies" class="pb-enemies"></p>
+          <div class="pb-powers">
+            <span>Enemy Power <b id="prebattle-enemy-power">0</b></span>
+            <span>Your Squad <b id="prebattle-squad-power">0</b></span>
+            <span id="prebattle-verdict"></span>
+          </div>
+          <div class="pb-row"><span class="pb-label">Rewards</span><span id="prebattle-rewards"></span></div>
+          <div class="pb-row"><span class="pb-label">Cost</span><span id="prebattle-cost"></span></div>
+          <div class="pb-label">Deployment (tap a hero to toggle)</div>
+          <div id="prebattle-deploy" class="pb-deploy"></div>
+          <button id="btn_fight" class="gold-btn pb-fight" data-target="btn_fight">⚔️ Fight</button>
+        </div>
+      </div>
+
       <!-- Hero Roster & Level-Up Hall Modal -->
       <div id="heroes-modal" class="modal-backdrop" hidden>
         <div class="modal heroes-modal">
