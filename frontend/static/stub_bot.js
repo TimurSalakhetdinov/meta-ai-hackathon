@@ -264,7 +264,11 @@ export class StubBot {
       // buying whatever is cheap. Only techs it can see are considered.
       const open = techs.filter((t) => !t.locked)
         .sort((a, b) => TECH_PRIORITY.indexOf(a.target_id) - TECH_PRIORITY.indexOf(b.target_id));
-      const saving = open.length && affordable.length && open[0] !== affordable[0] && r() < (p.plan ? 0.9 : 0.6);
+      // An explicit era goal (set in free play below) is saved for deterministically:
+      // never spend RP on a side tech while the goal tech is unaffordable.
+      const goalUnaffordable = this.savingFor && !affordable.some((t) => t.target_id === this.savingFor);
+      const saving = goalUnaffordable
+        || (open.length && affordable.length && open[0] !== affordable[0] && r() < (p.plan ? 0.9 : 0.6));
       if (saving) {
         this.researchCooldown = 6;
         this.savingFor = open[0].target_id;
@@ -351,9 +355,19 @@ export class StubBot {
     const tutorialActive = targets.some((t) => t.highlighted);
     const missingProducer = (t) => !tutorialActive && PRODUCERS[t.target_id] && !owned.has(PRODUCERS[t.target_id]);
     const producerOpen = targets.some((t) => t.kind === 'build_card' && !t.locked && missingProducer(t));
+    // Era goal in free play: Masonry unlocks the Quarry, then Stone Age Awakening
+    // ends the run. Without an explicit goal the bot spends its wood on shelters
+    // and farms as fast as the Woodcutter yields it and never affords Masonry.
+    if (state.step_id === 'free_play' && !state.achieved) {
+      const known = state.techs || [];
+      this.savingFor = !known.includes('tech_masonry') ? 'tech_masonry'
+        : !known.includes('tech_stone_age') ? 'tech_stone_age' : this.savingFor;
+    }
     // Saving for a tech: gather the scarcest basic resource first.
+    // Masonry costs wood only, so wood is the scarce resource until it lands.
     const res = state.resources || {};
-    const scarce = this.savingFor ? ['food', 'wood', 'stone'].sort((x, y) => (res[x] ?? 0) - (res[y] ?? 0))[0] : null;
+    const scarce = this.savingFor === 'tech_masonry' ? 'wood'
+      : this.savingFor ? ['food', 'wood', 'stone'].sort((x, y) => (res[x] ?? 0) - (res[y] ?? 0))[0] : null;
     const options = ready.map((t) => ({ t, w: (0.3 + p.harvest * 0.9) * (PRODUCES[t.building_type] === scarce ? 3 : 1), why: 'harvest' }));
     for (const t of targets) {
       const sal = SALIENCE[t.computed_salience] ?? 0.2;
