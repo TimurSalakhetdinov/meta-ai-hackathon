@@ -41,6 +41,26 @@ def _research(d: Driver, tech: str) -> None:
     assert tech in d.state()["techs"]
 
 
+def _fight(d: Driver, before: int) -> None:
+    """Play the turn-based battle: pick a ready hero, tap an enemy, repeat."""
+    import time as _time
+    deadline = _time.time() + 60
+    while d.state()["battles"] == before:
+        if _time.time() > deadline:
+            raise AssertionError(f"battle did not finish; state={d.state()}")
+        if d.state().get("battle_selected"):
+            enemy = next(t for t in d.targets() if t["kind"] == "battle_enemy" and t["visible"])
+            d.click(enemy["target_id"])
+            continue
+        hero = next((t for t in d.targets() if t["kind"] == "battle_hero" and t["visible"] and t["affordable"]), None)
+        if hero:
+            d.click(hero["target_id"])
+        elif d.target("btn_end_turn"):
+            d.click("btn_end_turn")
+        else:
+            d.page.wait_for_timeout(100)
+
+
 def _open(d: Driver, rich_server: Server, run_id: str) -> None:
     d.open(f"{rich_server.base_url}/?variant=A&seed=42&speed={SPEED}&run_id={run_id}")
     d.click("btn_advisor_ok")
@@ -83,6 +103,48 @@ def test_worker_sign_assigns_a_worker(scarce_worker_server: Server, browser: Any
     assert hut["worker"] == 1
     d.grind_until(lambda s: next(b for b in s["buildings"] if b["key"] == pad)["blocked_reason"] is None, timeout=10)
     assert d.target(f"worker_{pad}") is None  # staffed: the sign vanishes
+    assert not d.errors, d.errors
+
+
+def test_free_tile_placement_by_click(rich_server: Server, browser: Any) -> None:  # noqa: F811
+    """A selected building can be placed on any open meadow tile, not only pads."""
+    d = Driver(browser.new_page(viewport={"width": 1280, "height": 540}))
+    _open(d, rich_server, "p2_free_tile")
+    d.click("card_woodcutter_hut")
+    assert d.target("tile_5_3") is not None
+    d.click("tile_5_3")
+    # HoH flow: the tile tap only previews a ghost; nothing is built yet.
+    st = d.state()
+    assert st["pending_placement"] == {"type": "woodcutter_hut", "pad_id": "tile_5_3"}
+    assert not any(b["key"] == "tile_5_3" for b in st["buildings"])
+    d.click("btn_cancel_placement")
+    assert d.state()["pending_placement"] is None
+    assert not any(b["key"] == "tile_5_3" for b in d.state()["buildings"])
+    d.click("tile_5_3")
+    d.click("btn_confirm_placement")
+    hut = next(b for b in d.state()["buildings"] if b["key"] == "tile_5_3")
+    assert hut["type"] == "woodcutter_hut"
+    assert d.state()["pending_placement"] is None
+    # The east-river meadow (past the old cliff mask) is buildable too.
+    d.click("card_shelter")
+    assert d.target("tile_10_3") is not None
+    d.click("tile_10_3")
+    assert d.state()["pending_placement"] == {"type": "shelter", "pad_id": "tile_10_3"}
+    d.click("btn_confirm_placement")
+    assert any(b["key"] == "tile_10_3" and b["type"] == "shelter" for b in d.state()["buildings"])
+    # A formerly red-crossed cliff tile and a new river-row tile also build.
+    for tile in ("tile_10_2", "tile_13_4"):
+        d.click("card_shelter")
+        assert d.target(tile) is not None
+        d.click(tile)
+        assert d.state()["pending_placement"] == {"type": "shelter", "pad_id": tile}
+        d.click("btn_confirm_placement")
+        assert any(b["key"] == tile and b["type"] == "shelter" for b in d.state()["buildings"])
+    # The building drawer opens on tap and closes again; it must not stay.
+    d.click("building_tile_5_3")
+    assert d.state()["selected_building"] == "tile_5_3"
+    d.click("btn_close_drawer")
+    assert d.state()["selected_building"] is None
     assert not d.errors, d.errors
 
 
@@ -143,7 +205,8 @@ def test_three_eras_upgrades_quests_and_battles(rich_server: Server, browser: An
     assert d.state()["modal_open"] == "prebattle"
     d.click("btn_fight")
     assert d.state()["modal_open"] is None and d.state()["battle_active"]
-    after = d.grind_until(lambda s: s["battles"] == 1, timeout=30)
+    _fight(d, 0)
+    after = d.state()
     d.click("btn_victory_continue")
     assert after["resources"]["stone"] == st["resources"]["stone"] + 15
 
@@ -166,7 +229,7 @@ def test_three_eras_upgrades_quests_and_battles(rich_server: Server, browser: An
         d.click("btn_expedition")
         d.click(enc)
         d.click("btn_fight")
-        d.grind_until(lambda s: s["battles"] == before + 1, timeout=30)
+        _fight(d, before)
         d.click("btn_victory_continue")
     # The Bronze Age now requires every earlier (Dawn/Stone) research first;
     # Irrigation is a Bronze Age tech and comes after it.

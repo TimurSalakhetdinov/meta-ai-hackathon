@@ -196,31 +196,31 @@ export const ENCOUNTERS = [
 ];
 
 export const CAMPAIGN_STAGES = [
-  { id: 'stage_1', legacyId: 'encounter_misty_river', name: '1. Misty River Crossing', enemyPower: 120, waves: 1, enemies: 'Dire Wolves Lv.1', reward: { rp: 6, stone: 15, score: 15, scrolls: 10 } },
-  { id: 'stage_2', legacyId: 'encounter_megalithic_ruins', name: '2. Sunlit Glade Ambush', enemyPower: 165, waves: 1, enemies: 'Razor Boars Lv.1', reward: { rp: 6, stone: 15, score: 15, tokens: 1 } },
-  { id: 'stage_3', legacyId: 'encounter_quarry_ridge', name: '3. Megalithic Ruins', enemyPower: 240, waves: 2, enemies: 'Wolf & Boar Pack Lv.2', reward: { rp: 8, stone: 15, score: 20, scrolls: 15 } },
-  { id: 'stage_4', legacyId: null, name: '4. Whispering Pine Gorge', enemyPower: 310, waves: 2, enemies: 'Armored Boars Lv.2', reward: { rp: 10, stone: 20, score: 20, coins: 25 } },
-  { id: 'stage_5', legacyId: null, name: '5. Quarry Ridge Outpost', enemyPower: 390, waves: 2, enemies: 'Ridge Stalkers Lv.3', reward: { rp: 12, stone: 25, score: 25, tokens: 1 } },
-  { id: 'stage_6', legacyId: null, name: '6. Sabertooth Canyon', enemyPower: 520, waves: 3, reqPower: 460, enemies: 'Sabertooth Pack Lv.4', reward: { rp: 15, stone: 35, score: 35, coins: 40 } },
-  { id: 'stage_7', legacyId: null, name: '7. Obsidian Crag', enemyPower: 640, waves: 3, reqPower: 580, enemies: 'Elder Sabertooths Lv.5', reward: { rp: 20, stone: 40, score: 40, scrolls: 30 } },
-  { id: 'stage_8', legacyId: null, name: "8. BOSS: Shadowclaw's Lair", enemyPower: 780, waves: 3, reqPower: 700, enemies: 'Alpha Shadowclaw Lv.6', reward: { rp: 30, stone: 60, score: 60, coins: 100 } },
+  { id: 'stage_1', legacyId: 'encounter_misty_river', name: '1. Misty River Crossing', enemyPower: 120, slots: 1, waves: 1, enemies: 'Dire Wolves Lv.1', reward: { rp: 6, stone: 15, score: 15, scrolls: 10 } },
+  { id: 'stage_2', legacyId: 'encounter_megalithic_ruins', name: '2. Sunlit Glade Ambush', enemyPower: 165, slots: 1, waves: 1, enemies: 'Razor Boars Lv.1', reward: { rp: 6, stone: 15, score: 15, tokens: 1 } },
+  { id: 'stage_3', legacyId: 'encounter_quarry_ridge', name: '3. Megalithic Ruins', enemyPower: 240, slots: 2, waves: 2, enemies: 'Wolf & Boar Pack Lv.2', reward: { rp: 8, stone: 15, score: 20, scrolls: 15 } },
+  { id: 'stage_4', legacyId: null, name: '4. Whispering Pine Gorge', enemyPower: 310, slots: 2, waves: 2, enemies: 'Armored Boars Lv.2', reward: { rp: 10, stone: 20, score: 20, coins: 25 } },
+  { id: 'stage_5', legacyId: null, name: '5. Quarry Ridge Outpost', enemyPower: 390, slots: 3, waves: 2, enemies: 'Ridge Stalkers Lv.3', reward: { rp: 12, stone: 25, score: 25, tokens: 1 } },
+  { id: 'stage_6', legacyId: null, name: '6. Sabertooth Canyon', enemyPower: 520, slots: 3, waves: 3, reqPower: 460, enemies: 'Sabertooth Pack Lv.4', reward: { rp: 15, stone: 35, score: 35, coins: 40 } },
+  { id: 'stage_7', legacyId: null, name: '7. Obsidian Crag', enemyPower: 640, slots: 4, waves: 3, reqPower: 580, enemies: 'Elder Sabertooths Lv.5', reward: { rp: 20, stone: 40, score: 40, scrolls: 30 } },
+  { id: 'stage_8', legacyId: null, name: "8. BOSS: Shadowclaw's Lair", enemyPower: 780, slots: 4, waves: 3, reqPower: 700, enemies: 'Alpha Shadowclaw Lv.6', reward: { rp: 30, stone: 60, score: 60, coins: 100 } },
 ];
 
 const BATTLE_REWARD = { rp: 6, stone: 15, score: 15 };
 const MAP_PREFIXES = ['pad_', 'building_', 'card_', 'upgrade_', 'worker_', 'free_', 'exp_'];
 
 export const ADVISOR_TEXT = {
-  welcome: 'Welcome, Chief! Our tribe has settled in this sunlit Alpine Valley. Build a Small Home to shelter our workers.',
-  onb_01_shelter: 'Step 1/3: Build a Small Home. Pick the Small Home card, then a glowing building pad.',
-  onb_02_forager: 'Step 2/3: Build a Rural Farm, then tap it to harvest fresh food.',
-  onb_03_handoff: 'Step 3/3: You lead the valley now! Discover Basic Toolmaking to complete your training.',
-  free_play: 'Free play: train Heroes in the Barracks, conquer Campaign stages, and advance to the Stone Age.',
-  achieved: 'The Stone Age has dawned! Upgrade buildings, build a Copper Smelter and lead your heroes to victory.',
-  bronze: 'Bronze weapons and armor gleam throughout the valley. The Bronze Age is ours, Chief!',
+  welcome: 'There you are, Chief. Raise a Small Home before supper; wet grass makes a poor bed, especially at my age.',
+  onb_01_shelter: 'There you are, Chief. Raise a Small Home before supper; wet grass makes a poor bed, especially at my age.',
+  onb_02_forager: 'A roof overhead, but nothing in the pot. Plant a Rural Farm, let the crop ripen, then harvest it to feed the tribe.',
+  onb_03_handoff: 'We have shelter and supper, Chief. Now open Research and learn Basic Toolmaking; after that, you can spare yourself an old man\'s lessons.',
+  free_play: 'Time to look beyond our hearths, Chief. Train your heroes, win battles in the Campaign, and lead us into the Stone Age.',
+  achieved: 'The Stone Age is here, Chief. Strengthen our buildings, raise a Copper Smelter, and send your heroes to win battles; boasting alone won\'t do.',
+  bronze: 'The Bronze Age is ours, Chief. Look at those gleaming spears and shields; I thought these old eyes had seen their last marvel.',
 };
 const HINT_TEXT = {
-  btn_research: 'Psst, Chief! Open Research to discover Basic Toolmaking.',
-  tech_toolmaking: 'Basic Toolmaking is right there. Research it!',
+  btn_research: 'Open Research, Chief. There\'s learning waiting, and I\'ve only so much wisdom left to repeat.',
+  tech_toolmaking: 'Choose Basic Toolmaking and learn it, Chief. A good edge saves hard work, and these old shoulders approve.',
 };
 
 export class Game {
@@ -255,6 +255,8 @@ export class Game {
     this.step_id = STEPS[0];
     this.stepIndex = 0;
     this.selectedCard = null;
+    this.pendingPlacement = null;
+    this.selectedBuilding = null;
     this.modal = 'welcome';
     this.achieved = false;
     this.stats = { forager_harvests: 0, clicks: 0, first_click_t: null, upgrades: 0, battles: 0, hero_levelups: 0 };
@@ -263,6 +265,7 @@ export class Game {
     this.questClaimable = false;
     this.battleScore = 0;
     this.encountersCleared = new Set();
+    this.stageStars = {};
     this.featureScore = 0;
     this.featureUses = 0;
     this.featureReadyAt = 0;
@@ -339,16 +342,18 @@ export class Game {
       pads.push({ id: 'pad_11', tile: [9, 3] }, { id: 'pad_12', tile: [9, 6] });
     }
     // Free placement: every open meadow tile can be built on, not just the
-    // fixed plots. Fixed pads come first so guided builds keep their layout;
-    // forest (north corner), cliffs (east) and the town tiles stay unbuildable.
+    // fixed plots. Fixed pads come first so guided builds keep their layout.
+    // Blocked: the forest corner (north), the river-bank corner (south-east
+    // tip), and the two town tiles. Everything else, including the old
+    // cliff strip and two extra rows toward the river, is buildable.
     const covered = new Set(pads.map((p) => p.tile.join(',')));
     covered.add(TOWN_CENTER_TILE.join(','));
     covered.add(RESEARCH_TENT_TILE.join(','));
-    for (let i = 0; i < 12; i++) {
-      for (let j = 0; j < 12; j++) {
+    for (let i = 0; i < 14; i++) {
+      for (let j = 0; j < 14; j++) {
         if (covered.has(`${i},${j}`)) continue;
-        if (i + j <= 3) continue;          // forest corner
-        if (i >= 10 && j <= 4) continue;   // stony cliffs
+        if (i + j <= 3) continue;    // forest corner
+        if (i + j >= 25) continue;   // river-bank corner
         pads.push({ id: `tile_${i}_${j}`, tile: [i, j] });
       }
     }
@@ -501,6 +506,7 @@ export class Game {
       case 'modal_blocking_map': return 'Close the scroll first, Chief. The valley is behind it.';
       case 'card_selection_blocking_harvest': return 'Put down the build card first (tap it again), then collect.';
       case 'locked': return r.lock ? `${r.lock}, Chief.` : 'That is still locked, Chief.';
+      case 'outside_building_field': return 'No building there, Chief. Forest, cliffs and the river bank stay wild. Build inside the glowing field.';
       case 'cooldown': return `${this.feature?.title || 'That'} needs a moment to recover, Chief.`;
       case 'requires_prerequisite': return `First we must learn ${TECHS[r.requires]?.label || 'the earlier tech'}.`;
       default:
@@ -617,6 +623,7 @@ export class Game {
 
   guideTarget() {
     if (this.modal === 'welcome') return 'btn_advisor_ok';
+    if (this.pendingPlacement) return 'btn_confirm_placement';
     if (this.step_id === 'onb_01_shelter') return this.buildGuide('shelter');
     if (this.step_id === 'onb_02_forager') {
       const hut = this.buildings.find((b) => b.type === 'forager_hut');
@@ -820,67 +827,12 @@ export class Game {
     // Hero training at the Arena completes over time, not on the click.
     if (this.heroTraining && now >= this.heroTraining.completeAt) this.completeHeroTraining();
 
-    // Live 2.5D Battle Arena simulation
+    // Turn-based battle (HoMM style): nothing moves on the clock. Units act
+    // only on player clicks; the tick just expires the ult cut-in banner.
     if (this.battleState && this.battleState.active) {
       const bs = this.battleState;
       if (bs.cutIn && now >= bs.cutInUntil) {
         bs.cutIn = null;
-      }
-      const exchangeInterval = 0.6 / (bs.speed || 1);
-      if (now - (bs.lastExchangeT || 0) >= exchangeInterval) {
-        bs.lastExchangeT = now;
-        const isStage6Wall = (bs.stageId === 'stage_6' && this.squadPower() < 460 && bs.wave === bs.totalWaves);
-        if (isStage6Wall) {
-          bs.playerHp = Math.max(0, bs.playerHp - Math.round(bs.playerMaxHp * 0.65));
-          this.onFx({ type: 'sfx', sound: 'reject' });
-        } else {
-          const deployed = bs.deployed || ['vaelen'];
-          const atkSum = deployed.reduce((n, id) => n + (this.heroStats(id)?.atk || 0), 0);
-          const alliedDmg = Math.round(atkSum * (0.9 + Math.random() * 0.2));
-          const enemyDmg = Math.round((bs.stage.enemyPower / bs.totalWaves) * 0.11 * (0.85 + Math.random() * 0.3));
-          bs.enemyHp = Math.max(0, bs.enemyHp - alliedDmg);
-          bs.playerHp = Math.max(0, bs.playerHp - enemyDmg);
-          if (deployed.includes('vaelen')) bs.vaelenRage = Math.min(100, bs.vaelenRage + 15);
-          if (deployed.includes('lyra')) bs.lyraRage = Math.min(100, bs.lyraRage + 12);
-        }
-
-        if (bs.auto) {
-          if (bs.vaelenRage >= 100 && (bs.deployed || []).includes('vaelen')) this.triggerUltimate('vaelen');
-          else if (bs.lyraRage >= 100 && (bs.deployed || []).includes('lyra')) this.triggerUltimate('lyra');
-        }
-
-        if (bs.playerHp <= 0) {
-          bs.active = false;
-          bs.outcome = 'defeat';
-          this.emit('battle_lost', {
-            stage_id: bs.stageId,
-            enemy: bs.stage.name,
-            squad_power: this.squadPower(),
-            required_power: bs.stage.reqPower || bs.stage.enemyPower,
-          });
-          this.onFx({ type: 'sfx', sound: 'reject' });
-        } else if (bs.enemyHp <= 0) {
-          if (bs.wave < bs.totalWaves) {
-            bs.wave += 1;
-            bs.enemyHp = bs.enemyMaxHp;
-            this.onFx({ type: 'popup', tile: TOWN_CENTER_TILE, text: `Wave ${bs.wave}/${bs.totalWaves}!`, color: '#ffcc00', lift: 70 });
-          } else {
-            bs.active = false;
-            bs.outcome = 'victory';
-            this.encountersCleared.add(bs.stageId);
-            if (bs.stage.legacyId) this.encountersCleared.add(bs.stage.legacyId);
-            this.stats.battles += 1;
-            for (const [res, amt] of Object.entries(bs.stage.reward)) {
-              if (res === 'score') this.battleScore += amt;
-              else if (res in this.resources) this.resources[res] += amt;
-            }
-            if (bs.stageId === 'stage_2' || bs.stage.legacyId === 'encounter_megalithic_ruins') {
-              this.heroes.lyra.unlocked = true;
-            }
-            this.emit('battle_won', { stage_id: bs.stageId, reward: bs.stage.reward });
-            this.onFx({ type: 'sfx', sound: 'unlock' });
-          }
-        }
       }
     }
 
@@ -906,7 +858,7 @@ export class Game {
       this.resources.scrolls += 15;
       this.onFx({ type: 'popup', tile: b.tile, text: '+15 Hero Scrolls!', color: '#e0c0ff', lift: 110 });
     }
-    this.onFx({ type: 'sfx', sound: 'build' });
+    this.onFx({ type: 'sfx', sound: 'built' });
     this.onFx({ type: 'built', tile: b.tile, key: b.key });
     this.onFx({ type: 'popup', tile: b.tile, text: `${BUILDINGS[b.type].label} built!`, color: '#fff2b0', lift: 92 });
   }
@@ -939,6 +891,7 @@ export class Game {
     const qp = this.questProgress();
     if (this.quest && qp.complete && !this.questClaimable) {
       this.questClaimable = true;
+      this.onFx({ type: 'sfx', sound: 'quest' });
       if (this.config.auto_claim_quest_rewards) this.claimQuest();
     }
   }
@@ -954,7 +907,7 @@ export class Game {
     }
     this.emit('quest_claimed', { quest_id: q.id, reward: q.reward, auto: !!this.config.auto_claim_quest_rewards });
     this.onFx({ type: 'popup', tile: TOWN_CENTER_TILE, text: parts.join('  '), color: '#ffe08a', lift: 120 });
-    this.onFx({ type: 'sfx', sound: 'unlock' });
+    this.onFx({ type: 'sfx', sound: 'claim_reward' });
     this.questIndex += 1;
     this.questClaimable = false;
     return true;
@@ -974,8 +927,13 @@ export class Game {
     const squad = (deployed && deployed.length ? deployed : ['vaelen', ...(this.heroes.lyra.unlocked ? ['lyra'] : [])])
       .filter((id) => this.heroes[id]?.unlocked);
     if (!squad.length) return false;
-    const playerMaxHp = squad.reduce((n, id) => n + (this.heroStats(id)?.hp || 0), 0);
-    const enemyMaxHp = Math.round(stage.enemyPower * 1.2);
+    // Turn-based (HoMM style): stationary units, one action per hero per
+    // round, then the enemy round. Nothing fights on its own.
+    const units = squad.map((id) => {
+      const st = this.heroStats(id);
+      return { kind: 'hero', id, name: this.heroes[id].name, hp: st.hp, maxHp: st.hp, atk: st.atk,
+               rage: id === 'vaelen' ? 40 : 25, acted: false, alive: true };
+    });
     this.battleState = {
       active: true,
       outcome: null,
@@ -984,44 +942,180 @@ export class Game {
       deployed: squad,
       wave: 1,
       totalWaves: stage.waves,
-      playerHp: playerMaxHp,
-      playerMaxHp,
-      enemyHp: enemyMaxHp,
-      enemyMaxHp,
-      vaelenRage: 60,
-      lyraRage: 50,
-      auto: true,
-      speed: 1,
+      round: 1,
+      turn: 'player',
+      selectedUnit: null,
+      units,
+      enemies: [],
+      log: [`${stage.name}: pick a hero, then tap an enemy.`],
       cutIn: null,
       cutInUntil: 0,
       popups: [],
-      lastExchangeT: this.clock.t,
     };
+    this.spawnWave();
+    this.syncBattleTotals(this.battleState);
     return true;
+  }
+
+  spawnWave() {
+    const bs = this.battleState;
+    const total = Math.round(bs.stage.enemyPower * 1.2);
+    const count = bs.wave === bs.totalWaves && bs.totalWaves > 1 ? 3 : 2;
+    const hp = Math.max(20, Math.round(total / count));
+    bs.enemies = Array.from({ length: count }, (_, i) => ({
+      kind: 'enemy', idx: i, name: bs.wave === bs.totalWaves && i === 0 && bs.totalWaves > 1 ? 'Alpha Beast' : `Beast ${i + 1}`,
+      hp, maxHp: hp, atk: Math.max(6, Math.round(bs.stage.enemyPower * 0.045)), alive: true,
+    }));
+  }
+
+  syncBattleTotals(bs) {
+    bs.playerHp = bs.units.reduce((n, u) => n + Math.max(0, u.hp), 0);
+    bs.playerMaxHp = bs.units.reduce((n, u) => n + u.maxHp, 0);
+    bs.enemyHp = bs.enemies.reduce((n, u) => n + Math.max(0, u.hp), 0);
+    bs.enemyMaxHp = bs.enemies.reduce((n, u) => n + u.maxHp, 0);
+    const v = bs.units.find((u) => u.id === 'vaelen');
+    const l = bs.units.find((u) => u.id === 'lyra');
+    bs.vaelenRage = v ? v.rage : 0;
+    bs.lyraRage = l ? l.rage : 0;
+  }
+
+  battleLog(bs, text) {
+    bs.log.push(text);
+    if (bs.log.length > 4) bs.log.shift();
+  }
+
+  heroAttack(heroId, enemyIdx) {
+    const bs = this.battleState;
+    if (!bs || !bs.active || bs.turn !== 'player') return false;
+    const hero = bs.units.find((u) => u.id === heroId && u.alive && !u.acted);
+    const enemy = bs.enemies[enemyIdx];
+    if (!hero || !enemy || !enemy.alive) return false;
+    const dmg = Math.round(hero.atk * (0.9 + Math.random() * 0.2));
+    enemy.hp = Math.max(0, enemy.hp - dmg);
+    enemy.alive = enemy.hp > 0;
+    hero.acted = true;
+    hero.rage = Math.min(100, hero.rage + 25);
+    bs.selectedUnit = null;
+    this.battleLog(bs, `${hero.name.split(' ')[0]} hits ${enemy.name} for ${dmg}.`);
+    this.onFx({ type: 'sfx', sound: 'hit' });
+    if (hero.rage >= 100) this.onFx({ type: 'sfx', sound: 'ult_ready' });
+    this.afterBattleAction();
+    return true;
+  }
+
+  enemyRound() {
+    const bs = this.battleState;
+    if (bs.enemies.some((e) => e.alive)) this.onFx({ type: 'sfx', sound: 'roar' });
+    for (const e of bs.enemies) {
+      if (!e.alive) continue;
+      const alive = bs.units.filter((u) => u.alive);
+      if (!alive.length) break;
+      // Melee beasts hit the front line first (deployment order), like HoMM.
+      const target = alive[0];
+      const dmg = Math.round(e.atk * (0.85 + Math.random() * 0.3));
+      target.hp = Math.max(0, target.hp - dmg);
+      target.alive = target.hp > 0;
+      target.rage = Math.min(100, target.rage + 15);
+      this.battleLog(bs, `${e.name} hits ${target.name.split(' ')[0]} for ${dmg}.`);
+    }
+    for (const u of bs.units) u.acted = false;
+    bs.round += 1;
+    bs.turn = 'player';
+  }
+
+  endPlayerTurn() {
+    const bs = this.battleState;
+    if (!bs || !bs.active || bs.turn !== 'player') return false;
+    bs.turn = 'enemy';
+    this.enemyRound();
+    this.afterBattleAction();
+    return true;
+  }
+
+  afterBattleAction() {
+    const bs = this.battleState;
+    this.syncBattleTotals(bs);
+    if (bs.units.every((u) => !u.alive)) {
+      bs.active = false;
+      bs.outcome = 'defeat';
+      this.emit('battle_lost', {
+        stage_id: bs.stageId, enemy: bs.stage.name,
+        squad_power: this.squadPower(), required_power: bs.stage.reqPower || bs.stage.enemyPower,
+      });
+      this.onFx({ type: 'sfx', sound: 'reject' });
+      return;
+    }
+    if (bs.enemies.every((e) => !e.alive)) {
+      if (bs.wave < bs.totalWaves) {
+        bs.wave += 1;
+        for (const u of bs.units) u.acted = false;
+        bs.turn = 'player';
+        this.spawnWave();
+        this.syncBattleTotals(bs);
+        this.battleLog(bs, `Wave ${bs.wave}/${bs.totalWaves} arrives!`);
+        return;
+      }
+      bs.active = false;
+      bs.outcome = 'victory';
+      // HoH stars: 3 for a clean win, fewer when the squad limps home.
+      const hpPct = bs.playerHp / (bs.playerMaxHp || 1);
+      bs.stars = hpPct >= 0.7 ? 3 : hpPct >= 0.35 ? 2 : 1;
+      this.stageStars[bs.stageId] = Math.max(this.stageStars[bs.stageId] || 0, bs.stars);
+      this.encountersCleared.add(bs.stageId);
+      if (bs.stage.legacyId) this.encountersCleared.add(bs.stage.legacyId);
+      this.stats.battles += 1;
+      for (const [res, amt] of Object.entries(bs.stage.reward)) {
+        if (res === 'score') this.battleScore += amt;
+        else if (res in this.resources) this.resources[res] += amt;
+      }
+      if (bs.stageId === 'stage_2' || bs.stage.legacyId === 'encounter_megalithic_ruins') {
+        this.heroes.lyra.unlocked = true;
+      }
+      // Later stages award the rest of the tribe, HoH style.
+      if (bs.stageId === 'stage_4') this.heroes.ignis.unlocked = true;
+      if (bs.stageId === 'stage_6') this.heroes.aurelius.unlocked = true;
+      this.emit('battle_won', { stage_id: bs.stageId, reward: bs.stage.reward });
+      this.onFx({ type: 'sfx', sound: 'unlock' });
+      return;
+    }
+    // All heroes acted: the enemy round runs automatically.
+    if (bs.turn === 'player' && bs.units.filter((u) => u.alive).every((u) => u.acted)) {
+      this.endPlayerTurn();
+    }
   }
 
   triggerUltimate(heroId) {
     if (!this.battleState || !this.battleState.active) return false;
     const bs = this.battleState;
-    if (heroId === 'vaelen') {
-      bs.vaelenRage = 0;
-      bs.cutIn = { heroId: 'vaelen', name: 'Bera the Shield-Hunter', ult: 'EARTHSHATTER STOMP!', portrait: 'portrait_vaelen' };
-      bs.cutInUntil = this.clock.t + 0.9;
-      const dmg = Math.round(this.heroStats('vaelen').atk * 2.8);
-      bs.enemyHp = Math.max(0, bs.enemyHp - dmg);
-      this.onFx({ type: 'sfx', sound: 'hero_ult' });
-      return true;
-    }
-    if (heroId === 'lyra' && this.heroes.lyra.unlocked) {
-      bs.lyraRage = 0;
+    const hero = bs.units.find((u) => u.id === heroId && u.alive);
+    // The card only fires at full rage; early taps do nothing. Using the
+    // ultimate is the hero's action for this round.
+    if (!hero || hero.rage < 100 || hero.acted) return false;
+    hero.rage = 0;
+    hero.acted = true;
+    bs.selectedUnit = null;
+    if (heroId === 'lyra') {
       bs.cutIn = { heroId: 'lyra', name: 'Sunweaver Lyra', ult: 'SOLAR SALVE!', portrait: 'portrait_lyra' };
       bs.cutInUntil = this.clock.t + 0.9;
-      const heal = Math.round(bs.playerMaxHp * 0.45);
-      bs.playerHp = Math.min(bs.playerMaxHp, bs.playerHp + heal);
+      for (const u of bs.units) if (u.alive) u.hp = Math.min(u.maxHp, u.hp + Math.round(u.maxHp * 0.45));
+      this.battleLog(bs, 'Lyra heals the squad.');
       this.onFx({ type: 'sfx', sound: 'hero_heal' });
-      return true;
+    } else {
+      const names = { vaelen: ['Bera the Shield-Hunter', 'EARTHSHATTER STOMP!'], ignis: ['Ember-Keeper Ignis', 'EMBER STORM!'], aurelius: ['Tor the Stone-Breaker', 'MOUNTAIN SMASH!'] };
+      const [name, ult] = names[heroId] || ['Hero', 'ULTIMATE!'];
+      bs.cutIn = { heroId, name, ult, portrait: `portrait_${heroId}` };
+      bs.cutInUntil = this.clock.t + 0.9;
+      const dmg = Math.round(hero.atk * 2.2);
+      for (const e of bs.enemies) {
+        if (!e.alive) continue;
+        e.hp = Math.max(0, e.hp - dmg);
+        e.alive = e.hp > 0;
+      }
+      this.battleLog(bs, `${name.split(' ')[0]} unleashes ${ult}`);
+      this.onFx({ type: 'sfx', sound: 'hero_ult' });
     }
-    return false;
+    this.afterBattleAction();
+    return true;
   }
 
   // ------------------------------------------------------------ actions
@@ -1055,6 +1149,9 @@ export class Game {
     }
     if (this.modal === 'welcome') return { result: 'noop' };
     if (['btn_speed', 'btn_inspect', 'btn_mute'].includes(target_id)) return { result: 'ui' };
+    // The building drawer is transient: any tap that is not on a building
+    // (including its own worker/upgrade buttons) closes it.
+    if (this.selectedBuilding && !target_id.startsWith('building_')) this.selectedBuilding = null;
 
     // Research
     if (target_id === 'btn_research') {
@@ -1099,7 +1196,7 @@ export class Game {
       if (!stage || this.encountersCleared.has(stage.id)) return { result: 'noop' };
       this.preBattle = {
         stageId: stage.id,
-        deployed: ['vaelen', ...(this.heroes.lyra.unlocked ? ['lyra'] : [])],
+        deployed: ['vaelen', ...(this.heroes.lyra.unlocked ? ['lyra'] : [])].slice(0, stage.slots || 1),
       };
       this.modal = 'prebattle';
       return { result: 'ui' };
@@ -1113,9 +1210,11 @@ export class Game {
     if (target_id.startsWith('btn_deploy_')) {
       const heroId = target_id.slice('btn_deploy_'.length);
       if (this.modal !== 'prebattle' || !this.preBattle || !this.heroes[heroId]?.unlocked) return { result: 'noop' };
+      const stage = CAMPAIGN_STAGES.find((s) => s.id === this.preBattle.stageId);
       const i = this.preBattle.deployed.indexOf(heroId);
       if (i >= 0) this.preBattle.deployed.splice(i, 1);
-      else this.preBattle.deployed.push(heroId);
+      else if (this.preBattle.deployed.length < (stage?.slots || 1)) this.preBattle.deployed.push(heroId);
+      else return reject('deployment_full', { stage: stage?.id, slots: stage?.slots || 1 });
       return { result: 'ui' };
     }
     if (target_id === 'btn_fight') {
@@ -1142,20 +1241,24 @@ export class Game {
       return { result: 'ui' };
     }
 
-    // Combat Arena controls
-    if (target_id === 'btn_battle_speed') {
-      if (this.battleState) {
-        this.battleState.speed = this.battleState.speed === 1 ? 2 : 1;
-        return { result: 'ui' };
-      }
-      return { result: 'noop' };
+    // Turn-based battle controls: select a hero, tap an enemy to attack.
+    if (target_id.startsWith('unit_hero_')) {
+      const bs = this.battleState;
+      const id = target_id.slice('unit_hero_'.length);
+      if (!bs || !bs.active || bs.turn !== 'player') return { result: 'noop' };
+      const u = bs.units.find((x) => x.id === id && x.alive && !x.acted);
+      if (!u) return { result: 'noop' };
+      bs.selectedUnit = bs.selectedUnit === id ? null : id;
+      return { result: 'ui' };
     }
-    if (target_id === 'btn_battle_auto') {
-      if (this.battleState) {
-        this.battleState.auto = !this.battleState.auto;
-        return { result: 'ui' };
-      }
-      return { result: 'noop' };
+    if (target_id.startsWith('unit_enemy_')) {
+      const bs = this.battleState;
+      if (!bs || !bs.active || !bs.selectedUnit) return { result: 'noop' };
+      const idx = Number(target_id.slice('unit_enemy_'.length));
+      return this.heroAttack(bs.selectedUnit, idx) ? { result: 'advanced' } : { result: 'noop' };
+    }
+    if (target_id === 'btn_end_turn') {
+      return this.endPlayerTurn() ? { result: 'ui' } : { result: 'noop' };
     }
     if (target_id === 'btn_ult_vaelen') {
       return this.triggerUltimate('vaelen') ? { result: 'ui' } : { result: 'noop' };
@@ -1165,6 +1268,16 @@ export class Game {
     }
     if (target_id === 'btn_battle_continue' || target_id === 'btn_victory_continue') {
       this.battleState = null;
+      return { result: 'ui' };
+    }
+    if (target_id === 'btn_defeat_formation') {
+      // Back to the pre-battle screen for the same stage, squad kept.
+      const bs = this.battleState;
+      if (!bs) return { result: 'noop' };
+      const stage = bs.stage;
+      this.preBattle = { stageId: stage.id, deployed: [...(bs.deployed || ['vaelen'])].slice(0, stage.slots || 1) };
+      this.battleState = null;
+      this.modal = 'prebattle';
       return { result: 'ui' };
     }
     if (target_id === 'btn_defeat_heroes' || target_id === 'btn_campaign_heroes') {
@@ -1299,14 +1412,27 @@ export class Game {
         return reject(st.reason, { building: type, ...(st.missing ? { [`${st.missing.resource}_available`]: st.missing.available, [`${st.missing.resource}_required`]: st.missing.required } : {}) });
       }
       this.selectedCard = this.selectedCard === type ? null : type;
+      this.pendingPlacement = null;
       return { result: 'ui' };
     }
 
-    // Pad Placement
-    if (target_id.startsWith('pad_')) {
+    // Placement widget (HoH style): the tile tap only previews a ghost.
+    // Nothing is paid or built until the green check is tapped.
+    if (target_id === 'btn_confirm_placement') {
+      if (!this.pendingPlacement) return { result: 'noop' };
+      const pad = this.activePads().find((p) => p.id === this.pendingPlacement.padId);
+      if (!pad || this.buildingAt(pad.id)) { this.pendingPlacement = null; return { result: 'noop' }; }
+      return this.place(this.pendingPlacement.type, pad, reject);
+    }
+    if (target_id === 'btn_cancel_placement') {
+      this.pendingPlacement = null;
+      return { result: 'ui' };
+    }
+    if (target_id.startsWith('pad_') || target_id.startsWith('tile_')) {
       const pad = this.activePads().find((p) => p.id === target_id);
       if (!pad || this.buildingAt(pad.id) || !this.selectedCard) return { result: 'noop' };
-      return this.place(this.selectedCard, pad, reject);
+      this.pendingPlacement = { type: this.selectedCard, padId: pad.id, tile: pad.tile };
+      return { result: 'ui' };
     }
 
     // Building Harvest / Click
@@ -1316,8 +1442,11 @@ export class Game {
       // Still under construction: no harvest and no instant finish from clicking
       // the building itself (the ⚡ FREE chip is the only instant finish). It
       // starts producing only after construction completes, plus a full cycle.
-      if (b.status === 'building') return { result: 'noop' };
-      if (!b.ready) return { result: 'noop' };
+      // Any other tap opens the building drawer (HoH production inspector).
+      if (b.status === 'building') { this.selectedBuilding = b.key; return { result: 'ui' }; }
+      if (!b.ready) { this.selectedBuilding = b.key; return { result: 'ui' }; }
+      // Ready: the tap only collects. No drawer, nothing stays on screen.
+      this.selectedBuilding = null;
       if (this.selectedCard) {
         if (!this.config.clear_selection_on_harvest) {
           return reject('card_selection_blocking_harvest', { building: b.type, selected_card: this.selectedCard });
@@ -1330,8 +1459,16 @@ export class Game {
       const opened = [...this.affordableActions()].some((a) => !before.has(a));
       return { result: (opened || saving) ? 'advanced' : 'collected' };
     }
+    if (target_id === 'btn_close_drawer') {
+      this.selectedBuilding = null;
+      return { result: 'ui' };
+    }
+    if (target_id === 'empty' && this.selectedCard) {
+      return reject('outside_building_field', {});
+    }
     if (target_id === 'btn_deselect' && this.selectedCard) {
       this.selectedCard = null;
+      this.pendingPlacement = null;
       return { result: 'ui' };
     }
     return { result: 'noop' };
@@ -1353,7 +1490,10 @@ export class Game {
       cycleStart: 0, ready: false, blockedReason: null, level: 1,
     });
     this.selectedCard = null;
+    this.pendingPlacement = null;
     this.onFx({ type: 'dust', tile: pad.tile });
+    // Every building type has its own placement sound (build_<type>).
+    this.onFx({ type: 'sfx', sound: `build_${type}` });
     return { result: 'advanced' };
   }
 
@@ -1371,7 +1511,7 @@ export class Game {
     this.stats.upgrades += 1;
     this.onFx({ type: 'sparkle', tile: b.tile, key: b.key });
     this.onFx({ type: 'popup', tile: b.tile, text: `Lv.${b.level}!`, color: '#ffd75e', lift: 96 });
-    this.onFx({ type: 'sfx', sound: 'build' });
+    this.onFx({ type: 'sfx', sound: 'upgrade' });
     return { result: 'advanced' };
   }
 
@@ -1482,7 +1622,8 @@ export class Game {
     b.cycleStart = this.clock.t;
     if (b.type === 'forager_hut') this.stats.forager_harvests += 1;
     this.onFx({ type: 'popup', tile: b.tile, text: `+${amount} ${RESOURCE_LABEL[spec.produces]}`, color: '#b8f28a', lift: 84 });
-    this.onFx({ type: 'sfx', sound: 'harvest' });
+    // Each resource has its own collect sound (harvest_food/wood/stone/coins).
+    this.onFx({ type: 'sfx', sound: `harvest_${spec.produces}` });
   }
 
   research(id, reject) {
@@ -1525,6 +1666,9 @@ export class Game {
       score: this.score,
       modal_open: this.modal,
       selected_card: this.selectedCard,
+      pending_placement: this.pendingPlacement
+        ? { type: this.pendingPlacement.type, pad_id: this.pendingPlacement.padId } : null,
+      selected_building: this.selectedBuilding,
       techs: [...this.techs],
       achieved: this.achieved,
       bronze_achieved: this.bronzeAchieved,
@@ -1539,7 +1683,7 @@ export class Game {
       hero_training: this.heroTraining
         ? { hero_id: this.heroTraining.heroId, remaining_sec: Math.max(0, Math.round(this.heroTraining.completeAt - this.clock.t)) }
         : null,
-      buildings: this.buildings.filter((b) => b.key.startsWith('pad_'))
+      buildings: this.buildings.filter((b) => b.key.startsWith('pad_') || b.key.startsWith('tile_'))
         .map((b) => ({ key: b.key, type: b.type, level: b.level || 1, worker: b.worker, status: b.status,
                        blocked_reason: b.blockedReason || null })),
       sim_elapsed_sec: round3(this.clock.t),

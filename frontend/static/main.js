@@ -7,7 +7,7 @@ import {
   BUILDINGS, BUILD_ORDER, ALL_BUILD_ORDER, CAMPAIGN_STAGES, ENCOUNTERS, ERA_LABEL, Game,
   QUESTS, RESOURCES, ALL_RESOURCES, RESOURCE_LABEL, TECHS, UPGRADABLE_TYPES,
 } from './game.js';
-import { Sfx, defaultMuted } from './audio.js';
+import { Sfx, defaultMuted } from './audio.js?v=5';
 import { IsoRenderer } from './iso_renderer.js';
 import { loadSprites, spriteUrl } from './sprites.js';
 import { TechTreeView } from './tech_tree.js';
@@ -28,21 +28,57 @@ const kaelenVoice = {
   speak(text) {
     if (!text || text === this.last) return;
     this.last = text;
-    if (!this.unlocked || !('speechSynthesis' in window)) return;
+    if (!this.unlocked) return;
     if (window.__SFX_MUTED__ || params.bot || params.replayA || params.replayB) return;
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    const voices = speechSynthesis.getVoices();
-    u.voice = voices.find((v) => /^en[-_]GB/i.test(v.lang) && /male|daniel|arthur|brian/i.test(v.name))
-      || voices.find((v) => /^en[-_]GB/i.test(v.lang))
-      || voices.find((v) => /^en/i.test(v.lang)) || null;
-    u.pitch = 0.55;
-    u.rate = 0.82;
-    u.volume = 0.9;
-    speechSynthesis.speak(u);
+    // Pre-rendered ElevenLabs lines (scripts/generate_kaelen_voice.py).
+    // Until the full set is approved, only the welcome line has a file;
+    // any other text falls back to the browser voice below.
+    const FILES = [
+      ['There you are, Chief. Raise a Small Home before supper', 'kaelen_welcome.mp3'],
+      ['A roof overhead, but nothing in the pot.', 'kaelen_onb_02_forager.mp3'],
+      ['We have shelter and supper, Chief.', 'kaelen_onb_03_handoff.mp3'],
+      ['Time to look beyond our hearths, Chief.', 'kaelen_free_play.mp3'],
+      ['The Stone Age is here, Chief.', 'kaelen_achieved.mp3'],
+      ['The Bronze Age is ours, Chief.', 'kaelen_bronze.mp3'],
+      ['Open Research, Chief.', 'kaelen_hint_research.mp3'],
+      ['Choose Basic Toolmaking and learn it, Chief.', 'kaelen_hint_toolmaking.mp3'],
+    ];
+    // Dynamic warnings carry numbers that cannot be pre-rendered; the
+    // bubble shows them as text and the voice speaks a generic elder line.
+    const GENERIC = [
+      [/wood/i, 'kaelen_need_wood.mp3'],
+      [/stone/i, 'kaelen_need_stone.mp3'],
+      [/food/i, 'kaelen_need_food.mp3'],
+      [/coin/i, 'kaelen_need_coins.mp3'],
+      [/flask|research point/i, 'kaelen_need_rp.mp3'],
+      [/scroll/i, 'kaelen_need_scrolls.mp3'],
+      [/token/i, 'kaelen_need_tokens.mp3'],
+      [/worker/i, 'kaelen_need_worker.mp3'],
+      [/locked|learn .* first|research/i, 'kaelen_locked.mp3'],
+    ];
+    const generic = /need|not enough|no free|spent/i.test(text)
+      ? GENERIC.find(([re]) => re.test(text)) : null;
+    const hit = FILES.find(([prefix]) => text.startsWith(prefix))
+      || (generic ? [null, generic[1]] : null);
+    if (hit) {
+      if ('speechSynthesis' in window) speechSynthesis.cancel();
+      // Never overlap lines: stop the previous line before starting a new one.
+      if (this.current) { this.current.pause(); this.current.currentTime = 0; }
+      this.current = new Audio(`/static/assets/audio/voice/${hit[1]}?v=3`);
+      this.current.volume = this.voiceVolume ?? 0.9;
+      this.current.play().catch(() => {});
+      return;
+    }
+    // No pre-rendered line for this text: stay silent. The browser robot
+    // voice was removed entirely; Kaelen only speaks real recorded lines.
   },
 };
-window.addEventListener('pointerdown', () => { kaelenVoice.unlocked = true; }, { once: true });
+window.addEventListener('pointerdown', () => {
+  kaelenVoice.unlocked = true;
+  // First click unlocks audio: replay the line already on screen.
+  const cur = document.getElementById('advisor-text')?.textContent;
+  if (cur && cur === kaelenVoice.last) { kaelenVoice.last = ''; kaelenVoice.speak(cur); }
+}, { once: true });
 
 // The layout is a fixed 1280x540 stage (bots and screenshots rely on it).
 // Scale it to fit the window; all game coordinates stay in stage pixels.
@@ -145,6 +181,45 @@ async function boot() {
   renderer = new IsoRenderer($('world'), sprites, { seed: params.seed });
   const sfx = new Sfx({ muted: defaultMuted(params) });
   fxHandlers.push((fx) => { if (fx.type === 'sfx') sfx.play(fx.sound); });
+
+  // Volume menu (sound button): Music / Sounds / Voice sliders, persisted.
+  const volumes = (() => {
+    try { return { music: 60, sfx: 90, voice: 90, ...JSON.parse(localStorage.getItem('doe_volumes') || '{}') }; }
+    catch { return { music: 60, sfx: 90, voice: 90 }; }
+  })();
+  // Optional calls: a stale cached audio module must never crash the start.
+  sfx.setMusicVolume?.(volumes.music / 100);
+  sfx.setSfxVolume?.(volumes.sfx / 100);
+  kaelenVoice.voiceVolume = volumes.voice / 100;
+  const applyVolumes = () => {
+    localStorage.setItem('doe_volumes', JSON.stringify(volumes));
+    sfx.setMusicVolume?.(volumes.music / 100);
+    sfx.setSfxVolume?.(volumes.sfx / 100);
+    kaelenVoice.voiceVolume = volumes.voice / 100;
+    if (kaelenVoice.current) kaelenVoice.current.volume = kaelenVoice.voiceVolume;
+    for (const k of ['music', 'sfx', 'voice']) {
+      const el = $(`vol-${k}`);
+      if (el) el.value = volumes[k];
+      const lab = $(`vol-${k}-val`);
+      if (lab) lab.textContent = `${volumes[k]}%`;
+    }
+  };
+  for (const k of ['music', 'sfx', 'voice']) {
+    $(`vol-${k}`)?.addEventListener('input', (e) => { volumes[k] = Number(e.target.value); applyVolumes(); });
+  }
+  applyVolumes();
+  // Valley music track choice (volume menu), persisted.
+  const trackSel = $('music-track');
+  if (trackSel) {
+    const saved = localStorage.getItem('doe_music_track');
+    if (['valley', 'valley2', 'valley3', 'valley4'].includes(saved)) trackSel.value = saved;
+    sfx.setValleyTrack?.(trackSel.value);
+    trackSel.addEventListener('change', () => {
+      sfx.setValleyTrack?.(trackSel.value);
+      localStorage.setItem('doe_music_track', trackSel.value);
+    });
+  }
+  if (sfx.muted && $('btn_vol_mute')) $('btn_vol_mute').textContent = 'Unmute all';
   const hud = new Hud(game, config, sfx);
   const techView = new TechTreeView($('tech-tree'), $('tech-rp'));
   fxHandlers.push((fx) => hud.onFx(fx));
@@ -201,12 +276,36 @@ async function boot() {
     if (!target && (e.target === $('world') || e.target === root)) target = renderer.hitTest(game, x, y)?.target_id || null;
     if (!target && e.target.classList.contains('modal-backdrop')) target = targetBelow(e.target, e.clientX, e.clientY, game, renderer, x, y);
 
+    // Slider drags inside the volume menu must not click through to the game.
+    if (e.target.closest('#volume-menu') && target !== 'btn_vol_mute') return;
+    if (target !== 'btn_mute' && !e.target.closest('#volume-menu')) {
+      const menu = $('volume-menu');
+      if (menu) menu.hidden = true;
+    }
+
     const outcome = game.click(target || 'empty', x, y);
-    if (target === 'btn_mute') sfx.toggle();
+    if (target === 'btn_mute') {
+      const menu = $('volume-menu');
+      if (menu) menu.hidden = !menu.hidden;
+    }
+    if (target === 'btn_vol_mute') {
+      sfx.toggle();
+      const b = $('btn_vol_mute');
+      if (b) b.textContent = sfx.muted ? 'Unmute all' : 'Mute all';
+      if (kaelenVoice.current) { kaelenVoice.current.pause(); kaelenVoice.current = null; }
+    }
+    // The four dock buttons and research nodes have their own sounds.
+    const MENU_SOUNDS = {
+      btn_heroes: 'dock_heroes', btn_expedition: 'dock_campaign',
+      btn_research: 'dock_research', btn_upgrades: 'dock_upgrades',
+    };
     if (outcome.result === 'rejected') sfx.play('reject');
     if (outcome.result === 'rejected' && target?.startsWith('tech_')) techView.flashRejected(target, game);
     else if (outcome.result === 'rejected' && target?.startsWith('btn_feature_')) hud.featureRejected();
-    else if (outcome.result === 'ui' && target !== 'btn_mute') sfx.play('click');
+    else if (MENU_SOUNDS[target]) sfx.play(MENU_SOUNDS[target]);
+    else if (target?.startsWith('btn_close_')) sfx.play('modal_close');
+    else if (target?.startsWith('tech_') && outcome.result !== 'rejected') sfx.play('research_select');
+    else if (outcome.result === 'ui' && target !== 'btn_mute' && target !== 'btn_vol_mute') sfx.play('click');
     if (target === 'btn_speed') {
       game.clock.speed = SPEEDS[(SPEEDS.indexOf(game.clock.speed) + 1) % SPEEDS.length] || 1;
     }
@@ -269,6 +368,9 @@ function publishState(game, renderer) {
     score: game.score,
     modal_open: game.modal,
     selected_card: game.selectedCard,
+    pending_placement: game.pendingPlacement
+      ? { type: game.pendingPlacement.type, pad_id: game.pendingPlacement.padId } : null,
+    selected_building: game.selectedBuilding,
     achieved: game.achieved,
     bronze_achieved: game.bronzeAchieved,
     quest_index: game.questIndex,
@@ -278,6 +380,8 @@ function publishState(game, renderer) {
     squad_power: game.squadPower(),
     heroes: Object.fromEntries(Object.entries(game.heroes).map(([k, v]) => [k, { level: v.level, unlocked: v.unlocked, power: game.heroStats(k).power }])),
     battle_active: !!(game.battleState && game.battleState.active),
+    battle_selected: game.battleState?.selectedUnit || null,
+    battle_turn: game.battleState?.turn || null,
     battles: game.stats.battles,
     upgrades: game.stats.upgrades,
     techs: [...game.techs],
@@ -378,7 +482,7 @@ function renderedTargets(game, renderer, config) {
       && renderer.hitTest(game, w.x + w.w / 2, w.y + w.h / 2)?.target_id === w.target_id;
     out.push({
       ...w, x: round1(w.x), y: round1(w.y), visible, locked: false,
-      affordable: w.kind === 'pad' ? !!game.selectedCard : (w.kind === 'upgrade' ? w.affordable : true),
+      affordable: w.kind === 'pad' ? !!game.selectedCard : ((w.kind === 'upgrade' || w.kind === 'battle_hero') ? w.affordable : true),
       computed_salience: w.kind === 'pad' ? (game.selectedCard ? 'high' : 'low')
         : (w.ready || (w.kind === 'worker' && !w.staffed) || w.kind === 'free' ? 'high' : 'low'),
       highlighted: guide === w.target_id,
@@ -572,14 +676,17 @@ class Hud {
     $('era-banner').classList.toggle('stone', g.era !== 'dawn_age');
     $('era-banner').classList.toggle('bronze', g.era === 'bronze_age');
 
-    const stepLabel = { onb_01_shelter: 'Step 1/3', onb_02_forager: 'Step 2/3', onb_03_handoff: 'Step 3/3', free_play: 'Free play' };
+    const stepLabel = { onb_01_shelter: 'First teaching', onb_02_forager: 'Second teaching', onb_03_handoff: 'Last teaching', free_play: 'Your valley now' };
     $('step-chip').textContent = g.achieved ? ERA_LABEL[g.era] : stepLabel[g.step_id];
     const text = g.advisorText();
     if ($('advisor-text').textContent !== text) {
       $('advisor-text').textContent = text;
       kaelenVoice.speak(text);
     }
-    if (window.__SFX_MUTED__ && 'speechSynthesis' in window && speechSynthesis.speaking) speechSynthesis.cancel();
+    if (window.__SFX_MUTED__) {
+      if ('speechSynthesis' in window && speechSynthesis.speaking) speechSynthesis.cancel();
+      if (kaelenVoice.current) { kaelenVoice.current.pause(); kaelenVoice.current = null; }
+    }
     $('advisor').querySelector('.bubble').classList.toggle('hinting', !!g.hint);
 
     const mood = g.advisorMood();
@@ -615,10 +722,24 @@ class Hud {
     if (g.modal === 'quests') this.updateQuestsModal();
     if (g.modal === 'upgrades') this.updateUpgradesModal();
     if (g.modal === 'prebattle') this.updatePreBattleModal();
+    this.updateBuildingDrawer();
     this.updateBattleHud();
+    // In battle the city UI (build bar, dock, advisor, quests) leaves the screen.
+    const inBattle = !!(g.battleState && (g.battleState.active || g.battleState.outcome));
+    for (const id of ['build-bar', 'action-dock', 'advisor', 'quest-card']) {
+      const el = $(id);
+      if (el) el.hidden = inBattle;
+    }
     this.updateCards();
     this.updateArrow();
     if (this.inspectorOn) this.placeInspectTags();
+
+    // Era-up fanfare and battle outcome stings, once per transition.
+    if (this.lastEra && g.era !== this.lastEra) this.sfx.play('era_up');
+    this.lastEra = g.era;
+    const outcome = g.battleState?.outcome || null;
+    if (outcome && this.battleOutcomeSeen !== outcome) this.sfx.play(outcome);
+    this.battleOutcomeSeen = outcome;
 
     // Sfx music switcher
     this.sfx.setMusicTheme?.(g.battleState?.active ? 'battle' : 'valley');
@@ -651,6 +772,61 @@ class Hud {
     }).join('') : '<p class="u-empty">No buildings yet. Build something first.</p>';
   }
 
+  // Building drawer (HoH production inspector): tap a building to see what
+  // it makes, toggle its worker, or upgrade it. Reuses worker_/upgrade_ taps.
+  updateBuildingDrawer() {
+    const g = this.game;
+    const el = $('building-drawer');
+    if (!el) return;
+    const b = g.buildings.find((x) => x.key === g.selectedBuilding);
+    if (!b || g.modal || (g.battleState && g.battleState.active)) { el.hidden = true; this.drawerSig = null; return; }
+    el.hidden = false;
+    const spec = BUILDINGS[b.type];
+    const SPECIALS = {
+      town_center: { label: 'Great Hall', blurb: 'Heart of the tribe. Grows with every era.' },
+      research_tent: { label: 'Research Tent', blurb: 'Where the tribe learns new knowledge.' },
+    };
+    const name = spec?.label || SPECIALS[b.type]?.label || b.type;
+    const blurb = spec?.blurb || SPECIALS[b.type]?.blurb || '';
+    const spriteKey = b.type === 'town_center'
+      ? (g.era === 'bronze_age' ? 'town_center_bronze_age' : g.era === 'stone_age' ? 'town_center_stone_age' : 'town_center')
+      : b.type;
+    let status;
+    if (b.status === 'building') status = '🔨 Under construction…';
+    else if (b.ready) status = `✅ Ready: tap the building to collect ${spec?.produces || ''}`;
+    else if (b.blockedReason) status = `⚠️ ${b.blockedReason}`;
+    else if (spec?.produces) status = `⚙️ Producing ${RESOURCE_LABEL[spec.produces] || spec.produces} · ${Math.round(g.productionProgress(b) * 100)}%`;
+    else if (b.type === 'research_tent') status = `${g.techs.size} of ${Object.keys(TECHS).length} discoveries learned`;
+    else if (b.type === 'town_center') status = `${ERA_LABEL[g.era]} · Score ${g.score}`;
+    else status = 'Standing ready';
+    const costText = (costs) => Object.entries(costs || {}).filter(([, v]) => v > 0)
+      .map(([r, v]) => `${v} ${RESOURCE_LABEL[r]}`).join(' · ');
+    let actions = '';
+    if (b.status === 'done' && spec?.produces && g.workersPerBuilding > 0) {
+      actions += b.worker
+        ? `<button class="gold-btn" data-target="worker_${b.key}">👷 Worker assigned (tap to unassign)</button>`
+        : `<button class="gold-btn" data-target="worker_${b.key}">👷 Assign worker (${g.workersFree} free)</button>`;
+    }
+    if (b.status === 'done' && UPGRADABLE_TYPES.includes(b.type)) {
+      const st = g.upgradeStatus(b);
+      if (st.available && st.affordable) actions += `<button class="gold-btn" data-target="upgrade_${b.key}">⬆ Upgrade to Lv.${st.level + 1} · ${costText(st.costs)}</button>`;
+      else if (st.available) actions += `<span class="u-state">Upgrade needs ${costText(st.costs)}</span>`;
+      else if (st.requires) actions += `<span class="u-state">🔒 Upgrade: learn ${TECHS[st.requires]?.label || st.requires} first</span>`;
+    }
+    if (b.type === 'research_tent' && b.status === 'done') {
+      actions += `<button class="gold-btn" data-target="btn_research">🔬 Open Research</button>`;
+    }
+    const sig = JSON.stringify([b.key, b.level, b.status, b.ready, b.worker, b.blockedReason,
+      Math.floor(g.productionProgress(b) * 20), g.workersFree, g.upgradeStatus(b).affordable, g.techs.size, g.score]);
+    if (sig === this.drawerSig) return;
+    this.drawerSig = sig;
+    el.innerHTML = `<div class="bd-thumb"><img src="${spriteUrl(spriteKey)}" alt="" onerror="this.parentNode.style.display='none'"></div>`
+      + `<div class="bd-main"><div class="bd-head"><b>${name} <small class="bd-lv">Lv.${b.level || 1}</small></b>`
+      + `<button class="close-btn" data-target="btn_close_drawer" title="Close">&times;</button></div>`
+      + (blurb ? `<div class="bd-blurb">${blurb}</div>` : '')
+      + `<div class="bd-status">${status}</div><div class="bd-actions">${actions}</div></div>`;
+  }
+
   // Pre-battle screen: enemy, power check, rewards, cost, and deployment.
   updatePreBattleModal() {
     const g = this.game;
@@ -671,10 +847,12 @@ class Hud {
     verdict.style.color = enough ? '#2f6a1a' : '#b03a1e';
     $('prebattle-rewards').textContent = costText(stage.reward);
     $('prebattle-cost').textContent = costText(g.expeditionCosts());
-    const sig = JSON.stringify([pb.stageId, pb.deployed, g.heroes.lyra.unlocked]);
+    const slotsEl = $('prebattle-slots');
+    if (slotsEl) slotsEl.textContent = `Deployment: ${pb.deployed.length}/${stage.slots || 1} heroes`;
+    const sig = JSON.stringify([pb.stageId, pb.deployed, Object.values(g.heroes).map((h) => h.unlocked)]);
     if (sig !== this.pbSig) {
       this.pbSig = sig;
-      $('prebattle-deploy').innerHTML = ['vaelen', 'lyra'].map((id) => {
+      $('prebattle-deploy').innerHTML = Object.keys(g.heroes).map((id) => {
         const h = g.heroes[id];
         const on = pb.deployed.includes(id);
         return `<button class="pb-hero ${on ? 'on' : ''}" data-target="btn_deploy_${id}" ${h.unlocked ? '' : 'disabled'}>
@@ -721,16 +899,7 @@ class Hud {
       el.classList.toggle('locked', !!st.locked);
       el.classList.toggle('unaffordable', !st.locked && !st.affordable);
       el.classList.toggle('selected', g.selectedCard === type);
-      const optionalOpen = isNewContent(g, type);
-      let ribbon = el.querySelector('.ribbon');
-      if (optionalOpen && !ribbon) {
-        ribbon = document.createElement('span');
-        ribbon.className = 'ribbon';
-        ribbon.textContent = 'NEW!';
-        el.appendChild(ribbon);
-      } else if (!optionalOpen && ribbon) {
-        ribbon.remove();
-      }
+      // No NEW! ribbon on build cards.
     }
   }
 
@@ -770,7 +939,8 @@ class Hud {
       const cleared = g.encountersCleared.has(s.id) || (s.legacyId && g.encountersCleared.has(s.legacyId));
       card.classList.toggle('cleared', !!cleared);
       const starsEl = $(`stars-${s.id}`);
-      if (starsEl) starsEl.textContent = cleared ? '⭐⭐⭐' : '☆☆☆';
+      const earned = (g.stageStars && (g.stageStars[s.id] || (s.legacyId && g.stageStars[s.legacyId]))) || 0;
+      if (starsEl) starsEl.textContent = cleared ? '⭐'.repeat(earned || 3) + '☆'.repeat(3 - (earned || 3)) : '☆☆☆';
       const hintEl = card.querySelector('.node-tap-hint');
       if (hintEl) hintEl.textContent = cleared ? '✅ Cleared' : (s.reqPower && g.squadPower() < s.reqPower ? `⚠️ Power: ${g.squadPower()}/${s.reqPower}` : '⚡ Tap to Battle');
     }
@@ -877,8 +1047,14 @@ class Hud {
     $('battle-allied-hp-text').textContent = `${Math.max(0, Math.round(bs.playerHp))}/${bs.playerMaxHp}`;
     $('battle-enemy-hp-text').textContent = `${Math.max(0, Math.round(bs.enemyHp))}/${bs.enemyMaxHp}`;
 
-    $('btn_battle_speed').textContent = `${bs.speed || 1}x`;
-    $('btn_battle_auto').classList.toggle('active', !!bs.auto);
+    const turnEl = $('battle-turn-text');
+    if (turnEl) {
+      turnEl.textContent = bs.outcome ? 'Battle over'
+        : bs.selectedUnit ? `${(g.heroes[bs.selectedUnit]?.name || 'Hero').split(' ')[0]} picked: tap an enemy to attack`
+        : `Round ${bs.round || 1}: pick a hero, then tap an enemy`;
+    }
+    const logEl = $('battle-log');
+    if (logEl) logEl.innerHTML = (bs.log || []).map((l) => `<div>${l}</div>`).join('');
 
     // Rage fills
     $('rage-fill-vaelen').style.width = `${bs.vaelenRage || 0}%`;
@@ -904,6 +1080,8 @@ class Hud {
     if (bs.outcome === 'victory') {
       vicModal.hidden = false;
       defModal.hidden = true;
+      const starsEl = $('victory-stars');
+      if (starsEl) starsEl.textContent = '⭐'.repeat(bs.stars || 3) + '☆'.repeat(3 - (bs.stars || 3));
       const lootEl = $('victory-loot');
       if (lootEl && bs.stage?.reward) {
         lootEl.innerHTML = Object.entries(bs.stage.reward)
@@ -912,6 +1090,11 @@ class Hud {
     } else if (bs.outcome === 'defeat') {
       vicModal.hidden = true;
       defModal.hidden = false;
+      const desc = $('defeat-desc');
+      if (desc && bs.stage) {
+        desc.innerHTML = `${bs.stage.enemies} broke through on wave ${bs.wave || 1}/${bs.totalWaves || 1}! `
+          + `Recommended Combat Power: <b>${bs.stage.reqPower || bs.stage.enemyPower}</b>. Your squad: <b>${g.squadPower()}</b>.`;
+      }
     } else {
       vicModal.hidden = true;
       defModal.hidden = true;

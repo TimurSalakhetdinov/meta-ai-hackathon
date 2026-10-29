@@ -204,9 +204,23 @@ export class StubBot {
     }
 
     // Battle victory / return button
-    const continueBtn = by('btn_battle_continue');
+    const continueBtn = by('btn_battle_continue') || by('btn_victory_continue');
     if (continueBtn) {
       return { target: continueBtn, thought: 'Battle concluded. Return to the valley.', mood: 'engaged' };
+    }
+
+    // Turn-based battle: pick a hero that has not acted, then tap an enemy.
+    const enemyUnit = targets.find((t) => t.kind === 'battle_enemy');
+    const heroUnit = targets.find((t) => t.kind === 'battle_hero' && t.affordable);
+    if (enemyUnit && state.battle_selected) {
+      return { target: enemyUnit, thought: 'Attack the beast!', mood: 'engaged' };
+    }
+    if (heroUnit) {
+      return { target: heroUnit, thought: 'Your turn, hero. Strike!', mood: 'engaged' };
+    }
+    const endTurn = by('btn_end_turn');
+    if (endTurn && enemyUnit) {
+      return { target: endTurn, thought: 'Everyone acted. End the round.', mood: 'engaged' };
     }
 
     // Battle arena active ultimates
@@ -320,6 +334,10 @@ export class StubBot {
         }
       }
     }
+
+    // Placement preview open: confirm the ghost (HoH check button).
+    const confirmPlacement = targets.find((t) => t.target_id === 'btn_confirm_placement');
+    if (confirmPlacement) return { target: confirmPlacement, thought: 'That spot looks good. Confirm the build.' };
 
     // A build card is selected: place it on a plot.
     const pads = targets.filter((t) => t.kind === 'pad');

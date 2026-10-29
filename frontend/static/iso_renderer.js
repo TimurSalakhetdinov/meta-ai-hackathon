@@ -9,7 +9,7 @@ import { mulberry32, rngTools } from './clock.js';
 
 export const TILE_W = 64;
 export const TILE_H = 32;
-export const GRID = 12;
+export const GRID = 14;
 export const ORIGIN = { x: 480, y: 76 };
 export const VIEW_W = 960;
 export const VIEW_H = 540;
@@ -39,7 +39,7 @@ export const EXPANSION_PADS = {
 
 const isWater = (i, j) => false;
 const isForest = (i, j) => i + j <= 3;
-const isStony = (i, j) => i >= 10 && j <= 4;
+const isStony = (i, j) => i >= 10 && j <= 2;
 const key = (i, j) => `${i},${j}`;
 
 // Road from the Town Center to a tile: walk along i, then along j.
@@ -53,9 +53,11 @@ function routeTiles(to) {
   return out;
 }
 
-// Path from the Town Center to a building's doorstep, around other buildings
-// (BFS on the grid; building tiles are walls except the destination itself).
-// The last hop lands on the tile in front of the building, never through it.
+// Path from the Town Center to a building's doorstep. Every building sprite
+// faces south, so the door is at the bottom centre of the sprite and the
+// villager must arrive from the south, never through a side wall.
+// Building tiles are walls. Tiles next to a foreign building cost extra, so
+// routes keep to open ground instead of squeezing past walls (Dijkstra).
 function findRoute(game, building) {
   const start = TOWN_CENTER_TILE;
   const goal = building.tile;
@@ -64,28 +66,54 @@ function findRoute(game, building) {
     if (b === building || !b.tile) continue;
     blocked.add(b.tile.join(','));
   }
-  blocked.delete(goal.join(','));
   blocked.delete(start.join(','));
-  // Doorstep: the neighbouring tile with the lowest screen position (front).
-  const doors = [[goal[0] + 1, goal[1]], [goal[0], goal[1] + 1], [goal[0] + 1, goal[1] + 1]]
-    .filter(([i, j]) => i >= 0 && j >= 0 && i < 12 && j < 12 && !blocked.has(`${i},${j}`));
-  const door = doors.length ? doors[doors.length - 1] : goal;
-  const queue = [[start]];
-  const seen = new Set([start.join(',')]);
-  while (queue.length) {
-    const path = queue.shift();
-    const [ci, cj] = path[path.length - 1];
-    if (ci === door[0] && cj === door[1]) return [...path, goal];
+  const nearWall = (i, j) => {
+    for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
+      if (blocked.has(`${i + di},${j + dj}`)) return true;
+    }
+    return false;
+  };
+  // South doorstep tiles, nearest first.
+  const doors = [[1, 1], [2, 1], [1, 2], [2, 2], [2, 0], [0, 2]]
+    .map(([di, dj]) => [goal[0] + di, goal[1] + dj])
+    .filter(([i, j]) => i >= 0 && j >= 0 && i < GRID && j < GRID && !blocked.has(`${i},${j}`));
+  if (!doors.length) return routeTiles(goal);
+  const dist = new Map([[start.join(','), 0]]);
+  const prev = new Map();
+  const open = [[0, start]];
+  while (open.length) {
+    let best = 0;
+    for (let n = 1; n < open.length; n++) if (open[n][0] < open[best][0]) best = n;
+    const [d, [ci, cj]] = open.splice(best, 1)[0];
+    if (d > (dist.get(`${ci},${cj}`) ?? Infinity)) continue;
     for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const ni = ci + di;
       const nj = cj + dj;
       const k = `${ni},${nj}`;
-      if (ni < 0 || nj < 0 || ni >= 12 || nj >= 12 || seen.has(k) || blocked.has(k)) continue;
-      seen.add(k);
-      queue.push([...path, [ni, nj]]);
+      if (ni < 0 || nj < 0 || ni >= GRID || nj >= GRID || blocked.has(k)) continue;
+      const nd = d + 1 + (nearWall(ni, nj) ? 3 : 0);
+      if (nd < (dist.get(k) ?? Infinity)) {
+        dist.set(k, nd);
+        prev.set(k, [ci, cj]);
+        open.push([nd, [ni, nj]]);
+      }
     }
   }
-  return routeTiles(goal); // hemmed in: fall back to the straight road
+  let door = null;
+  let doorCost = Infinity;
+  doors.forEach(([i, j], idx) => {
+    const c = (dist.get(`${i},${j}`) ?? Infinity) + idx * 1.5;
+    if (c < doorCost) { doorCost = c; door = [i, j]; }
+  });
+  if (!door || doorCost === Infinity) return routeTiles(goal);
+  const path = [door];
+  let cur = door;
+  while (cur[0] !== start[0] || cur[1] !== start[1]) {
+    cur = prev.get(cur.join(','));
+    if (!cur) return routeTiles(goal);
+    path.unshift(cur);
+  }
+  return path;
 }
 
 const ALL_ROUTED_PADS = [
@@ -229,7 +257,7 @@ export class IsoRenderer {
         else base = shade('#86b34e', r.range(-12, 10));
         g.save();
         if (hasBackdrop) {
-          g.globalAlpha = ROAD.has(key(i, j)) ? 0.88 : 0.22;
+          g.globalAlpha = 0.22;
         }
         diamond(g, x, y, TILE_W, TILE_H, base);
         // Soft tile edge so the grid reads without hard lines.
@@ -255,17 +283,7 @@ export class IsoRenderer {
         g.restore();
       }
     }
-    // Dirt roads.
-    g.save();
-    if (hasBackdrop) g.globalAlpha = 0.88;
-    for (const k of ROAD) {
-      const [i, j] = k.split(',').map(Number);
-      const { x, y } = tileToScreen(i, j);
-      diamond(g, x, y, TILE_W * 0.82, TILE_H * 0.82, shade('#b48a5a', r.range(-8, 8)));
-      g.fillStyle = 'rgba(90,60,30,0.30)';
-      for (let n = 0; n < 6; n++) g.fillRect(x + r.range(-16, 16), y + r.range(-5, 5), 2, 2);
-    }
-    g.restore();
+    // No roads: the meadow stays clean.
     // Plaza under the Town Center and the tent.
     for (const [i, j] of [TOWN_CENTER_TILE, RESEARCH_TENT_TILE]) {
       const { x, y } = tileToScreen(i, j);
@@ -273,11 +291,22 @@ export class IsoRenderer {
       diamond(g, x, y, TILE_W * 1.3, TILE_H * 1.3, '#cfb084');
     }
     // No fixed plot boxes: placement is free, so the meadow stays natural.
-    // A soft packed-earth tint under the fixed starter plots keeps the first
-    // guided builds readable without a checkerboard of numbered boxes.
+    // A soft worn-earth patch (radial, no hard edges) under the fixed starter
+    // plots keeps the first guided builds readable.
     PADS.forEach((p) => {
       const { x, y } = tileToScreen(...p.tile);
-      diamond(g, x, y, TILE_W * 0.82, TILE_H * 0.82, 'rgba(199,168,120,0.35)');
+      const grad = g.createRadialGradient(x, y, 2, x, y, 30);
+      grad.addColorStop(0, 'rgba(199,168,120,0.30)');
+      grad.addColorStop(1, 'rgba(199,168,120,0)');
+      g.save();
+      g.translate(x, y);
+      g.scale(1, 0.5);
+      g.translate(-x, -y);
+      g.fillStyle = grad;
+      g.beginPath();
+      g.arc(x, y, 30, 0, Math.PI * 2);
+      g.fill();
+      g.restore();
     });
     return c;
   }
@@ -312,6 +341,7 @@ export class IsoRenderer {
     for (const v of this.villagers.values()) items.push({ y: v.y, draw: () => drawVillager(ctx, v, this.time) });
     items.sort((a, b) => a.y - b.y);
     for (const it of items) it.draw();
+    this.drawPlacementPreview(ctx, game);
 
     this.updateSmoke(game, simDt);
     this.drawParticles(ctx, realDt);
@@ -346,6 +376,57 @@ export class IsoRenderer {
         ctx.fillStyle = `rgba(235, 255, 255, ${alpha})`;
         ctx.fillRect(sx, sy, 3, 3);
       }
+      // Flowing river: dashed current lines and foam dots travel along the
+      // painted river (bottom right, under the bridge) so the water moves.
+      const riverPts = [[688, 548], [752, 492], [812, 450], [878, 418], [962, 388]];
+      const riverPoint = (t) => {
+        const seg = Math.min(riverPts.length - 2, Math.floor(t * (riverPts.length - 1)));
+        const lt = t * (riverPts.length - 1) - seg;
+        const [ax, ay] = riverPts[seg];
+        const [bx, by] = riverPts[seg + 1];
+        return { x: ax + (bx - ax) * lt, y: ay + (by - ay) * lt };
+      };
+      ctx.save();
+      for (const [off, wdt, alpha] of [[0, 3, 0.40], [14, 2, 0.32], [28, 2, 0.26]]) {
+        ctx.strokeStyle = `rgba(220, 248, 255, ${alpha})`;
+        ctx.lineWidth = wdt;
+        ctx.setLineDash([16, 22]);
+        ctx.lineDashOffset = -(this.time * 42 + off);
+        ctx.beginPath();
+        riverPts.forEach(([x, y], i) => {
+          const yy = y + (off - 14) * 0.55;
+          if (i === 0) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
+        });
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      for (let i = 0; i < 9; i++) {
+        const t = (this.time * 0.055 + i / 9) % 1;
+        const p = riverPoint(t);
+        const a = 0.25 + 0.45 * Math.sin(t * Math.PI);
+        ctx.fillStyle = `rgba(255,255,255,${a})`;
+        ctx.beginPath();
+        ctx.arc(p.x + Math.sin(i * 7.3) * 7, p.y + Math.cos(i * 5.1) * 4, 1.6 + (i % 3) * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+      // The bridge is painted into the backdrop, so repaint it over the
+      // flow lines: the water passes under the bridge, not over it. The
+      // clip follows the bridge outline (arch opening excluded, so the
+      // flow stays visible through it); same image, so no seam.
+      const bgImg = this.sprites.valley_backdrop.img;
+      ctx.save();
+      ctx.beginPath();
+      const bridgePoly = [
+        [690, 400], [700, 388], [730, 376], [790, 378], [845, 398],
+        [868, 420], [870, 452], [855, 468], [840, 452], [832, 418],
+        [766, 462], [742, 428], [716, 424], [706, 460], [694, 458],
+      ];
+      bridgePoly.forEach(([x, y], i) => { if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(bgImg, 0, 0, VIEW_W, VIEW_H);
+      ctx.restore();
     } else {
       // Fallback: rich sunlit emerald Alpine Valley gradient (#6eb349 -> #468330)
       const grad = ctx.createLinearGradient(0, 0, 0, VIEW_H);
@@ -502,12 +583,50 @@ export class IsoRenderer {
     // only the guide target gets an outline.
     const pulse = 0.5 + 0.5 * Math.sin(this.time * 5);
     const pads = game.activePads ? game.activePads() : PADS;
-    ctx.fillStyle = `rgba(255,238,170,${0.05 + 0.03 * pulse})`;
+    ctx.fillStyle = `rgba(255,238,170,${0.10 + 0.04 * pulse})`;
     for (const p of pads) {
       if (game.buildingAt(p.id)) continue;
       const { x, y } = tileToScreen(...p.tile);
       diamondPath(ctx, x, y, TILE_W, TILE_H);
       ctx.fill();
+    }
+    // Outline the whole buildable diamond so painted meadow outside the
+    // field does not look placeable.
+    const n = tileToScreen(0, 0), e = tileToScreen(GRID - 1, 0), s = tileToScreen(GRID - 1, GRID - 1), w = tileToScreen(0, GRID - 1);
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(n.x, n.y - TILE_H / 2);
+    ctx.lineTo(e.x + TILE_W / 2, e.y);
+    ctx.lineTo(s.x, s.y + TILE_H / 2);
+    ctx.lineTo(w.x - TILE_W / 2, w.y);
+    ctx.closePath();
+    ctx.strokeStyle = `rgba(255,215,94,${0.55 + 0.35 * pulse})`;
+    ctx.lineWidth = 3;
+    ctx.shadowColor = '#ffd75e';
+    ctx.shadowBlur = 8;
+    ctx.stroke();
+    ctx.restore();
+    // Blocked tiles inside the field (forest, cliffs, standing buildings)
+    // get a red wash and cross, so "cannot build here" is visible, not silent.
+    const buildable = new Set(pads.map((p) => p.tile.join(',')));
+    for (let i = 0; i < GRID; i++) {
+      for (let j = 0; j < GRID; j++) {
+        if (buildable.has(`${i},${j}`)) continue;
+        if (i === TOWN_CENTER_TILE[0] && j === TOWN_CENTER_TILE[1]) continue;
+        if (i === RESEARCH_TENT_TILE[0] && j === RESEARCH_TENT_TILE[1]) continue;
+        const { x, y } = tileToScreen(i, j);
+        diamondPath(ctx, x, y, TILE_W * 0.96, TILE_H * 0.96);
+        ctx.fillStyle = 'rgba(200,60,40,0.16)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(220,70,50,0.45)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x - 10, y - 5);
+        ctx.lineTo(x + 10, y + 5);
+        ctx.moveTo(x + 10, y - 5);
+        ctx.lineTo(x - 10, y + 5);
+        ctx.stroke();
+      }
     }
     const guide = game.guideTarget ? game.guideTarget() : null;
     for (const p of pads) {
@@ -522,6 +641,43 @@ export class IsoRenderer {
       ctx.stroke();
       ctx.restore();
     }
+  }
+
+  // HoH placement widget: translucent ghost of the chosen building on the
+  // tapped tile, green footprint, and cancel / confirm buttons below it.
+  // Nothing is built until confirm is tapped.
+  drawPlacementPreview(ctx, game) {
+    const pending = game.pendingPlacement;
+    if (!pending || game.modal) return;
+    const { x, y } = tileToScreen(...pending.tile);
+    ctx.save();
+    diamondPath(ctx, x, y, TILE_W * 0.96, TILE_H * 0.96);
+    ctx.fillStyle = 'rgba(110,245,85,0.35)';
+    ctx.fill();
+    ctx.strokeStyle = '#6ef555';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.globalAlpha = 0.6;
+    this.drawBuilding(ctx, game, { key: 'ghost', type: pending.type, tile: pending.tile, status: 'done', level: 1, worker: 0 }, { x, y });
+    ctx.restore();
+    const btn = (cx, fill, glyph) => {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, y + 35, 16, 0, Math.PI * 2);
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#fff3c4';
+      ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 17px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(glyph, cx, y + 36);
+      ctx.restore();
+    };
+    btn(x - 35, '#c0392b', '✕');
+    btn(x + 35, '#2e9e2e', '✓');
   }
 
   spriteKeyFor(game, b) {
@@ -758,7 +914,7 @@ export class IsoRenderer {
         affordable: true,
       }];
     }
-    if (b.status !== 'done' || !b.key.startsWith('pad_')) return [];
+    if (b.status !== 'done' || !(b.key.startsWith('pad_') || b.key.startsWith('tile_'))) return [];
     const out = [];
     // The worker sign is an action prompt: it shows only while the building has
     // no worker, and clicking it assigns one. A staffed building shows no sign.
@@ -788,9 +944,14 @@ export class IsoRenderer {
       if (!existing || existing.signature !== signature) {
         const tiles = findRoute(game, b);
         const pts = tiles.map(([i, j]) => tileToScreen(i, j));
-        // The walk ends at the front door (bottom edge of the sprite),
-        // not at the building's centre.
-        pts[pts.length - 1] = { x: pts[pts.length - 1].x, y: pts[pts.length - 1].y + 16 };
+        // Final approach: align south of the door, then walk straight up
+        // into it. The door is at the bottom centre of every sprite, so the
+        // last segment is vertical and the villager never crosses a wall.
+        const bp = tileToScreen(...b.tile);
+        const approach = { x: bp.x, y: bp.y + 46 };
+        const last = pts[pts.length - 1];
+        if (!last || Math.hypot(last.x - approach.x, last.y - approach.y) > 4) pts.push(approach);
+        pts.push({ x: bp.x, y: bp.y + 14 });
         const r = this.fxRand;
         this.villagers.set(b.key, {
           pts, signature, s: existing ? existing.s : r.range(0, 0.3), dir: existing ? existing.dir : 1,
@@ -812,6 +973,8 @@ export class IsoRenderer {
       const f = v.s * segs;
       const n = Math.min(segs - 1, Math.floor(f));
       const t = f - n;
+      // Progress along the final (door) segment, for the doorway fade.
+      v.doorT = n === segs - 1 ? t : 0;
       const a = v.pts[n];
       const b = v.pts[n + 1] || a;
       // Walk along the road with a little sideways offset so two villagers don't overlap.
@@ -825,7 +988,9 @@ export class IsoRenderer {
 
   updateSmoke(game, simDt) {
     for (const b of game.buildings) {
-      if (b.status !== 'done' || !['shelter', 'town_center'].includes(b.type)) continue;
+      // Smoke only where a fire belongs: home chimneys and the smelter forge.
+      // The Town Center (main building) has no roof smoke.
+      if (b.status !== 'done' || !['shelter', 'smelter'].includes(b.type)) continue;
       const t = (this.smokeTimers.get(b.key) || 0) - simDt;
       if (t > 0) { this.smokeTimers.set(b.key, t); continue; }
       this.smokeTimers.set(b.key, 0.45);
@@ -836,9 +1001,6 @@ export class IsoRenderer {
       if (sprite && sprite.chimney) {
         sx = pos.x - sprite.anchor[0] * sprite.width + sprite.chimney[0] * sprite.width;
         sy = pos.y - sprite.anchor[1] * sprite.height + sprite.chimney[1] * sprite.height;
-      } else if (b.type === 'town_center') {
-        sx = pos.x + 22;
-        sy = pos.y - 86;
       }
       const r = this.fxRand;
       this.particles.push({ kind: 'smoke', x: sx, y: sy, vx: r.range(3, 9), vy: r.range(-16, -10), life: 3.2, age: 0, size: r.range(3, 5) });
@@ -914,7 +1076,7 @@ export class IsoRenderer {
   // ------------------------------------------------------------ targets
   // Clickable world objects in canvas (= #game-root) pixels.
   worldTargets(game) {
-    if (game.battleState && game.battleState.active) return [];
+    if (game.battleState && game.battleState.active) return this.battleTargets(game);
     const out = [];
     for (const b of game.buildings) {
       const { x, y } = tileToScreen(...b.tile);
@@ -932,6 +1094,11 @@ export class IsoRenderer {
       const { x, y } = tileToScreen(...p.tile);
       out.push({ target_id: p.id, kind: 'pad', x: x - TILE_W / 2, y: y - TILE_H / 2, w: TILE_W, h: TILE_H });
     }
+    if (game.pendingPlacement) {
+      const { x, y } = tileToScreen(...game.pendingPlacement.tile);
+      out.push({ target_id: 'btn_cancel_placement', kind: 'placement', x: x - 52, y: y + 18, w: 34, h: 34, affordable: true });
+      out.push({ target_id: 'btn_confirm_placement', kind: 'placement', x: x + 18, y: y + 18, w: 34, h: 34, affordable: true });
+    }
     return out;
   }
 
@@ -939,25 +1106,51 @@ export class IsoRenderer {
   // (placement mode); otherwise ready buildings and front-most objects win.
   hitTest(game, x, y) {
     const targets = this.worldTargets(game);
+    if (game.battleState && game.battleState.active) {
+      return targets.find((t) => inRect(t, x, y)) || null;
+    }
     const pad = targets.find((t) => t.kind === 'pad'
       && Math.abs(x - (t.x + t.w / 2)) / (TILE_W / 2) + Math.abs(y - (t.y + t.h / 2)) / (TILE_H / 2) <= 1);
-    const chip = targets.find((t) => (t.kind === 'upgrade' || t.kind === 'worker' || t.kind === 'free_finish' || t.kind === 'expansion') && inRect(t, x, y));
+    const chip = targets.find((t) => (t.kind === 'upgrade' || t.kind === 'worker' || t.kind === 'free_finish' || t.kind === 'expansion' || t.kind === 'placement') && inRect(t, x, y));
     if (chip) return chip;
+    // Placement mode: the tile wins. Building sprites are tall and overlap
+    // the tiles below them; without this, the tile under a ready farm could
+    // never be picked (the click harvested instead of placing).
+    if (pad && game.selectedCard) return pad;
     // The floating harvest bubble sits above the building box; clicking it harvests.
     const bubble = targets.find((t) => t.kind === 'building' && t.ready
       && Math.hypot(x - (t.x + t.w / 2), y - (t.y + t.h - 14 - 78)) <= 20);
     if (bubble) return bubble;
-    // A ready building under the pointer wins over the free tile behind it,
-    // even in placement mode (free tiles are everywhere now).
     const readyBuilding = targets.find((t) => t.kind === 'building' && t.ready && inRect(t, x, y));
     if (readyBuilding) return readyBuilding;
-    if (pad && game.selectedCard) return pad;
     const buildings = targets.filter((t) => t.kind === 'building' && inRect(t, x, y))
       .sort((a, b) => (b.ready - a.ready) || (b.y + b.h) - (a.y + a.h));
     return buildings[0] || pad || null;
   }
 
   // ------------------------------------------------------------ battle arena
+  // Fixed unit slots: heroes left, enemies right. Units stand still.
+  battleUnitPos(kind, idx) {
+    return kind === 'hero' ? { x: 235, y: 200 + idx * 105 } : { x: 725, y: 200 + idx * 105 };
+  }
+
+  battleTargets(game) {
+    const bs = game.battleState;
+    if (!bs || !bs.active) return [];
+    const out = [];
+    (bs.units || []).forEach((u, i) => {
+      if (!u.alive) return;
+      const p = this.battleUnitPos('hero', i);
+      out.push({ target_id: `unit_hero_${u.id}`, kind: 'battle_hero', x: p.x - 48, y: p.y - 78, w: 96, h: 112, affordable: !u.acted });
+    });
+    (bs.enemies || []).forEach((e, i) => {
+      if (!e.alive) return;
+      const p = this.battleUnitPos('enemy', i);
+      out.push({ target_id: `unit_enemy_${e.idx}`, kind: 'battle_enemy', x: p.x - 48, y: p.y - 78, w: 96, h: 112, affordable: true });
+    });
+    return out;
+  }
+
   renderBattleArena(ctx, game, dt) {
     const bs = game.battleState || game.battle || game.battleArena;
     if (!bs) return;
@@ -1011,134 +1204,51 @@ export class IsoRenderer {
     ctx.fillText(`${stageTitle} · Wave ${bs.wave || 1}/${bs.totalWaves || 1}`, VIEW_W / 2, 36);
     ctx.textBaseline = 'alphabetic';
 
-    // Animation cycles
-    const attackCycle = (this.time * 3.2) % Math.PI;
-    const alliedLunge = Math.sin(attackCycle) * 18;
-    const enemyLunge = -Math.sin(attackCycle + 1.4) * 16;
-    const bobV = Math.sin(this.time * 6) * 3;
-    const bobL = Math.sin(this.time * 6 + 1.3) * 3;
-    const bobE1 = Math.sin(this.time * 5.5 + 0.6) * 3;
-    const bobE2 = Math.sin(this.time * 5.5 + 2.1) * 3;
-    const auraPulse = 0.5 + 0.5 * Math.sin(this.time * 4.5);
-
-    // 2. Allied Heroes (Left Side)
-    // hero_vaelen at (250, 320)
-    const vx = 250 + alliedLunge;
-    const vy = 320 + bobV;
-    // Golden aura ring
-    ctx.save();
-    ctx.strokeStyle = `rgba(245, 195, 75, ${0.45 + 0.35 * auraPulse})`;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.ellipse(vx, 328, 36, 14, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-
-    // Vaelen Sprite
-    const vSprite = this.sprites.hero_vaelen;
-    if (vSprite?.img) {
-      const w = vSprite.width;
-      const h = vSprite.height;
-      ctx.drawImage(vSprite.img, vx - vSprite.anchor[0] * w, vy - vSprite.anchor[1] * h, w, h);
-    } else {
-      circle(ctx, vx, vy - 24, 20, '#d97706');
-    }
-
-    // Overhead green HP bar for Vaelen / Allies
-    const phpPct = Math.max(0, Math.min(1, bs.playerHp / (bs.playerMaxHp || 1)));
-    roundRect(ctx, 160, 205, 150, 15, 7.5, 'rgba(15, 12, 10, 0.85)');
-    roundRect(ctx, 162, 207, 146 * phpPct, 11, 5.5, '#22c55e');
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 9px Georgia, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(`${bs.playerHp} / ${bs.playerMaxHp} HP`, 235, 212.5);
-    ctx.textBaseline = 'alphabetic';
-
-    // Rage bar for Vaelen
-    const vRagePct = Math.min(1, (bs.vaelenRage || 0) / 100);
-    roundRect(ctx, 160, 224, 150, 6, 3, 'rgba(15, 12, 10, 0.85)');
-    roundRect(ctx, 161, 225, 148 * vRagePct, 4, 2, vRagePct >= 1 ? '#ffd700' : '#f97316');
-
-    // hero_lyra at (165, 345) if unlocked
-    const lyraUnlocked = !!(game.heroes?.lyra?.unlocked);
-    if (lyraUnlocked) {
-      const lx = 165 + alliedLunge * 0.75;
-      const ly = 345 + bobL;
+    // Turn-based units: fixed slots, no marching, no bobbing. A gold ring
+    // marks the picked hero; a dimmed unit has already acted this round.
+    const drawUnit = (u, p, spriteKey, accent) => {
       ctx.save();
-      ctx.strokeStyle = `rgba(255, 235, 140, ${0.45 + 0.35 * auraPulse})`;
-      ctx.lineWidth = 2.5;
+      if (!u.alive) ctx.globalAlpha = 0.25;
+      else if (u.acted) ctx.globalAlpha = 0.55;
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
       ctx.beginPath();
-      ctx.ellipse(lx, 352, 30, 12, 0, 0, Math.PI * 2);
-      ctx.stroke();
+      ctx.ellipse(p.x, p.y + 8, 34, 11, 0, 0, Math.PI * 2);
+      ctx.fill();
+      if (bs.selectedUnit && u.id === bs.selectedUnit) {
+        ctx.strokeStyle = '#ffd75e';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.ellipse(p.x, p.y + 8, 40, 14, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      const spr = this.sprites[spriteKey];
+      if (spr?.img) {
+        ctx.drawImage(spr.img, p.x - spr.anchor[0] * spr.width, p.y - spr.anchor[1] * spr.height, spr.width, spr.height);
+      } else {
+        circle(ctx, p.x, p.y - 24, 20, accent);
+      }
       ctx.restore();
-
-      const lSprite = this.sprites.hero_lyra;
-      if (lSprite?.img) {
-        const w = lSprite.width;
-        const h = lSprite.height;
-        ctx.drawImage(lSprite.img, lx - lSprite.anchor[0] * w, ly - lSprite.anchor[1] * h, w, h);
-      } else {
-        circle(ctx, lx, ly - 20, 16, '#ec4899');
+      // Name + HP bar above the unit.
+      const pct = Math.max(0, Math.min(1, u.hp / (u.maxHp || 1)));
+      roundRect(ctx, p.x - 42, p.y - 86, 84, 10, 5, 'rgba(15,12,10,0.85)');
+      roundRect(ctx, p.x - 41, p.y - 85, 82 * pct, 8, 4, u.kind === 'hero' ? '#22c55e' : '#ef4444');
+      ctx.fillStyle = '#fff4c2';
+      ctx.font = 'bold 10px Georgia, serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(u.kind === 'hero' ? u.name.split(' ')[0] : u.name, p.x, p.y - 92);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '9px Georgia, serif';
+      ctx.fillText(u.alive ? `${u.hp}/${u.maxHp} HP${u.acted ? ' · acted' : ''}` : 'fallen', p.x, p.y - 64);
+      if (u.kind === 'hero' && u.alive) {
+        roundRect(ctx, p.x - 42, p.y + 16, 84, 5, 2.5, 'rgba(15,12,10,0.85)');
+        roundRect(ctx, p.x - 41, p.y + 17, 82 * Math.min(1, (u.rage || 0) / 100), 3, 1.5,
+          (u.rage || 0) >= 100 ? '#ffd700' : '#f97316');
       }
+    };
+    (bs.units || []).forEach((u, i) => drawUnit(u, this.battleUnitPos('hero', i), `hero_${u.id}`, '#d97706'));
+    (bs.enemies || []).forEach((e, i) => drawUnit(e, this.battleUnitPos('enemy', i),
+      e.name === 'Alpha Beast' ? 'boss_shadowclaw' : 'enemy_beast_pack', '#991b1b'));
 
-      // Rage bar for Lyra
-      const lRagePct = Math.min(1, (bs.lyraRage || 0) / 100);
-      roundRect(ctx, 110, 240, 90, 5, 2.5, 'rgba(15, 12, 10, 0.85)');
-      roundRect(ctx, 111, 241, 88 * lRagePct, 3, 1.5, lRagePct >= 1 ? '#ffd700' : '#a855f7');
-    }
-
-    // 3. Enemy Beasts (Right Side)
-    // Overhead red HP bar for Enemies
-    const ehpPct = Math.max(0, Math.min(1, bs.enemyHp / (bs.enemyMaxHp || 1)));
-    roundRect(ctx, 650, 205, 160, 15, 7.5, 'rgba(15, 12, 10, 0.85)');
-    roundRect(ctx, 652, 207, 156 * ehpPct, 11, 5.5, '#ef4444');
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 9px Georgia, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(`${bs.enemyHp} / ${bs.enemyMaxHp} HP`, 730, 212.5);
-    ctx.textBaseline = 'alphabetic';
-
-    const isBoss = bs.stageId === 'stage_8' || bs.stageId === 'stage_6';
-    if (isBoss) {
-      // boss_shadowclaw
-      const bx = 710 + enemyLunge;
-      const by = 300 + bobE1;
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-      ctx.beginPath();
-      ctx.ellipse(bx, 318, 52, 18, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      const bossSprite = this.sprites.boss_shadowclaw;
-      if (bossSprite?.img) {
-        const w = bossSprite.width;
-        const h = bossSprite.height;
-        ctx.drawImage(bossSprite.img, bx - bossSprite.anchor[0] * w, by - bossSprite.anchor[1] * h, w, h);
-      } else {
-        circle(ctx, bx, by - 32, 28, '#7c2d12');
-      }
-    }
-
-    // Enemy beast pack wolves/boars at (670, 315) and (755, 350)
-    const beastSprite = this.sprites.enemy_beast_pack;
-    const beastPos = isBoss
-      ? [{ x: 775 + enemyLunge, y: 350 + bobE2 }]
-      : [{ x: 670 + enemyLunge, y: 315 + bobE1 }, { x: 755 + enemyLunge, y: 350 + bobE2 }];
-
-    for (const bp of beastPos) {
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-      ctx.beginPath();
-      ctx.ellipse(bp.x, bp.y + 6, 28, 10, 0, 0, Math.PI * 2);
-      ctx.fill();
-      if (beastSprite?.img) {
-        const w = beastSprite.width;
-        const h = beastSprite.height;
-        ctx.drawImage(beastSprite.img, bp.x - beastSprite.anchor[0] * w, bp.y - beastSprite.anchor[1] * h, w, h);
-      } else {
-        circle(ctx, bp.x, bp.y - 18, 18, '#991b1b');
-      }
-    }
 
     // 4. Dramatic diagonal comic-book slash banner if bs.cutIn is active
     if (bs.cutIn) {
@@ -1206,10 +1316,10 @@ function drawVillager(ctx, v, time) {
   if (v.inside > 0) return; // inside the building, out of sight
   const step = v.moving ? Math.sin(time * 10 + v.phase) : 0;
   const { x, y } = v;
-  // Fade at the doorway so the villager slips into the building instead of
-  // reversing on the spot at its centre.
+  // Fade only while crossing the doorstep (last steps of the final
+  // segment), so the villager slips through the door, not through a wall.
   ctx.save();
-  if (v.s > 0.9) ctx.globalAlpha = Math.max(0, Math.min(1, (1 - v.s) / 0.1));
+  if ((v.doorT || 0) > 0.6) ctx.globalAlpha = Math.max(0.1, 1 - (v.doorT - 0.6) / 0.4);
   ctx.fillStyle = 'rgba(0,0,0,0.25)';
   ctx.beginPath();
   ctx.ellipse(x, y + 1, 5, 2, 0, 0, Math.PI * 2);

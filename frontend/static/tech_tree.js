@@ -3,10 +3,11 @@
 
 import { RESOURCE_LABEL, TECHS, TECH_ORDER } from './game.js';
 
-// Five narrower columns; each chain sits on one row so its arrows run straight.
+// Five columns; each chain sits on one row so its arrows run straight.
 // The era chain runs along the bottom row and Irrigation (a Bronze Age tech) is last.
-const COL = [0, 158, 316, 474, 632];
-const ROW = [0, 132, 264];
+// Nodes are wide enough that names and effects never clip.
+const COL = [0, 178, 356, 534, 712];
+const ROW = [0, 134, 268];
 const NODE_POS = {
   tech_toolmaking: [COL[0], ROW[1]],
   tech_woodworking: [COL[1], ROW[0]],
@@ -17,8 +18,8 @@ const NODE_POS = {
   tech_bronze_age: [COL[3], ROW[2]],
   tech_irrigation: [COL[4], ROW[2]],
 };
-const NODE_W = 142;
-const NODE_H = 112;
+const NODE_W = 166;
+const NODE_H = 118;
 const TREE_W = COL[4] + NODE_W;
 const TREE_H = ROW[2] + NODE_H;
 

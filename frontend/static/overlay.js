@@ -92,7 +92,8 @@ class Overlay {
     this.step = 1;
     this.tab = 'forge';
     this.slide = document.body.classList.contains('slide-dock');
-    document.querySelectorAll('#stepper .step-btn').forEach((b) => b.addEventListener('click', () => this.showStep(Number(b.dataset.step))));
+    // The stepper is a progress indicator, not navigation: steps advance
+    // only through the panel actions (forge, approve, run playtest).
     document.getElementById('live-link').addEventListener('click', () => this.showTab('live'));
 
     this.personasReady = fetch('/api/personas').then((r) => r.json()).catch(() => []).then((rows) => {
@@ -138,7 +139,8 @@ class Overlay {
       const n = Number(b.dataset.step);
       b.classList.toggle('current', n === current);
       b.classList.toggle('done', done[n] && n !== current);
-      b.disabled = !reachable[n];
+      b.classList.toggle('locked', !reachable[n]);
+      b.disabled = true;
     });
     document.getElementById('live-link').classList.toggle('current', this.tab === 'live');
   }

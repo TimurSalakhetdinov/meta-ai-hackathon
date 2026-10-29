@@ -37,7 +37,7 @@ flowchart LR
 | Muse Spark | Persona playtesters (computer use + working-memory scratchpads), session reasoning, fix & feature rework proposals |
 | SAM 3.1 | Segmenting UI elements in gameplay screenshots & computing the `6.76x` distractor-to-goal visual salience ratio |
 | Muse Image | Live in-game Variant B UI emblem generation in the Feature Forge & 2.5D sprite/portrait assets |
-| Meta AudioCraft / MusicGen | Optional soundtrack pipeline in `scripts/generate_music_tracks.py` (`--mode musicgen`, `facebook/musicgen-medium`). Not yet run: the committed `valley_theme.wav` and `battle_theme.wav` loops are offline synth output from the same script (`--mode synth`) |
+| Meta AudioCraft / MusicGen | Soundtrack in `scripts/generate_music_eleven.py` (ElevenLabs Music, prompts from the HoH audio spec in the Downloads brief). The committed `valley_theme.mp3` (60 s) and `battle_theme.mp3` (45 s) are ElevenLabs output. The older MusicGen/synth WAV loops were replaced |
 | Muse Code | Agentic coding tool used to build and iterate on the multi-agent backend, telemetry, and Feature Studio |
 
 ## Status
@@ -61,7 +61,7 @@ flowchart LR
 - [x] Gameplay-fix batch: 8-tech tree (Sturdy Construction gates Lv.2, Stone Age Awakening gates Lv.3, Bronze Age Dawn needs every earlier Dawn/Stone research plus the 20-minute `bronze_unlock_min_sim_sec` timer, Irrigation last as a Bronze Age tech; Tech Tree window draggable by its header), free placement on any open meadow tile with a soft meadow glow (forest corner and cliffs blocked, no numbered plot boxes), separate Upgrades menu with the on-building chip only when usable and no permanent Lv badge, worker sign only on unstaffed producers (tap assigns; producers built with no free worker start unstaffed), production cycles 12s food / 20s wood / 15s stone / 20s smelter, Heroes' Arena (needs Barracks) with timed hero training (`hero_training_sec`, never instant), renamed heroes Bera the Shield-Hunter, Sunweaver Lyra, Ember-Keeper Ignis and Tor the Stone-Breaker (ids unchanged, new stone-age bust portraits), campaign stages as medallion nodes on a dotted trail over the campaign map backdrop, and Elder Kaelen advisor speech via browser speech synthesis (low slow voice, silent in bot runs and when muted)
 - [x] Game Manager in the Architect's Council: 3 prebuilt feature presets (`configs/feature_presets.json`), "Approve & play" approval, custom idea box, and full-screen council report
 - [x] Handover regression fixed: stub bot saves for Masonry in free play, so variant B reaches the Stone Age on seeds 42 and 44 again (full suite: 99 passed)
-- [ ] Soundtrack: committed valley/battle loops are offline synth output; optional MusicGen regeneration (`scripts/generate_music_tracks.py --mode musicgen`) not yet run
+- [x] Soundtrack: `valley_theme.mp3` and `battle_theme.mp3` generated with ElevenLabs Music from the HoH audio spec prompts. Elder Kaelen voice lines and 22 sound effects also generated with ElevenLabs (`scripts/generate_kaelen_voice.py`, `scripts/generate_sfx.py`)
 - [ ] Validation against human sessions
 - [ ] Demo video
 

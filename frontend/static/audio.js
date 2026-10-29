@@ -25,6 +25,8 @@ export class Sfx {
   constructor({ muted = false } = {}) {
     this.muted = muted;
     this.ctx = null;
+    this.musicVolume = 0.6;
+    this.sfxVolume = 0.9;
     this.masterGain = null;
     this.compressor = null;
     this.sfxGain = null;
@@ -40,8 +42,11 @@ export class Sfx {
     this.audioFilesAvailable = false;
     this.audioElements = { valley: null, battle: null };
     // Decoded soundtrack loops played gaplessly through Web Audio.
-    this.musicBuffers = { valley: null, battle: null };
-    this.musicSources = { valley: null, battle: null };
+    // Valley has three selectable tracks (music menu); battle is fixed.
+    this.valleyTrack = 'valley'; // 'valley' | 'valley2' | 'valley3' | 'valley4'
+    this.valleyTrackGains = null;
+    this.musicBuffers = { valley: null, valley2: null, valley3: null, valley4: null, battle: null };
+    this.musicSources = { valley: null, valley2: null, valley3: null, valley4: null, battle: null };
     this.musicLoad = 'idle'; // 'idle' | 'loading' | 'ready' | 'failed'
 
     // Procedural Sequencer Timers
@@ -86,12 +91,12 @@ export class Sfx {
 
     // SFX Sub-bus
     this.sfxGain = this.ctx.createGain();
-    this.sfxGain.gain.setValueAtTime(1.0, this.ctx.currentTime);
+    this.sfxGain.gain.setValueAtTime(this.sfxVolume, this.ctx.currentTime);
     this.sfxGain.connect(this.masterGain);
 
     // Music Sub-bus & Theme Crossfader Busses
     this.musicGain = this.ctx.createGain();
-    this.musicGain.gain.setValueAtTime(0.70, this.ctx.currentTime);
+    this.musicGain.gain.setValueAtTime(0.70 * this.musicVolume, this.ctx.currentTime);
     this.musicGain.connect(this.masterGain);
 
     this.valleyGain = this.ctx.createGain();
@@ -101,6 +106,15 @@ export class Sfx {
     this.battleGain = this.ctx.createGain();
     this.battleGain.gain.setValueAtTime(this.musicTheme === 'battle' ? 1.0 : 0.0001, this.ctx.currentTime);
     this.battleGain.connect(this.musicGain);
+
+    // Per-track gains under the valley bus, for track switching crossfades.
+    this.valleyTrackGains = {};
+    for (const t of ['valley', 'valley2', 'valley3', 'valley4']) {
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(t === this.valleyTrack ? 1.0 : 0.0001, this.ctx.currentTime);
+      g.connect(this.valleyGain);
+      this.valleyTrackGains[t] = g;
+    }
 
     // Build 2-second shared white noise buffer for procedural transient layers
     this._buildNoiseBuffer();
@@ -128,21 +142,67 @@ export class Sfx {
     this.noiseBuffer = buffer;
   }
 
+  // ElevenLabs SFX files (scripts/generate_sfx.py). When a file is loaded it
+  // replaces the synth version of that sound; anything missing falls back.
+  _loadSfxFiles() {
+    if (this.sfxFilesStarted || typeof fetch !== 'function') return;
+    this.sfxFilesStarted = true;
+    this.sfxFiles = this.sfxFiles || {};
+    const NAMES = ['click', 'modal_open', 'modal_close', 'build', 'built', 'free_finish',
+      'ready', 'harvest', 'coin', 'unlock', 'era_up', 'quest', 'quest_claim',
+      'hero_levelup', 'hit', 'roar', 'ult_ready', 'hero_ult', 'hero_heal',
+      'victory', 'defeat', 'reject',
+      'build_shelter', 'build_forager_hut', 'build_woodcutter_hut', 'build_stone_quarry',
+      'build_granary', 'build_smelter', 'build_tribal_monument', 'build_barracks', 'build_hero_arena',
+      'harvest_food', 'harvest_wood', 'harvest_stone', 'harvest_coins', 'research_select',
+      'dock_heroes', 'dock_campaign', 'dock_research', 'dock_upgrades', 'claim_reward', 'ambient_wind', 'upgrade'];
+    for (const n of NAMES) {
+      fetch(`/static/assets/audio/sfx/${n}.mp3?v=4`)
+        .then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+        .then((data) => new Promise((ok, fail) => this.ctx.decodeAudioData(data, ok, fail)))
+        .then((buf) => { this.sfxFiles[n] = buf; })
+        .catch(() => {});
+    }
+  }
+
+  _playSfxFile(name, bus) {
+    const ALIAS = {
+      ui: 'click', place: 'build', food: 'harvest', harvest_food: 'harvest',
+      coins: 'coin', harvest_coin: 'coin', speedup: 'free_finish', instant_finish: 'free_finish',
+      research: 'unlock', levelup: 'hero_levelup', sword_clash: 'hit', slash: 'hit',
+      attack: 'hit', beast_roar: 'roar', sabertooth: 'roar', ult_stomp: 'hero_ult',
+      stomp: 'hero_ult', earthshatter: 'hero_ult', error: 'reject',
+    };
+    const file = ALIAS[name] || name;
+    const buf = this.sfxFiles && this.sfxFiles[file];
+    if (!buf) return false;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(bus);
+    src.start();
+    return true;
+  }
+
   _loadMusicBuffers() {
     if (this.musicLoad !== 'idle' || typeof fetch !== 'function') return;
     this.musicLoad = 'loading';
-    const load = (theme) => fetch(AUDIO_BASE + `${theme}_theme.wav`)
-      .then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+    const loadOne = (theme, ext) => fetch(AUDIO_BASE + `${theme}_theme.${ext}?v=4`)
+      .then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); });
+    // ElevenLabs MP3 first (scripts/generate_music_eleven.py), WAV fallback.
+    // A missing track must not kill the others: each load settles on its own.
+    const load = (theme) => loadOne(theme, 'mp3').catch(() => loadOne(theme, 'wav'))
       .then((data) => new Promise((ok, fail) => this.ctx.decodeAudioData(data, ok, fail)))
-      .then((buf) => { this.musicBuffers[theme] = this._seamlessLoop(buf, 2.0); });
-    Promise.all([load('valley'), load('battle')])
+      .then((buf) => { this.musicBuffers[theme] = this._seamlessLoop(buf, 2.0); })
+      .catch(() => { this.musicBuffers[theme] = null; });
+    Promise.all([load('valley'), load('valley2'), load('valley3'), load('valley4'), load('battle')])
       .then(() => {
+        if (!this.musicBuffers.valley && !this.musicBuffers.valley2 && !this.musicBuffers.valley3 && !this.musicBuffers.valley4 && !this.musicBuffers.battle) {
+          this.musicLoad = 'failed';
+          if (this.musicRunning) this._startValleyWaterfall();
+          return;
+        }
         this.musicLoad = 'ready';
         if (this.musicRunning) this._startMusicSources();
-      })
-      .catch(() => {
-        this.musicLoad = 'failed';
-        if (this.musicRunning) this._startValleyWaterfall();
       });
   }
 
@@ -167,22 +227,54 @@ export class Sfx {
 
   _startMusicSources() {
     if (!this.ctx) return;
-    for (const theme of ['valley', 'battle']) {
+    for (const theme of ['valley', 'valley2', 'valley3', 'valley4', 'battle']) {
       if (this.musicSources[theme] || !this.musicBuffers[theme]) continue;
       const src = this.ctx.createBufferSource();
       src.buffer = this.musicBuffers[theme];
       src.loop = true;
-      src.connect(theme === 'valley' ? this.valleyGain : this.battleGain);
+      src.connect(theme === 'battle' ? this.battleGain : (this.valleyTrackGains?.[theme] || this.valleyGain));
       src.start();
       this.musicSources[theme] = src;
     }
+    this._loadSfxFiles();
+    this._scheduleWind();
   }
 
   _stopMusicSources() {
-    for (const theme of ['valley', 'battle']) {
+    for (const theme of ['valley', 'valley2', 'valley3', 'valley4', 'battle']) {
       try { this.musicSources[theme]?.stop(); } catch (e) { /* already stopped */ }
       this.musicSources[theme] = null;
     }
+    if (this.windTimer) { clearTimeout(this.windTimer); this.windTimer = null; }
+  }
+
+  // Occasional forest wind gusts over the valley (sfx/ambient_wind.mp3),
+  // scheduled every 20 to 45 seconds while the valley theme is in front.
+  _scheduleWind() {
+    if (this.windTimer) clearTimeout(this.windTimer);
+    const next = () => {
+      this.windTimer = setTimeout(() => {
+        const buf = this.sfxFiles && this.sfxFiles.ambient_wind;
+        if (buf && this.musicRunning && !this.muted && this.musicTheme === 'valley' && this.ctx) {
+          const src = this.ctx.createBufferSource();
+          src.buffer = buf;
+          src.loop = true;
+          src.playbackRate.value = 0.92 + Math.random() * 0.16;
+          const g = this.ctx.createGain();
+          const t = this.ctx.currentTime;
+          const dur = 7 + Math.random() * 5;
+          g.gain.setValueAtTime(0, t);
+          g.gain.linearRampToValueAtTime(0.13, t + dur * 0.4);
+          g.gain.linearRampToValueAtTime(0, t + dur);
+          src.connect(g);
+          g.connect(this.valleyGain || this.masterGain);
+          src.start(t);
+          src.stop(t + dur + 0.1);
+        }
+        next();
+      }, 20000 + Math.random() * 25000);
+    };
+    next();
   }
 
   toggle() {
@@ -222,6 +314,37 @@ export class Sfx {
   // =================================================================
   // BACKGROUND MUSIC SEQUENCER & CROSSFADER
   // =================================================================
+
+  setMusicVolume(v) {
+    this.musicVolume = Math.max(0, Math.min(1, v));
+    if (this.ctx && this.musicGain) {
+      this.musicGain.gain.setTargetAtTime(0.70 * this.musicVolume, this.ctx.currentTime, 0.03);
+    }
+    const active = this.musicTheme === 'valley' ? this.audioElements?.valley : this.audioElements?.battle;
+    if (active && !this.muted) active.volume = 0.70 * this.musicVolume;
+  }
+
+  setSfxVolume(v) {
+    this.sfxVolume = Math.max(0, Math.min(1, v));
+    if (this.ctx && this.sfxGain) {
+      this.sfxGain.gain.setTargetAtTime(this.sfxVolume, this.ctx.currentTime, 0.03);
+    }
+  }
+
+  // Switch the valley track (music menu). Battle theme is unaffected.
+  setValleyTrack(track) {
+    if (!['valley', 'valley2', 'valley3', 'valley4'].includes(track)) return;
+    this.valleyTrack = track;
+    if (this.ctx && this.valleyTrackGains) {
+      const t = this.ctx.currentTime;
+      for (const [name, g] of Object.entries(this.valleyTrackGains)) {
+        g.gain.cancelScheduledValues(t);
+        g.gain.setValueAtTime(g.gain.value, t);
+        g.gain.linearRampToValueAtTime(name === track ? 1.0 : 0.0001, t + 0.85);
+      }
+    }
+    if (!this.musicRunning && !this.muted) this.startMusic();
+  }
 
   setMusicTheme(theme) {
     if (theme !== 'valley' && theme !== 'battle') return;
@@ -701,6 +824,9 @@ export class Sfx {
 
     const t = ctx.currentTime;
     const bus = this.sfxGain || this.masterGain;
+
+    this._loadSfxFiles();
+    if (this._playSfxFile(name, bus)) return;
 
     switch (name) {
       // -------------------------------------------------------------

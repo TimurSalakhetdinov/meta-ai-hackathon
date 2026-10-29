@@ -352,6 +352,16 @@ def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = No
         return FileResponse(STATIC_DIR / "index.html", headers={"Cache-Control": "no-store"})
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+    @app.middleware("http")
+    async def static_no_cache(request, call_next):
+        # Game assets change often during development; always revalidate so
+        # players never hear stale cached music or sounds.
+        response = await call_next(request)
+        if request.url.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
     return app
 
 

@@ -124,10 +124,11 @@ class Driver:
         self.page.wait_for_function(f"window.__GAME_STATE__.last_click_seq > {seq}", timeout=3000)
 
     def build(self, building: str) -> str:
-        """Select a build card, then click the first free plot. Returns the plot id."""
+        """Select a build card, preview on the first free plot, confirm. Returns the plot id."""
         self.click(f"card_{building}")
         pad = next(t for t in self.targets() if t["kind"] == "pad" and t["visible"])
         self.click(pad["target_id"])
+        self.click("btn_confirm_placement")
         return pad["target_id"]
 
     def harvest_ready(self) -> int:
