@@ -43,7 +43,7 @@ export class Sfx {
     this.audioElements = { valley: null, battle: null };
     // Decoded soundtrack loops played gaplessly through Web Audio.
     // Valley has three selectable tracks (music menu); battle is fixed.
-    this.valleyTrack = 'valley'; // 'valley' | 'valley2' | 'valley3' | 'valley4'
+    this.valleyTrack = 'valley4'; // default: Celtic Humming; 'valley' | 'valley2' | 'valley3' | 'valley4'
     this.valleyTrackGains = null;
     this.musicBuffers = { valley: null, valley2: null, valley3: null, valley4: null, battle: null };
     this.musicSources = { valley: null, valley2: null, valley3: null, valley4: null, battle: null };
@@ -157,7 +157,7 @@ export class Sfx {
       'harvest_food', 'harvest_wood', 'harvest_stone', 'harvest_coins', 'research_select',
       'dock_heroes', 'dock_campaign', 'dock_research', 'dock_upgrades', 'claim_reward', 'ambient_wind', 'upgrade'];
     for (const n of NAMES) {
-      fetch(`/static/assets/audio/sfx/${n}.mp3?v=4`)
+      fetch(`/static/assets/audio/sfx/${n}.mp3?v=9`)
         .then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
         .then((data) => new Promise((ok, fail) => this.ctx.decodeAudioData(data, ok, fail)))
         .then((buf) => { this.sfxFiles[n] = buf; })

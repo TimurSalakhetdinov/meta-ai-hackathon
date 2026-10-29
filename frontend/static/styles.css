@@ -78,6 +78,14 @@ button { font: inherit; cursor: pointer; }
   background: linear-gradient(var(--gold-hi), var(--gold)); border: 1px solid var(--gold-lo);
   box-shadow: 0 2px 0 #6b4f17;
 }
+/* Upgrades moved to the top bar: keep the dock button presence, bar height. */
+.hud-btn.upgrades-top {
+  margin-left: auto; height: 34px; padding: 0 14px; font-size: 13px; letter-spacing: .2px;
+  border-radius: 10px; border: 2px solid #fff3c4; color: #3a2208;
+  background: linear-gradient(#ffe9b8, var(--gold));
+  box-shadow: 0 2px 0 #6b4f17, 0 4px 10px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.7);
+}
+.hud-btn.upgrades-top:hover { filter: brightness(1.07); }
 #btn_inspect { font-style: italic; font-family: Georgia, serif; width: 32px; }
 #btn_inspect.on { background: linear-gradient(#bff4ff, var(--cyan)); }
 
@@ -109,13 +117,26 @@ button { font: inherit; cursor: pointer; }
 
 /* ------------------------------------------------------------ Build bar */
 #build-bar {
-  position: absolute; left: 0; bottom: 0; width: 620px; height: 110px; padding: 6px 14px;
-  background: none;
-  z-index: 5;
-  pointer-events: none;
+  position: absolute; left: 12px; bottom: 8px; width: auto; height: auto; padding: 0;
+  background: none; z-index: 5; pointer-events: none;
+  display: flex; flex-direction: row; align-items: flex-end; gap: 10px;
 }
+.build-menu { display: flex; flex-direction: column; }
 #build-bar .card, #build-bar .build-cat-btn { pointer-events: auto; }
-.build-filter-bar { display: flex; gap: 5px; margin-bottom: 4px; }
+/* Same size as the Research dock card. */
+.buildings-toggle {
+  pointer-events: auto; flex: 0 0 auto;
+  width: calc(68px * var(--card-scale)); height: calc(70px * var(--card-scale));
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  font: 800 11px var(--ui); color: var(--ink); border-radius: 10px; cursor: pointer;
+  background: linear-gradient(#fff5d8, var(--parch-2)); border: 2px solid var(--gold);
+  box-shadow: 0 3px 0 #6b4f17, 0 6px 12px rgba(0,0,0,.4);
+}
+.buildings-toggle .d-ico { font-family: var(--emoji); font-size: 26px; }
+.buildings-toggle .d-label { font-size: 11px; font-weight: bold; }
+#build-bar.collapsed { width: auto; height: auto; }
+#build-bar.collapsed .build-menu { display: none; }
+.build-filter-bar { display: flex; flex-wrap: nowrap; gap: 5px; margin-bottom: 4px; }
 .build-cat-btn {
   padding: 2px 7px; font: 700 9.5px var(--ui); border-radius: 6px;
   background: rgba(35,28,20,0.85); border: 1px solid #786548; color: #eedcc0; cursor: pointer; transition: all .15s ease;
@@ -124,17 +145,18 @@ button { font: inherit; cursor: pointer; }
   background: linear-gradient(var(--gold-hi), var(--gold)); border-color: #fff; color: #3a2208;
   font-weight: bold; box-shadow: 0 0 6px rgba(255,215,94,.6);
 }
-.cards { display: flex; gap: 18px; align-items: flex-end; height: 74px; }
+.cards { display: flex; flex-wrap: nowrap; gap: 10px; align-items: flex-end; width: auto; height: auto; }
+/* Building cards match the dock buttons (Research, Upgrades): icon on top, label below. */
 .card {
   position: relative; width: calc(68px * var(--card-scale)); height: calc(70px * var(--card-scale));
-  padding: 2px 3px 3px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+  padding: 3px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
   background: linear-gradient(#fff5d8, var(--parch-2)); border: 2px solid var(--gold); border-radius: 10px;
   box-shadow: 0 3px 0 #6b4f17, 0 6px 12px rgba(0,0,0,.4); color: var(--ink); overflow: visible;
   transition: transform .12s ease;
 }
-.card img { position: absolute; top: -16px; left: 50%; transform: translateX(-50%); width: 56px; height: 46px;
-  object-fit: contain; filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)); pointer-events: none; }
-.card .c-name { font-size: 9.5px; letter-spacing: -.2px; font-weight: bold; line-height: 1.1; white-space: nowrap; }
+.card img { width: 34px; height: 28px; object-fit: contain;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,.3)); pointer-events: none; }
+.card .c-name { font-size: 9.5px; letter-spacing: -.2px; font-weight: bold; line-height: 1.1; white-space: nowrap; text-align: center; }
 .card .c-cost { font-size: 9.5px; font-family: var(--ui); white-space: nowrap; }
 .card .c-cost span.short { color: #c0392b; font-weight: bold; }
 .card:hover { transform: translateY(-2px); }

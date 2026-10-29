@@ -23,16 +23,17 @@
           <div class="res" id="res-workers" title="Free / total workers"><span class="ico">&#x1F465;</span><b>0/0</b></div>
           <div class="res score" id="res-score" title="Settlement score"><span class="ico">&#x2B50;</span><b>0</b></div>
         </div>
+        <button id="btn_upgrades" class="hud-btn upgrades-top" data-target="btn_upgrades" title="Building Upgrades">&#x2B06;&#xFE0F; Upgrades</button>
         <button id="btn_speed" class="hud-btn" data-target="btn_speed" title="Game speed">1x</button>
         <button id="btn_inspect" class="hud-btn" data-target="btn_inspect" title="Config inspector">i</button>
         <button id="btn_mute" class="hud-btn" data-target="btn_mute" title="Volume settings">&#x1F507;</button>
         <div id="volume-menu" class="volume-menu" hidden>
           <div class="vol-row"><label for="vol-music">🎵 Music</label><input id="vol-music" type="range" min="0" max="100" value="60"><b id="vol-music-val">60%</b></div>
           <div class="vol-row"><label for="music-track">🎼 Track</label><select id="music-track" class="vol-track">
+            <option value="valley4">Celtic Humming</option>
             <option value="valley">Celtic Valley</option>
             <option value="valley2">Nordic Settlement</option>
             <option value="valley3">Village Work</option>
-            <option value="valley4">Celtic Humming</option>
           </select></div>
           <div class="vol-row"><label for="vol-sfx">🔔 Sounds</label><input id="vol-sfx" type="range" min="0" max="100" value="90"><b id="vol-sfx-val">90%</b></div>
           <div class="vol-row"><label for="vol-voice">🗣️ Voice</label><input id="vol-voice" type="range" min="0" max="100" value="90"><b id="vol-voice-val">90%</b></div>
@@ -59,14 +60,17 @@
       </section>
 
       <footer id="build-bar">
-        <div class="build-filter-bar">
-          <button class="build-cat-btn active" data-build-cat="all">All</button>
-          <button class="build-cat-btn" data-build-cat="homes">&#x1F3E0; Homes</button>
-          <button class="build-cat-btn" data-build-cat="production">&#x1F33E; Production</button>
-          <button class="build-cat-btn" data-build-cat="military">&#x2694;&#xFE0F; Military</button>
-          <button class="build-cat-btn" data-build-cat="culture">&#x1F3DB;&#xFE0F; Culture</button>
+        <button id="btn_buildings_toggle" class="buildings-toggle" title="Show or hide the buildings menu"><span class="d-ico">&#x1F528;</span><span class="d-label">Buildings</span></button>
+        <div class="build-menu">
+          <div class="build-filter-bar">
+            <button class="build-cat-btn active" data-build-cat="all">All</button>
+            <button class="build-cat-btn" data-build-cat="homes">&#x1F3E0; Homes</button>
+            <button class="build-cat-btn" data-build-cat="production">&#x1F33E; Production</button>
+            <button class="build-cat-btn" data-build-cat="military">&#x2694;&#xFE0F; Military</button>
+            <button class="build-cat-btn" data-build-cat="culture">&#x1F3DB;&#xFE0F; Culture</button>
+          </div>
+          <div id="cards" class="cards"></div>
         </div>
-        <div id="cards" class="cards"></div>
       </footer>
 
       <!-- Bottom Right Action Dock -->
@@ -79,9 +83,6 @@
         </button>
         <button id="btn_research" data-target="btn_research" class="dock-btn research-btn sal-low" title="Research">
           <span class="d-ico">&#x1F4DC;</span><span class="d-label">Research</span>
-        </button>
-        <button id="btn_upgrades" data-target="btn_upgrades" class="dock-btn upgrades-btn" title="Building Upgrades">
-          <span class="d-ico">&#x2B06;&#xFE0F;</span><span class="d-label">Upgrades</span>
         </button>
       </div>
 
@@ -308,6 +309,6 @@
 
   <div id="replay-root" hidden></div>
 
-  <script type="module" src="/static/main.js?v=5"></script>
+  <script type="module" src="/static/main.js?v=11"></script>
 </body>
 </html>

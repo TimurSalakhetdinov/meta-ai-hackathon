@@ -7,9 +7,9 @@ import {
   BUILDINGS, BUILD_ORDER, ALL_BUILD_ORDER, CAMPAIGN_STAGES, ENCOUNTERS, ERA_LABEL, Game,
   QUESTS, RESOURCES, ALL_RESOURCES, RESOURCE_LABEL, TECHS, UPGRADABLE_TYPES,
 } from './game.js';
-import { Sfx, defaultMuted } from './audio.js?v=5';
-import { IsoRenderer } from './iso_renderer.js';
-import { loadSprites, spriteUrl } from './sprites.js';
+import { Sfx, defaultMuted } from './audio.js?v=7';
+import { IsoRenderer } from './iso_renderer.js?v=11';
+import { loadSprites, spriteUrl } from './sprites.js?v=10';
 import { TechTreeView } from './tech_tree.js';
 import { initOverlay } from './overlay.js';
 
@@ -212,7 +212,8 @@ async function boot() {
   const trackSel = $('music-track');
   if (trackSel) {
     const saved = localStorage.getItem('doe_music_track');
-    if (['valley', 'valley2', 'valley3', 'valley4'].includes(saved)) trackSel.value = saved;
+    // Default (no saved choice): Celtic Humming, first in the list.
+    trackSel.value = ['valley', 'valley2', 'valley3', 'valley4'].includes(saved) ? saved : 'valley4';
     sfx.setValleyTrack?.(trackSel.value);
     trackSel.addEventListener('change', () => {
       sfx.setValleyTrack?.(trackSel.value);
@@ -220,6 +221,23 @@ async function boot() {
     });
   }
   if (sfx.muted && $('btn_vol_mute')) $('btn_vol_mute').textContent = 'Unmute all';
+  // Buildings menu collapse: one button hides the cards, click again expands.
+  const buildBar = $('build-bar');
+  const buildToggle = $('btn_buildings_toggle');
+  if (buildBar && buildToggle) {
+    const setCollapsed = (collapsed) => {
+      buildBar.classList.toggle('collapsed', collapsed);
+      buildToggle.innerHTML = collapsed
+        ? '<span class="d-ico">&#x1F528;</span><span class="d-label">Buildings &#x25B8;</span>'
+        : '<span class="d-ico">&#x1F528;</span><span class="d-label">Buildings &#x25BE;</span>';
+      localStorage.setItem('doe_build_bar_collapsed', collapsed ? '1' : '0');
+    };
+    setCollapsed(localStorage.getItem('doe_build_bar_collapsed') === '1');
+    buildToggle.addEventListener('click', () => {
+      setCollapsed(!buildBar.classList.contains('collapsed'));
+      sfx.play('click');
+    });
+  }
   const hud = new Hud(game, config, sfx);
   const techView = new TechTreeView($('tech-tree'), $('tech-rp'));
   fxHandlers.push((fx) => hud.onFx(fx));
@@ -258,6 +276,8 @@ async function boot() {
     pressed = el ? { target: el.dataset.target, gone: () => !el.isConnected } : null;
   }, true);
   root.addEventListener('click', (e) => {
+    // The Buildings toggle has its own listener; never a game click.
+    if (e.target.closest('#btn_buildings_toggle')) return;
     const rect = root.getBoundingClientRect();
     const x = (e.clientX - rect.left) / uiScale;
     const y = (e.clientY - rect.top) / uiScale;

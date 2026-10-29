@@ -378,7 +378,7 @@ export class IsoRenderer {
       }
       // Flowing river: dashed current lines and foam dots travel along the
       // painted river (bottom right, under the bridge) so the water moves.
-      const riverPts = [[688, 548], [752, 492], [812, 450], [878, 418], [962, 388]];
+      const riverPts = [[-10, 368], [140, 394], [279, 429], [454, 471], [593, 492], [698, 464], [758, 442], [812, 420], [872, 392], [962, 356]];
       const riverPoint = (t) => {
         const seg = Math.min(riverPts.length - 2, Math.floor(t * (riverPts.length - 1)));
         const lt = t * (riverPts.length - 1) - seg;
@@ -386,23 +386,37 @@ export class IsoRenderer {
         const [bx, by] = riverPts[seg + 1];
         return { x: ax + (bx - ax) * lt, y: ay + (by - ay) * lt };
       };
+      // Two separate flow segments: downstream of the bridge and upstream
+      // of it. Nothing is drawn between them, so no flow can cross the bridge.
+      // Short segments that follow the water only; gaps at the rocks and
+      // bends keep the dashes off the grass banks.
+      const riverSegs = [
+        [[-10, 368], [140, 394], [279, 429]],
+        [[320, 442], [454, 471], [560, 488]],
+        [[620, 478], [698, 464], [750, 444]],
+        [[852, 392], [962, 356]],
+      ];
       ctx.save();
       for (const [off, wdt, alpha] of [[0, 3, 0.40], [14, 2, 0.32], [28, 2, 0.26]]) {
         ctx.strokeStyle = `rgba(220, 248, 255, ${alpha})`;
         ctx.lineWidth = wdt;
         ctx.setLineDash([16, 22]);
         ctx.lineDashOffset = -(this.time * 42 + off);
-        ctx.beginPath();
-        riverPts.forEach(([x, y], i) => {
-          const yy = y + (off - 14) * 0.55;
-          if (i === 0) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
-        });
-        ctx.stroke();
+        for (const segPts of riverSegs) {
+          ctx.beginPath();
+          segPts.forEach(([x, y], i) => {
+            const yy = y + (off - 14) * 0.55;
+            if (i === 0) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
+          });
+          ctx.stroke();
+        }
       }
       ctx.setLineDash([]);
       for (let i = 0; i < 9; i++) {
         const t = (this.time * 0.055 + i / 9) % 1;
         const p = riverPoint(t);
+        // Foam vanishes well before the bridge and reappears after it.
+        if (p.x > 745 && p.x < 858 && p.y > 375 && p.y < 455) continue;
         const a = 0.25 + 0.45 * Math.sin(t * Math.PI);
         ctx.fillStyle = `rgba(255,255,255,${a})`;
         ctx.beginPath();
@@ -721,8 +735,57 @@ export class IsoRenderer {
       const w = sprite.width * scale;
       const h = sprite.height * scale;
       ctx.drawImage(sprite.img, pos.x - sprite.anchor[0] * w, pos.y - sprite.anchor[1] * h, w, h);
+      // Animated flames over the painted fires (Town Center campfire and
+      // braziers, smelter furnace). Anchors live in the sprite manifest.
+      if (sprite.fire) {
+        let seed = 0;
+        for (const ch of b.key || '') seed += ch.charCodeAt(0);
+        for (const [fx, fy] of sprite.fire) {
+          this.drawFire(ctx,
+            pos.x - sprite.anchor[0] * w + fx * w,
+            pos.y - sprite.anchor[1] * h + fy * h,
+            w * 0.085, seed);
+          seed += 7;
+        }
+      }
     } else {
       drawProceduralBuilding(ctx, spriteKey, pos, scale);
+    }
+  }
+
+  // Flickering flame at (x, y) on the fire's base, about `size` px tall.
+  drawFire(ctx, x, y, size, seed) {
+    const t = this.time;
+    const sway = Math.sin(t * 9 + seed * 1.7) * size * 0.10 + Math.sin(t * 23 + seed) * size * 0.04;
+    const tall = size * (1 + 0.16 * Math.sin(t * 11 + seed * 2.3) + 0.07 * Math.sin(t * 27 + seed));
+    // Warm glow.
+    const glow = ctx.createRadialGradient(x, y - tall * 0.4, 1, x, y - tall * 0.4, size * 1.15);
+    glow.addColorStop(0, 'rgba(255,170,60,0.34)');
+    glow.addColorStop(1, 'rgba(255,140,40,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(x, y - tall * 0.4, size * 1.15, 0, Math.PI * 2);
+    ctx.fill();
+    // Three nested teardrop flames, tips leaning with the flicker.
+    const flame = (w, h, tip, color) => {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(x - w, y);
+      ctx.bezierCurveTo(x - w, y - h * 0.55, x + tip - w * 0.35, y - h * 0.75, x + tip, y - h);
+      ctx.bezierCurveTo(x - tip + w * 0.35, y - h * 0.75, x + w, y - h * 0.55, x + w, y);
+      ctx.bezierCurveTo(x + w * 0.45, y - h * 0.16, x - w * 0.45, y - h * 0.16, x - w, y);
+      ctx.fill();
+    };
+    flame(size * 0.52, tall, sway, 'rgba(232,106,26,0.92)');
+    flame(size * 0.36, tall * 0.74, sway * 1.25, 'rgba(248,178,44,0.95)');
+    flame(size * 0.20, tall * 0.48, sway * 1.5, 'rgba(255,236,170,0.97)');
+    // Rising embers.
+    for (let i = 0; i < 3; i++) {
+      const k = (t * 0.7 + seed * 0.13 + i / 3) % 1;
+      ctx.fillStyle = `rgba(255,${170 + Math.floor(60 * (1 - k))},60,${0.75 * (1 - k)})`;
+      ctx.beginPath();
+      ctx.arc(x + Math.sin(seed + i * 5 + t * 3) * size * 0.3 * k, y - tall * (0.5 + k * 0.9), 1.3 * (1 - k) + 0.4, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 
@@ -990,7 +1053,7 @@ export class IsoRenderer {
     for (const b of game.buildings) {
       // Smoke only where a fire belongs: home chimneys and the smelter forge.
       // The Town Center (main building) has no roof smoke.
-      if (b.status !== 'done' || !['shelter', 'smelter'].includes(b.type)) continue;
+      if (b.status !== 'done' || !['shelter', 'smelter', 'research_tent'].includes(b.type)) continue;
       const t = (this.smokeTimers.get(b.key) || 0) - simDt;
       if (t > 0) { this.smokeTimers.set(b.key, t); continue; }
       this.smokeTimers.set(b.key, 0.45);
