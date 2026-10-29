@@ -205,3 +205,10 @@ Many short, independent sessions, not one long run. One pair is a demo, not evid
   - Known: `tests/test_e2e_closed_loop_stub.py::test_closed_loop_stub` fails since the safety net (line 39); it is not fixed yet.
   - Known: the committed soundtrack WAVs are synth output, not MusicGen. The README and architecture docs claim otherwise. A local `facebook/musicgen-medium` run was in progress at handoff.
   - Next for Muse Code: commit this work on a branch (drop the leftover `patch_007` and `patch_008`), fix the e2e test, install or rerun the MusicGen tracks, then hero busts in the Elder Kaelen style via Muse Image (plan in the local `docs/HANDOFF.md`, section 7).
+- 2026-10-29 (Muse Code, `muse/handover-tasks`): Took over the Claude Code handover. All work at $0 Meta spend.
+  - Committed session 5 on the branch (`3687dcc`) and deleted the leftover manual studio patches `patch_007` to `patch_013` (all `proposed`, none used by the demo or tests).
+  - Fixed `test_closed_loop_stub`: arm B completed onboarding but spent its wood on shelters and farms and never afforded Masonry. The stub bot now holds an explicit era goal in free play (Masonry, then Stone Age Awakening), saves for it deterministically, and harvests wood first while saving. Arm B reaches `first_achievement` on seeds 42 and 44 again (`6a08ea1`). Full suite: 99 passed.
+  - Fixed the Bronze Age lock label truncating "Stone Age Awakening" in the tech tree; the lock label now shortens era names ("Stone Age").
+  - Soundtrack docs corrected: the committed `valley_theme.wav` and `battle_theme.wav` are offline synth output, not MusicGen. The optional `--mode musicgen` pipeline (`facebook/musicgen-medium`) was not run (no torch installed, ~15 GB download, and tracks must be listened to before committing). README and `docs/architecture.md` now say so.
+  - Skipped per user: hero busts in the Elder Kaelen style (`scripts/generate_building_sprites.py` plan in the local `docs/HANDOFF.md`, section 7).
+  - Next: push the branch, then a first small live run in meta mode.

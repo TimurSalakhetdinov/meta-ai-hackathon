@@ -37,7 +37,7 @@ flowchart LR
 | Muse Spark | Persona playtesters (computer use + working-memory scratchpads), session reasoning, fix & feature rework proposals |
 | SAM 3.1 | Segmenting UI elements in gameplay screenshots & computing the `6.76x` distractor-to-goal visual salience ratio |
 | Muse Image | Live in-game Variant B UI emblem generation in the Feature Forge & 2.5D sprite/portrait assets |
-| Meta AudioCraft / MusicGen | (`facebook/musicgen-small` pipeline in `scripts/generate_music_tracks.py`) Alpine Valley pastoral & 2.5D Battle Arena soundtrack loops (`valley_theme.wav`, `battle_theme.wav`) |
+| Meta AudioCraft / MusicGen | Optional soundtrack pipeline in `scripts/generate_music_tracks.py` (`--mode musicgen`, `facebook/musicgen-medium`). Not yet run: the committed `valley_theme.wav` and `battle_theme.wav` loops are offline synth output from the same script (`--mode synth`) |
 | Muse Code | Agentic coding tool used to build and iterate on the multi-agent backend, telemetry, and Feature Studio |
 
 ## Status
@@ -58,6 +58,9 @@ flowchart LR
 - [x] Committed demo runs in `runs_demo/` and a Dockerfile for a single-port deploy
 - [x] Feature studio in the dock: free-text feature to a validated patch with a stub emblem, five research-grounded personas, playtest behind the approval gate, verdict report and archetype-aware rework synthesis (stub mode, $0). Pre-baked HURTS → POSITIVE demo bundle (`patch_005`/`patch_006` + 20 committed runs) with a 1-click Council Report switcher and split replays
 - [x] Full "Dawn of Empires" 2.5D overhaul: sunlit Alpine Valley backdrop, Checkered 4x4 Territory Expansions (exp_1/exp_2), Sacred Obelisk +20% Culture Adjacency Aura, FREE instant-finish chips, Hero Roster & Level-Up Hall (Commander Vaelen & Sun-Priestess Lyra Lv.1–7), 8-Stage Ancient Wilds Campaign with Stage 6 Sabertooth Defeat Wall, Live 2.5D Tactical Combat Arena with Ultimate Portrait Cut-Ins, 6-Chapter Quest Ledger, and continuous Valley/Battle soundtrack + physical-modeling SFX
+- [x] Game Manager in the Architect's Council: 3 prebuilt feature presets (`configs/feature_presets.json`), "Approve & play" approval, custom idea box, and full-screen council report
+- [x] Handover regression fixed: stub bot saves for Masonry in free play, so variant B reaches the Stone Age on seeds 42 and 44 again (full suite: 99 passed)
+- [ ] Soundtrack: committed valley/battle loops are offline synth output; optional MusicGen regeneration (`scripts/generate_music_tracks.py --mode musicgen`) not yet run
 - [ ] Validation against human sessions
 - [ ] Demo video
 

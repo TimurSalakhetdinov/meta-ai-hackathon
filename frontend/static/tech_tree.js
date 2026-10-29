@@ -98,7 +98,8 @@ export class TechTreeView {
       const res = game.roundedResources();
       cost = Object.entries(st.costs).filter(([, v]) => v > 0)
         .map(([r, v]) => `<span class="${res[r] < v ? 'short' : ''}">${v} ${RESOURCE_LABEL[r]}</span>`).join(' · ');
-      if (!st.available) cost = `\u{1F512} ${TECHS[st.requires].label}`;
+      // Shorten the lock label ("Stone Age Awakening" -> "Stone Age") so it fits the node.
+      if (!st.available) cost = `\u{1F512} ${TECHS[st.requires].label.replace(/ (Awakening|Dawn)$/, '')}`;
     }
     if (this.flash?.id === id && performance.now() < this.flash.until) {
       cls += ' shake';

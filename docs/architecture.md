@@ -55,7 +55,7 @@ flowchart LR
 
 | Component | Location | Responsibility |
 |---|---|---|
-| Game frontend | `frontend/static/` | 2.5D isometric settlement canvas (Dawn of Empires: 3 eras *Dawn → Stone → Bronze Age*, 7 buildable buildings + Town Center with Lv.1–3 upgrades, 7 techs, 6-Chapter Quests, 8-Stage Campaign battles with Stage 6 Sabertooth Wall, Live 2.5D Tactical Battle Arena with Ultimate cut-ins, Hero Hall Lv.1–7, Territory Expansions `exp_1`/`exp_2`, Sacred Obelisk +20% Culture aura, `⚡ FREE` instant-finish, dual-engine AudioCraft / MusicGen soundtrack + SFX, worker assignment, and custom `FeaturePlugin` button). Emits raw events. Exposes `window.__GAME_STATE__` and `window.__GAME_DEBUG__.getRenderedTargets()`. |
+| Game frontend | `frontend/static/` | 2.5D isometric settlement canvas (Dawn of Empires: 3 eras *Dawn → Stone → Bronze Age*, 7 buildable buildings + Town Center with Lv.1–3 upgrades, 7 techs, 6-Chapter Quests, 8-Stage Campaign battles with Stage 6 Sabertooth Wall, Live 2.5D Tactical Battle Arena with Ultimate cut-ins, Hero Hall Lv.1–7, Territory Expansions `exp_1`/`exp_2`, Sacred Obelisk +20% Culture aura, `⚡ FREE` instant-finish, dual-engine soundtrack (committed synth WAV loops, optional MusicGen regeneration) + SFX, worker assignment, and custom `FeaturePlugin` button). Emits raw events. Exposes `window.__GAME_STATE__` and `window.__GAME_DEBUG__.getRenderedTargets()`. |
 | Right dock (Architect's Council) | `frontend/static/overlay.js` | **Telemetry Pill** (top: step id, time to first action, onboarding checklist) and **Architect's Council** studio (`📜 Feature Forge` for free-text PM feature prototyping + approval gate + 5-persona guild selector, `🏛️ Council Report` with 1-click `HURTS` / `POSITIVE` switcher + SAM 3.1 `6.76x` onboarding diagnosis, and `👁️ Live Chronicle` with `[▶ Watch Bot Play]`). Lives outside the `960x540` bot clip. |
 | Replay player | `frontend/static/replay.js` | `/?replay_a=<run>&replay_b=<run>&speed=4`: side-by-side playback from recorded artifacts on one timeline, no API calls. Refuses runs whose `provider_mode` is not `meta` unless `?dev=1`. |
 | Config & patch service | `backend/config_service.py` | Loads `configs/base_config.json`, applies patches (including `FeaturePlugin`), validates with Pydantic, enforces the approval gate, writes `audit_log.jsonl`. |
@@ -89,7 +89,7 @@ frontend/static/
   assets/audio/             # valley_theme.wav & battle_theme.wav soundtrack loops
 scripts/
   cutout_sprites.py         # slices 7 sprite sheets & strips solid background into 28 PNGs
-  generate_music_tracks.py  # Meta AudioCraft / MusicGen + procedural acoustic synthesizer
+  generate_music_tracks.py  # procedural synthesizer (default) + optional Meta MusicGen mode
 backend/
   app.py  schemas.py  config_service.py  telemetry.py
   bot_runner.py  meta_client.py  cli.py      # built Oct 29+ in Muse Code
@@ -214,8 +214,8 @@ The "Dawn of Empires" overhaul elevates the browser game into a modern, full-ble
 - **Background Stripping Pipeline:** `scripts/cutout_sprites.py` executes flood-fill background removal with soft translucent drop-shadow preservation.
 
 ### 10. Dual-Engine Soundtrack & Audio System (`frontend/static/audio.js`, `scripts/generate_music_tracks.py`)
-- **Meta AudioCraft / MusicGen Integration:** `scripts/generate_music_tracks.py` implements a generation pipeline using Meta's `facebook/musicgen-small` model:
-  - `valley_theme.wav`: 16-second seamless Alpine pastoral loop (72 BPM, ancient Mediterranean acoustic instrumentation, lyre, pan flute, warm cello strings, waterfall wash).
+- **Soundtrack sources:** The committed tracks are offline synth output from `scripts/generate_music_tracks.py --mode synth`, not MusicGen output. The script also implements an optional Meta MusicGen mode (`--mode musicgen`, `facebook/musicgen-medium` by default, requires torch, transformers and scipy) that exits with an error when its dependencies are missing, so synth output is never mistaken for MusicGen. Regenerate and listen before replacing the committed tracks.
+  - `valley_theme.wav`: 16-second seamless Alpine pastoral loop (ancient Mediterranean acoustic instrumentation, lyre, pan flute, warm cello strings, waterfall wash).
   - `battle_theme.wav`: 12-second seamless 2.5D battle loop (120 BPM, driving tribal war drums, taiko percussion, rhythmic brass fifths, strings ostinato).
 - **Web Audio Synthesis Fallback:** In `audio.js`, a pure Web Audio physical-modeling synthesizer runs autonomously if audio files are offline, offering 16-step procedural sequencers, chord progressions, and ambient noise beds.
 - **Adaptive Crossfading & SFX:** Smooth 0.85s gain crossfading transitions between exploration and combat. Multi-layered SFX include FM metallic coin clinks, brass fanfares, rock fracture shockwaves, and major-9th harp glissandos.
