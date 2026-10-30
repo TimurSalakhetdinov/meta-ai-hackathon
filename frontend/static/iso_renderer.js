@@ -1236,7 +1236,9 @@ export class IsoRenderer {
   // without overlap: horizontal step is 3/4 of the hex width, vertical
   // step is the full hex height, odd rows shifted by half a step.
   battleHexCenter(gx, gy) {
-    return { x: 66 + gx * 56 + (gy % 2 ? 28 : 0), y: 108 + gy * 46 };
+    // The field starts below the battle HUD so no figure can leave the top
+    // of the screen, and ends with room for the bars below the feet.
+    return { x: 66 + gx * 56 + (gy % 2 ? 28 : 0), y: 188 + gy * 39 };
   }
 
   battleUnitPos(unit) {
@@ -1325,12 +1327,8 @@ export class IsoRenderer {
         const blocked = BATTLE_BLOCKED.some(([x, y]) => x === gx && y === gy);
         hexPath(c.x, c.y);
         if (blocked) {
-          // Blocked rock hex: a soft stone tint only, no dark spot.
-          ctx.fillStyle = 'rgba(90,78,64,0.28)';
-          ctx.fill();
-          ctx.strokeStyle = 'rgba(255,255,255,0.10)';
-          ctx.lineWidth = 1;
-          ctx.stroke();
+          // Blocked rock hex: drawn as nothing. The painting already shows
+          // the rocks; no dark rhomb on top of it.
         } else if (reachSet.has(`${gx},${gy}`)) {
           // Reachable hexes glow white only: no yellow checkerboard.
           ctx.fillStyle = `rgba(255,255,255,${0.10 + 0.03 * Math.sin(this.time * 5)})`;
@@ -1339,8 +1337,12 @@ export class IsoRenderer {
           ctx.lineWidth = 1;
           ctx.stroke();
         } else {
-          // The grid itself stays barely visible over the painting.
-          ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+          // Every hex on the field stays barely visible, so the player can
+          // always see where a move could go. Dark edges read on light dirt
+          // where a white line would vanish.
+          ctx.fillStyle = 'rgba(255,255,255,0.04)';
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(74,45,16,0.30)';
           ctx.lineWidth = 1;
           ctx.stroke();
         }
@@ -1350,12 +1352,20 @@ export class IsoRenderer {
     // marks the picked hero; a dimmed unit has already acted this round.
     const drawUnit = (u, p, spriteKey, accent) => {
       ctx.save();
-      if (!u.alive) ctx.globalAlpha = 0.25;
-      else if (u.acted) ctx.globalAlpha = 0.55;
+      if (!u.alive) ctx.globalAlpha = 0.8;
+      else if (u.acted) ctx.globalAlpha = 0.85;
       ctx.fillStyle = 'rgba(0,0,0,0.35)';
       ctx.beginPath();
       ctx.ellipse(p.x, p.y + 8, 34, 11, 0, 0, Math.PI * 2);
       ctx.fill();
+      // Enemies get a rust-red base ring so they read at a glance.
+      if (u.kind === 'enemy') {
+        ctx.strokeStyle = 'rgba(178,52,32,0.9)';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.ellipse(p.x, p.y + 8, 38, 13, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
       if (bs.selectedUnit && u.id === bs.selectedUnit) {
         ctx.strokeStyle = '#ffd75e';
         ctx.lineWidth = 3;
@@ -1365,7 +1375,19 @@ export class IsoRenderer {
       }
       const spr = this.sprites[spriteKey];
       if (spr?.img) {
-        ctx.drawImage(spr.img, p.x - spr.anchor[0] * spr.width, p.y - spr.anchor[1] * spr.height, spr.width, spr.height);
+        // Cap the drawn height so tall sprites never leave the screen.
+        const drawH = Math.min(spr.height, 100);
+        const drawW = spr.width * (drawH / spr.height);
+        if (!u.alive) {
+          // The fallen stay on the field, tipped over, instead of vanishing.
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(-Math.PI / 2.2);
+          ctx.drawImage(spr.img, -drawW / 2, -drawH * 0.35, drawW, drawH);
+          ctx.restore();
+        } else {
+          ctx.drawImage(spr.img, p.x - spr.anchor[0] * drawW, p.y - spr.anchor[1] * drawH, drawW, drawH);
+        }
       } else {
         circle(ctx, p.x, p.y - 24, 20, accent);
       }

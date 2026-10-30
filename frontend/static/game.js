@@ -1604,8 +1604,20 @@ export class Game {
     return true;
   }
 
+  // End Turn: the hero's activation simply ends, no Defend bonus, and the
+  // initiative queue moves on to the next unit (often an enemy).
   endPlayerTurn() {
-    return this.battleDefend();
+    const bs = this.battleState;
+    if (!bs || !bs.active || bs.activeRef?.kind !== 'hero') return false;
+    const hero = bs.units.find((u) => u.id === bs.activeRef.id && u.alive && !u.acted);
+    if (!hero) return false;
+    hero.acted = true;
+    bs.selectedUnit = null;
+    bs.preview = null;
+    this.battleLog(bs, `${hero.name.split(' ')[0]} ends the turn.`);
+    bs.queue.shift();
+    this.afterBattleAction();
+    return true;
   }
 
   // Between waves the battle pauses on a Continue tap: heroes keep their
@@ -1867,6 +1879,9 @@ export class Game {
       // HoMM3: only the unit whose initiative turn it is can act.
       if (bs.activeRef?.kind !== 'hero' || bs.activeRef.id !== id) return { result: 'noop' };
       bs.selectedUnit = id;
+      // No ult cards on screen: tapping the active hero at full charge fires it.
+      const hero = bs.units.find((u) => u.id === id);
+      if (hero && (hero.rage || 0) >= 100 && this.triggerUltimate(id)) return { result: 'advanced' };
       return { result: 'ui' };
     }
     if (target_id === 'btn_battle_wait') {

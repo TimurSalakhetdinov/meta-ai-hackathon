@@ -232,16 +232,6 @@ export class StubBot {
       return { target: endTurn, thought: 'Everyone acted. End the round.', mood: 'engaged' };
     }
 
-    // Battle arena active ultimates
-    const ultVaelen = by('btn_ult_vaelen');
-    if (ultVaelen && !ultVaelen.locked && !ultVaelen.cooldown) {
-      return { target: ultVaelen, thought: '⚡ Bera Rage 100%! Unleash Earthshatter Stomp!', mood: 'engaged' };
-    }
-    const ultLyra = by('btn_ult_lyra');
-    if (ultLyra && !ultLyra.locked && !ultLyra.cooldown) {
-      return { target: ultLyra, thought: '✨ Sunweaver Lyra Rage 100%! Cast Solar Salve to heal allies!', mood: 'engaged' };
-    }
-
     // Heroes Hall modal open
     if (by('btn_close_heroes')) {
       const lvlBtn = by('btn_hero_levelup') || by('btn_levelup_vaelen') || by('btn_levelup_lyra')

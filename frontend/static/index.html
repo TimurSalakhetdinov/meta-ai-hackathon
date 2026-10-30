@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=1280">
   <title>Dawn of Empires</title>
-  <link rel="stylesheet" href="/static/styles.css?v=12">
+  <link rel="stylesheet" href="/static/styles.css?v=13">
 </head>
 <body>
   <div id="app">
@@ -230,8 +230,7 @@
             <div class="battle-controls">
               <span id="battle-turn-text" class="battle-turn-tag">Your turn: pick a hero, then tap an enemy</span>
               <button id="btn_battle_wait" class="battle-ctrl-btn" data-target="btn_battle_wait" title="Act last this round">Wait</button>
-              <button id="btn_battle_defend" class="battle-ctrl-btn" data-target="btn_battle_defend" title="Skip action, take less damage">Defend</button>
-              <button id="btn_end_turn" class="battle-ctrl-btn" data-target="btn_end_turn" hidden>End Turn</button>
+              <button id="btn_end_turn" class="battle-ctrl-btn" data-target="btn_end_turn" title="End this hero's turn">End Turn</button>
             </div>
           </div>
           <div class="team-hp enemy">
@@ -242,7 +241,6 @@
         </div>
         <div id="battle-log" class="battle-log"></div>
         <div id="battle-initiative" class="battle-initiative" title="Turn order this round, fastest first"></div>
-        <div id="battle-inspect" class="battle-inspect"></div>
         <button id="btn_battle_wave_continue" class="gold-btn battle-wave-continue" data-target="btn_battle_wave_continue" hidden>Continue — next wave</button>
 
         <!-- Full-Screen Comic-Book Cut-In Slash -->
@@ -254,26 +252,6 @@
               <div class="cutin-ult" id="cutin-ult">⚡ EARTHSHATTER STOMP!</div>
             </div>
           </div>
-        </div>
-
-        <!-- Bottom Hero Rage Tray -->
-        <div class="battle-bottom-tray">
-          <button id="btn_ult_vaelen" class="hero-rage-card" data-target="btn_ult_vaelen">
-            <img src="/static/assets/sprites/portrait_vaelen.png" alt="" class="rage-portrait">
-            <div class="rage-info">
-              <span class="rage-name">Bera</span>
-              <span class="rage-hp" id="rage-hp-vaelen"></span>
-            </div>
-            <span class="rage-ult-tag">ULT</span>
-          </button>
-          <button id="btn_ult_lyra" class="hero-rage-card" data-target="btn_ult_lyra">
-            <img src="/static/assets/sprites/portrait_lyra.png" alt="" class="rage-portrait">
-            <div class="rage-info">
-              <span class="rage-name">Lyra</span>
-              <span class="rage-hp" id="rage-hp-lyra"></span>
-            </div>
-            <span class="rage-ult-tag">HEAL</span>
-          </button>
         </div>
 
         <!-- Victory Chest Modal -->
@@ -312,6 +290,6 @@
 
   <div id="replay-root" hidden></div>
 
-  <script type="module" src="/static/main.js?v=81"></script>
+  <script type="module" src="/static/main.js?v=84"></script>
 </body>
 </html>

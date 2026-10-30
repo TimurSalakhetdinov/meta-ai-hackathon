@@ -885,8 +885,8 @@ select.persona { flex: 1; padding: 4px; background: #fffaf0; color: var(--ink); 
 .mgr-choice .mc-text { flex: 1; }
 .mgr-justplay { display: block; margin: 14px auto 0; padding: 4px 10px; cursor: pointer;
   background: none; border: none; font: 700 13px var(--serif); color: #6a4a28; text-decoration: underline; }
-.mgr-play-btn { display: block; margin: 30px auto 0; width: 340px; max-width: 70%; padding: 10px 4px; font-size: 14px; }
-.mgr-foot { margin-top: 10px; text-align: center; font: 11px var(--ui); color: #6a5236; }
+.mgr-play-btn { display: block; margin: 56px auto 0; width: 340px; max-width: 70%; padding: 10px 4px; font-size: 14px; }
+.mgr-foot { margin-top: 14px; text-align: center; font: 11px var(--ui); color: #6a5236; }
 .mgr-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin-top: 10px; }
 .mgr-field { display: flex; flex-direction: column; gap: 3px; font: 700 11px var(--ui); color: #5a4028; }
 .mgr-field select { font: 12px var(--ui); padding: 5px 7px; border-radius: 7px; border: 2px solid #d9bf85; background: #fffdf6; color: var(--ink); }

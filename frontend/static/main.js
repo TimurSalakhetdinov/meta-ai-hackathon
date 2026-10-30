@@ -6,10 +6,10 @@ import { urlParams } from './clock.js';
 import {
   BUILDINGS, BUILD_ORDER, ALL_BUILD_ORDER, CAMPAIGN_STAGES, ENCOUNTERS, ERA_LABEL, Game,
   QUESTS, RESOURCES, ALL_RESOURCES, RESOURCE_LABEL, TECHS, UPGRADABLE_TYPES,
-} from './game.js?v=73';
+} from './game.js?v=74';
 import { Sfx, defaultMuted } from './audio.js?v=23';
-import { IsoRenderer } from './iso_renderer.js?v=65';
-import { loadSprites, spriteUrl } from './sprites.js?v=65';
+import { IsoRenderer } from './iso_renderer.js?v=67';
+import { loadSprites, spriteUrl } from './sprites.js?v=66';
 import { TechTreeView } from './tech_tree.js?v=52';
 import { initOverlay } from './overlay.js';
 
@@ -978,6 +978,11 @@ class Hud {
         el.hidden = true;
         continue;
       }
+      // Only the Barracks joins the All view; the Arena stays Military-only.
+      if (type === 'hero_arena' && this.buildCategory === 'all') {
+        el.hidden = true;
+        continue;
+      }
       el.hidden = false;
       const st = g.cardStatus(type);
       const costs = BUILDINGS[type].costs(this.config);
@@ -1180,25 +1185,11 @@ class Hud {
       initEl.innerHTML = (bs.queue || []).map((ref, i) =>
         `<span class="init-chip ${i === 0 ? 'now' : ''} ${ref.kind}">${i + 1}. ${nameOf(ref)}</span>`).join('');
     }
-    // Inspection strip: the attack preview, else the active unit's numbers.
-    const inspEl = $('battle-inspect');
-    if (inspEl) {
-      const active = bs.units?.find((u) => u.id === bs.selectedUnit);
-      inspEl.textContent = bs.preview?.text
-        || (active ? `${active.name} · ${Math.max(0, active.hp)}/${active.maxHp} HP · ATK ${active.atk} · move ${active.moveLeft}/${active.speed} · charge ${Math.round(active.rage || 0)}%${active.defending ? ' · defending (−30% damage)' : ''}${active.retaliated ? ' · retaliation spent' : ''}`
-          : 'Tap a glowing hex to move; tap an enemy once to preview, again to attack.');
-    }
     const waveBtn = $('btn_battle_wave_continue');
     if (waveBtn) waveBtn.hidden = !bs.awaitingWave;
 
-    // Hero cards: exact HP as text; the charge bar lives on the canvas only.
-    for (const [id, elId] of [['vaelen', 'rage-hp-vaelen'], ['lyra', 'rage-hp-lyra']]) {
-      const u = bs.units?.find((x) => x.id === id);
-      const el = $(elId);
-      if (el) el.textContent = u ? `${Math.max(0, u.hp)}/${u.maxHp} HP · charge ${Math.round(u.rage || 0)}%` : '';
-    }
-    $('btn_ult_vaelen').classList.toggle('ready', (bs.vaelenRage || 0) >= 100);
-    $('btn_ult_lyra').classList.toggle('ready', (bs.lyraRage || 0) >= 100);
+    // No hero cards on the battle screen: charge shows on the canvas bar
+    // under the active hero, and tapping that hero at full charge fires it.
 
     // Cut-in
     const cutin = $('battle-cutin');
