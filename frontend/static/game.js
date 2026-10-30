@@ -1876,8 +1876,20 @@ export class Game {
       const bs = this.battleState;
       const id = target_id.slice('unit_hero_'.length);
       if (!bs || !bs.active) return { result: 'noop' };
-      // HoMM3: only the unit whose initiative turn it is can act.
-      if (bs.activeRef?.kind !== 'hero' || bs.activeRef.id !== id) return { result: 'noop' };
+      // Only the unit whose initiative turn it is can act, but the player
+      // may switch to any other ready hero: the first hero keeps whatever
+      // movement it had left and can be picked again later this round.
+      if (bs.activeRef?.kind !== 'hero') return { result: 'noop' };
+      if (bs.activeRef.id !== id) {
+        const hero = bs.units.find((u) => u.id === id);
+        const qi = bs.queue.findIndex((r) => r.kind === 'hero' && r.id === id);
+        if (!hero?.alive || hero.acted || hero.waited || qi <= 0) return { result: 'noop' };
+        const [ref] = bs.queue.splice(qi, 1);
+        bs.queue.unshift(ref);
+        bs.activeRef = ref;
+        bs.preview = null;
+        for (const u of bs.units) u.activeTurn = u.id === id;
+      }
       bs.selectedUnit = id;
       // No ult cards on screen: tapping the active hero at full charge fires it.
       const hero = bs.units.find((u) => u.id === id);

@@ -6,7 +6,7 @@ import { urlParams } from './clock.js';
 import {
   BUILDINGS, BUILD_ORDER, ALL_BUILD_ORDER, CAMPAIGN_STAGES, ENCOUNTERS, ERA_LABEL, Game,
   QUESTS, RESOURCES, ALL_RESOURCES, RESOURCE_LABEL, TECHS, UPGRADABLE_TYPES,
-} from './game.js?v=74';
+} from './game.js?v=75';
 import { Sfx, defaultMuted } from './audio.js?v=23';
 import { IsoRenderer } from './iso_renderer.js?v=67';
 import { loadSprites, spriteUrl } from './sprites.js?v=66';
