@@ -1330,10 +1330,11 @@ export class IsoRenderer {
           // Blocked rock hex: drawn as nothing. The painting already shows
           // the rocks; no dark rhomb on top of it.
         } else if (reachSet.has(`${gx},${gy}`)) {
-          // Reachable hexes glow white only: no yellow checkerboard.
-          ctx.fillStyle = `rgba(255,255,255,${0.10 + 0.03 * Math.sin(this.time * 5)})`;
+          // Reachable hexes look like every other hex: barely visible dark
+          // edges only, no white glow and no colour change when moving.
+          ctx.fillStyle = 'rgba(255,255,255,0.04)';
           ctx.fill();
-          ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+          ctx.strokeStyle = 'rgba(74,45,16,0.30)';
           ctx.lineWidth = 1;
           ctx.stroke();
         } else {
