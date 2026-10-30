@@ -1417,7 +1417,7 @@ export class IsoRenderer {
 
 
     // 4. Dramatic diagonal comic-book slash banner if bs.cutIn is active
-    if (bs.cutIn) {
+    if (bs.cutIn && bs.active) {
       ctx.save();
       // Dramatic diagonal comic-book slash banner across the canvas
       ctx.fillStyle = 'rgba(15, 10, 10, 0.90)';

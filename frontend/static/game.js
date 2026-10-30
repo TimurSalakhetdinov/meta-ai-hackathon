@@ -182,7 +182,7 @@ export const QUESTS = [
     id: 'chapter_6', title: 'Chapter VI: Dawn of the Bronze Empire',
     objectives: [
       ['Enter the Bronze Age', (g) => g.era === 'bronze_age'],
-      ['Conquer Stage 8 Boss: Shadowclaw', (g) => g.encountersCleared.has('stage_8')],
+      ['Conquer Stage 8 Boss: The White Bean Sí', (g) => g.encountersCleared.has('stage_8')],
       ['Reach 250+ Empire Score', (g) => g.score >= 250],
     ],
     reward: { food: 100, wood: 100, stone: 50 },
@@ -196,48 +196,35 @@ export const ENCOUNTERS = [
 ];
 
 export const CAMPAIGN_STAGES = [
-  { id: 'stage_1', legacyId: 'encounter_misty_river', name: '1. Misty River Crossing', enemyPower: 120, slots: 1, waves: 1, enemies: 'Ash Clan Patrol Lv.1', reward: { rp: 6, stone: 15, score: 15, scrolls: 10 } },
-  { id: 'stage_2', legacyId: 'encounter_megalithic_ruins', name: '2. Sunlit Glade Ambush', enemyPower: 165, slots: 1, waves: 1, enemies: 'Boar Clan Raiders Lv.1', reward: { rp: 6, stone: 15, score: 15, tokens: 1 } },
-  { id: 'stage_3', legacyId: 'encounter_quarry_ridge', name: '3. Megalithic Ruins', enemyPower: 240, slots: 2, waves: 2, enemies: 'Flint Clan Warband Lv.2', reward: { rp: 8, stone: 15, score: 20, scrolls: 15 } },
-  { id: 'stage_4', legacyId: null, name: '4. Whispering Pine Gorge', enemyPower: 310, slots: 2, waves: 2, enemies: 'Frost Clan Raiders Lv.2', reward: { rp: 10, stone: 20, score: 20, coins: 25 } },
-  { id: 'stage_5', legacyId: null, name: '5. Quarry Ridge Outpost', enemyPower: 390, slots: 3, waves: 2, enemies: 'Gale Clan Stalkers Lv.3', reward: { rp: 12, stone: 25, score: 25, tokens: 1 } },
-  { id: 'stage_6', legacyId: null, name: '6. Sabertooth Canyon', enemyPower: 520, slots: 3, waves: 3, reqPower: 460, enemies: 'Tusk Clan Warband Lv.4', reward: { rp: 15, stone: 35, score: 35, coins: 40 } },
-  { id: 'stage_7', legacyId: null, name: '7. Obsidian Crag', enemyPower: 640, slots: 4, waves: 3, reqPower: 580, enemies: 'Raven Clan Warband Lv.5', reward: { rp: 20, stone: 40, score: 40, scrolls: 30 } },
-  { id: 'stage_8', legacyId: null, name: "8. BOSS: Shadowclaw's Lair", enemyPower: 780, slots: 4, waves: 3, reqPower: 700, enemies: 'Shadowclaw Lv.6', reward: { rp: 30, stone: 60, score: 60, coins: 100 } },
+  { id: 'stage_1', legacyId: 'encounter_misty_river', name: '1. Misty River Crossing', enemyPower: 120, slots: 1, waves: 1, enemies: 'Otherworld Guardians Lv.1', reward: { rp: 6, stone: 15, score: 15, scrolls: 10 } },
+  { id: 'stage_2', legacyId: 'encounter_megalithic_ruins', name: '2. Sunlit Glade Ambush', enemyPower: 165, slots: 1, waves: 1, enemies: 'Otherworld Guardians Lv.1', reward: { rp: 6, stone: 15, score: 15, tokens: 1 } },
+  { id: 'stage_3', legacyId: 'encounter_quarry_ridge', name: '3. Megalithic Ruins', enemyPower: 240, slots: 2, waves: 2, enemies: 'Guardians of the Grove Lv.2', reward: { rp: 8, stone: 15, score: 20, scrolls: 15 } },
+  { id: 'stage_4', legacyId: null, name: '4. Whispering Pine Gorge', enemyPower: 310, slots: 2, waves: 2, enemies: 'Guardians of the Falls Lv.2', reward: { rp: 10, stone: 20, score: 20, coins: 25 } },
+  { id: 'stage_5', legacyId: null, name: '5. Quarry Ridge Outpost', enemyPower: 390, slots: 3, waves: 2, enemies: 'Guardians of the Ridge Lv.3', reward: { rp: 12, stone: 25, score: 25, tokens: 1 } },
+  { id: 'stage_6', legacyId: null, name: '6. Sabertooth Canyon', enemyPower: 520, slots: 3, waves: 3, reqPower: 460, enemies: 'Guardians of the Canyon Lv.4', reward: { rp: 15, stone: 35, score: 35, coins: 40 } },
+  { id: 'stage_7', legacyId: null, name: '7. Obsidian Crag', enemyPower: 640, slots: 4, waves: 3, reqPower: 580, enemies: 'Guardians of the Crag Lv.5', reward: { rp: 20, stone: 40, score: 40, scrolls: 30 } },
+  { id: 'stage_8', legacyId: null, name: "8. BOSS: The Bean Sí's Ford", enemyPower: 780, slots: 4, waves: 3, reqPower: 700, enemies: 'The White Bean Sí Lv.6', reward: { rp: 30, stone: 60, score: 60, coins: 100 } },
 ];
 
-// Rival clan roster (Astra design, docs in Downloads/enemy-roster.md):
-// every battle draws its enemies randomly from the stage's tier band.
+// Guardians of the Otherworld (inspired by Irish and Scottish folklore):
+// mysterious beings defending groves, rivers and ancient places. Every
+// battle draws its enemies randomly from the stage's tier band.
 export const ENEMY_ROSTER = [
-  { name: 'Ash Clan Clubman', tier: 1, role: 'melee', speed: 4, sprite: 'enemy_ash_clubman' },
-  { name: 'Reed Clan Slinger', tier: 1, role: 'ranged', speed: 5, sprite: 'enemy_reed_slinger' },
-  { name: 'Birch Clan Knifer', tier: 1, role: 'skirmisher', speed: 6, sprite: 'enemy_birch_knifer' },
-  { name: 'Flint Clan Axeman', tier: 2, role: 'melee', speed: 4, sprite: 'enemy_flint_axeman' },
-  { name: 'Moss Clan Bowhand', tier: 2, role: 'ranged', speed: 5, sprite: 'enemy_moss_bowhand' },
-  { name: 'Oak Clan Doorward', tier: 2, role: 'tank', speed: 3, sprite: 'enemy_oak_doorward' },
-  { name: 'Thorn Clan Runner', tier: 3, role: 'skirmisher', speed: 7, sprite: 'enemy_thorn_runner' },
-  { name: 'Reed Clan Herbkeeper', tier: 3, role: 'healer', speed: 4, sprite: 'enemy_reed_herbkeeper' },
-  { name: 'Flint Clan Hookman', tier: 3, role: 'melee', speed: 4, sprite: 'enemy_flint_hookman' },
-  { name: 'Ash Clan Drumhand', tier: 4, role: 'support', speed: 4, sprite: 'enemy_ash_drumhand' },
-  { name: 'Frost Clan Guard', tier: 4, role: 'tank', speed: 3, sprite: 'enemy_frost_guard' },
-  { name: 'Cinder Clan Dartman', tier: 4, role: 'ranged', speed: 6, sprite: 'enemy_cinder_dartman' },
-  { name: 'Boar Clan Cleaver', tier: 5, role: 'melee', speed: 4, sprite: 'enemy_boar_cleaver' },
-  { name: 'Gale Clan Scout', tier: 5, role: 'skirmisher', speed: 7, sprite: 'enemy_gale_scout' },
-  { name: 'Thorn Clan Longbow', tier: 5, role: 'ranged', speed: 4, sprite: 'enemy_thorn_longbow' },
-  { name: 'Tusk Clan Shieldwall', tier: 6, role: 'tank', speed: 3, sprite: 'enemy_tusk_shieldwall' },
-  { name: 'Tusk Clan Spearcast', tier: 6, role: 'ranged', speed: 5, sprite: 'enemy_tusk_spearcast' },
-  { name: 'Raven Clan Standard', tier: 6, role: 'support', speed: 4, sprite: 'enemy_raven_standard' },
-  { name: 'Iron Clan Swordsman', tier: 7, role: 'melee', speed: 5, sprite: 'enemy_iron_swordsman' },
-  { name: 'Gale Clan Harrier', tier: 7, role: 'skirmisher', speed: 7, sprite: 'enemy_gale_harrier' },
-  { name: 'Frost Clan Bonewright', tier: 7, role: 'healer', speed: 4, sprite: 'enemy_frost_bonewright' },
-  { name: 'Night Clan Gateward', tier: 8, role: 'tank', speed: 3, sprite: 'enemy_night_gateward' },
-  { name: 'Night Clan Bowguard', tier: 8, role: 'ranged', speed: 5, sprite: 'enemy_night_bowguard' },
-  { name: 'Iron Clan Breaker', tier: 8, role: 'melee', speed: 4, sprite: 'enemy_iron_breaker' },
+  { name: 'Marshlight', tier: 1, role: 'ranged', speed: 5, sprite: 'enemy_marshlight' },
+  { name: 'Fairy Mound Sentinel', tier: 1, role: 'melee', speed: 4, sprite: 'enemy_mound_sentinel' },
+  { name: 'Cù Sìth', tier: 2, role: 'skirmisher', speed: 7, sprite: 'enemy_cu_sith' },
+  { name: 'Hawthorn Guardian', tier: 3, role: 'tank', speed: 3, sprite: 'enemy_hawthorn' },
+  { name: 'Púca', tier: 4, role: 'skirmisher', speed: 6, sprite: 'enemy_puca' },
+  { name: 'Selkie Mistweaver', tier: 4, role: 'healer', speed: 5, sprite: 'enemy_selkie' },
+  { name: 'Kelpie', tier: 5, role: 'melee', speed: 5, sprite: 'enemy_kelpie' },
+  { name: 'Bean Sí', tier: 6, role: 'omen', speed: 5, sprite: 'enemy_bean_si' },
+  { name: 'Ogham Stone Warden', tier: 7, role: 'tank', speed: 3, sprite: 'enemy_ogham_warden' },
+  { name: 'Omen Crow', tier: 8, role: 'skirmisher', speed: 7, sprite: 'enemy_omen_crow' },
 ];
 export const ENEMY_BOSSES = {
-  stage_6: { name: 'Tusk Chief', role: 'melee', speed: 4, sprite: 'enemy_tusk_chief' },
-  stage_7: { name: 'Raven Marshal', role: 'ranged', speed: 5, sprite: 'enemy_raven_marshal' },
-  stage_8: { name: 'Shadowclaw', role: 'melee', speed: 6, sprite: 'enemy_shadowclaw' },
+  stage_6: { name: 'The Kelpie Lord', role: 'melee', speed: 5, sprite: 'enemy_kelpie' },
+  stage_7: { name: 'The Ogham Warden', role: 'tank', speed: 3, sprite: 'enemy_ogham_warden' },
+  stage_8: { name: 'The White Bean Sí', role: 'omen', speed: 5, sprite: 'enemy_bean_si' },
 };
 
 const BATTLE_REWARD = { rp: 6, stone: 15, score: 15 };
@@ -295,10 +282,10 @@ const CHAPTER_ANNOUNCE = {
     ],
   },
   chapter_6: {
-    open: 'Gather your best heroes for Shadowclaw, Chief. We have a fine valley growing here, and he has been a thoroughly poor neighbour.',
+    open: 'Gather your best heroes for the White Bean Sí, Chief. Mind the old ford: its guardian was there long before our hearths.',
     tasks: [
       null,
-      'Defeat Shadowclaw in the Campaign, Chief. Send your best heroes to settle the matter; these hills could use a quieter neighbour.',
+      'Face the White Bean Sí in the Campaign, Chief. Send your best heroes to pass her test; these hills could use a quieter neighbour.',
       'Raise your Empire Score by building, researching, and winning Campaign battles, Chief. Give this old man a village worth boasting about.',
     ],
   },
@@ -1215,11 +1202,29 @@ export class Game {
   }
 
   beginRound(bs) {
+    // A Marshlight flare left on a hex last round goes off now: 8 damage to
+    // whoever still stands in the cold light. It was announced, so it is fair.
+    if (bs.flare) {
+      const hit = bs.units.find((u) => u.alive && u.gx === bs.flare.gx && u.gy === bs.flare.gy);
+      if (hit) {
+        hit.hp = Math.max(0, hit.hp - 8);
+        hit.alive = hit.hp > 0;
+        this.battleLog(bs, `The Marshlight flares under ${hit.name.split(' ')[0]} for 8.`);
+      }
+      bs.flare = null;
+    }
     // Defend lasts until the start of that unit's next activation, so it is
     // cleared in advanceBattle, not here. Drummer buffs add movement once.
     for (const u of [...bs.units, ...bs.enemies]) {
       u.acted = false; u.retaliated = false; u.waited = false;
       u.moveLeft = (u.speed || 5) + (u.buffMove || 0); u.buffMove = 0;
+      // Hawthorn roots: a slowed hero starts with one less movement.
+      if (u.slowed) { u.moveLeft = Math.max(1, u.moveLeft - 1); u.slowed = false; }
+      // The Púca changes shape each round: quick hare or sturdy goat.
+      if (u.sprite === 'enemy_puca' && u.alive) {
+        u.form = u.form === 'hare' ? 'goat' : 'hare';
+        u.moveLeft = u.form === 'hare' ? 7 : 4;
+      }
     }
     bs.queue = this.buildInitiative(bs);
     bs.turn = 'player';
@@ -1273,13 +1278,15 @@ export class Game {
   }
 
   // Shortest hex path from a unit to any tile matching isGoal, as a list of
-  // steps (excluding the start tile). Null when unreachable.
-  battlePath(unit, isGoal) {
+  // steps (excluding the start tile). Null when unreachable. The Omen Crow
+  // flies: it may cross rock hexes but must still land on a legal hex.
+  battlePath(unit, isGoal, fly = false) {
     const seen = new Map([[`${unit.gx},${unit.gy}`, null]]);
     const queue = [[unit.gx, unit.gy]];
     while (queue.length) {
       const [x, y] = queue.shift();
-      if ((x !== unit.gx || y !== unit.gy) && isGoal(x, y)) {
+      if ((x !== unit.gx || y !== unit.gy) && isGoal(x, y)
+          && !(fly && BATTLE_BLOCKED.some(([bx, by]) => bx === x && by === y))) {
         const path = [];
         let cur = [x, y];
         while (cur) { path.unshift(cur); cur = seen.get(cur.join(',')); }
@@ -1287,7 +1294,12 @@ export class Game {
       }
       for (const [nx, ny] of hexNeighbors(x, y)) {
         const k = `${nx},${ny}`;
-        if (seen.has(k) || this.battleBlocked(nx, ny, unit)) continue;
+        if (seen.has(k)) continue;
+        if (fly) {
+          if (nx < 0 || ny < 0 || nx >= BATTLE_COLS || ny >= BATTLE_ROWS) continue;
+          const bs = this.battleState;
+          if ([...bs.units, ...bs.enemies].some((u) => u !== unit && u.alive && u.gx === nx && u.gy === ny)) continue;
+        } else if (this.battleBlocked(nx, ny, unit)) continue;
         seen.set(k, [x, y]);
         queue.push([nx, ny]);
       }
@@ -1327,9 +1339,14 @@ export class Game {
 
   // Move a unit along the shortest path toward a goal, up to its movement.
   moveToward(unit, isGoal) {
-    const path = this.battlePath(unit, isGoal);
+    const path = this.battlePath(unit, isGoal, unit.sprite === 'enemy_omen_crow');
     if (!path) return 0;
-    const steps = Math.min(unit.moveLeft || 0, path.length);
+    let steps = Math.min(unit.moveLeft || 0, path.length);
+    // Round one is deployment: enemies advance on the right side only and
+    // stay in the right third before the player has acted.
+    if (unit.kind === 'enemy' && this.battleState?.round === 1) {
+      while (steps > 0 && path[steps - 1].gx < 10) steps -= 1;
+    }
     if (steps > 0) { unit.gx = path[steps - 1].gx; unit.gy = path[steps - 1].gy; unit.moveLeft -= steps; }
     return steps;
   }
@@ -1341,9 +1358,41 @@ export class Game {
     const heroes = bs.units.filter((u) => u.alive);
     if (!heroes.length) return;
     const allies = bs.enemies.filter((x) => x.alive && x !== e);
+    // Ogham Stone Warden: braces and shields an adjacent ally for one hit.
+    if (e.sprite === 'enemy_ogham_warden') {
+      const near = allies.find((a) => hexDistance(e, a) <= 1);
+      if (near && !near.shielded) {
+        near.shielded = true;
+        this.battleLog(bs, `The Ogham runes glow: ${near.name} is shielded.`);
+      }
+    }
+    // Cù Sìth: every third bark strengthens the next attack.
+    if (e.sprite === 'enemy_cu_sith') {
+      e.barks = (e.barks || 0) + 1;
+      if (e.barks % 3 === 0) { e.buffAtk = 2; this.battleLog(bs, 'The Cù Sìth barks a third time. Its next bite will be fierce.'); }
+    }
+    if (e.sprite === 'enemy_puca') {
+      this.battleLog(bs, `The Púca bounds in ${e.form === 'goat' ? 'goat' : 'hare'} form.`);
+    }
+    // Bean Sí: an omen, not a scream. The marked hero's next attack is
+    // halved; no turn is ever taken away.
+    if (e.role === 'omen') {
+      if (e.supportCd > 0) e.supportCd -= 1;
+      const marked = heroes.filter((u) => !u.omen).sort((a, b) => b.atk - a.atk)[0];
+      if (marked && e.supportCd <= 0) {
+        if (hexDistance(e, marked) > 4) this.moveToward(e, (x, y) => hexDistance({ gx: x, gy: y }, marked) <= 4);
+        if (hexDistance(e, marked) <= 4) {
+          marked.omen = true;
+          e.supportCd = 2;
+          this.battleLog(bs, `The Bean Sí keens softly: an omen rests on ${marked.name.split(' ')[0]}. Their next attack will be halved.`);
+          return;
+        }
+      }
+    }
     const strike = (target, mult = 1) => {
       let dmg = Math.round(e.atk * mult * (0.85 + Math.random() * 0.3));
-      if (e.buffAtk) { dmg = Math.round(dmg * 1.15); e.buffAtk = 0; }
+      if (e.buffAtk) { dmg = Math.round(dmg * (e.buffAtk === 2 ? 1.5 : 1.15)); e.buffAtk = 0; }
+      if (e.sprite === 'enemy_puca' && e.form === 'goat') dmg = Math.round(dmg * 1.3);
       if (target.defending) dmg = Math.max(1, Math.round(dmg * 0.7));
       target.hp = Math.max(0, target.hp - dmg);
       target.alive = target.hp > 0;
@@ -1357,6 +1406,17 @@ export class Game {
         e.hp = Math.max(0, e.hp - rd);
         e.alive = e.hp > 0;
         this.battleLog(bs, `${target.name.split(' ')[0]} retaliates for ${rd}.`);
+      }
+      // Kelpie: drags its victim one hex closer, into the wet grass.
+      if (target.alive && e.alive && e.sprite === 'enemy_kelpie' && hexDistance(e, target) > 1) {
+        const step = hexNeighbors(target.gx, target.gy)
+          .map(([gx, gy]) => ({ gx, gy }))
+          .filter((t) => hexDistance(t, e) < hexDistance(target, e) && !this.battleBlocked(t.gx, t.gy, target))
+          .sort((a, b) => hexDistance(a, e) - hexDistance(b, e))[0];
+        if (step) {
+          target.gx = step.gx; target.gy = step.gy;
+          this.battleLog(bs, `The Kelpie drags ${target.name.split(' ')[0]} one hex closer.`);
+        }
       }
     };
     // Healer: bounded heals (2 per battle, 20% max HP, no revival), then a
@@ -1412,10 +1472,20 @@ export class Game {
           this.battleLog(bs, `${e.name} shoots ${target.name.split(' ')[0]} for ${dmg} (through cover).`);
           this.onFx({ type: 'sfx', sound: 'roar' });
         } else strike(target);
+        // Marshlight: the cold light stays on the hex and flares next round.
+        if (e.sprite === 'enemy_marshlight' && target.alive) {
+          bs.flare = { gx: target.gx, gy: target.gy };
+          this.battleLog(bs, `Cold light clings to the hex under ${target.name.split(' ')[0]}. It will flare next round.`);
+        }
         return;
       }
       const adj = heroes.find((u) => hexDistance(e, u) === 1);
       if (adj) { strike(adj, 0.5); return; }
+    }
+    // Kelpie strikes from the shallows at two hexes and drags its victim in.
+    if (e.sprite === 'enemy_kelpie') {
+      const near = heroes.reduce((best, u) => (hexDistance(e, u) < hexDistance(e, best) ? u : best), heroes[0]);
+      if (hexDistance(e, near) === 2) { strike(near); return; }
     }
     // Melee roles: skirmishers hunt ranged or wounded heroes, tanks and
     // others take the nearest. Same movement and action rules as heroes.
@@ -1431,6 +1501,15 @@ export class Game {
       }
     }
     strike(target);
+    // Hawthorn Guardian: roots creep out and slow every adjacent hero.
+    if (e.sprite === 'enemy_hawthorn' && e.alive) {
+      for (const u of heroes) {
+        if (u.alive && hexDistance(e, u) <= 1 && !u.slowed) {
+          u.slowed = true;
+          this.battleLog(bs, `Hawthorn roots grip ${u.name.split(' ')[0]}: slower next round.`);
+        }
+      }
+    }
   }
 
   spawnWave() {
@@ -1448,12 +1527,12 @@ export class Game {
     const picked = [];
     for (const e of pool) {
       if (picked.length >= (finalWave && ENEMY_BOSSES[bs.stageId] ? count - 1 : count)) break;
-      if ((e.role === 'support' || e.role === 'healer')
-          && picked.some((p) => p.role === 'support' || p.role === 'healer')) continue;
+      if ((e.role === 'support' || e.role === 'healer' || e.role === 'omen')
+          && picked.some((p) => p.role === 'support' || p.role === 'healer' || p.role === 'omen')) continue;
       picked.push(e);
     }
     while (picked.length < (finalWave && ENEMY_BOSSES[bs.stageId] ? count - 1 : count)) picked.push(band[picked.length % band.length]);
-    const roleAtk = { tank: 0.8, healer: 0.6, support: 0.6, ranged: 0.9, skirmisher: 0.95, melee: 1 };
+    const roleAtk = { tank: 0.8, healer: 0.6, support: 0.6, omen: 0.7, ranged: 0.9, skirmisher: 0.95, melee: 1 };
     const mk = (entry, i, boss = false) => ({
       kind: 'enemy', idx: i, name: entry.name, role: entry.role, sprite: entry.sprite,
       ranged: entry.role === 'ranged',
@@ -1511,6 +1590,8 @@ export class Game {
     const weakMelee = hero.ranged && engaged;
     const cover = hero.ranged && !weakMelee && shotHasCover(hero, enemy);
     let dmg = Math.round(hero.atk * (weakMelee ? 0.5 : 1) * (cover ? 0.75 : 1));
+    if (enemy.shielded) dmg = Math.max(1, Math.round(dmg * 0.5));
+    if (hero.omen) dmg = Math.max(1, Math.round(dmg * 0.5));
     const luckOn = bs.stageId !== 'stage_1';
     const kills = dmg >= enemy.hp;
     const retal = !kills && !enemy.retaliated && (!hero.ranged || weakMelee)
@@ -1548,6 +1629,8 @@ export class Game {
     const lucky = bs.stageId !== 'stage_1' && Math.random() < 0.12;
     let dmg = Math.round(hero.atk * (0.9 + Math.random() * 0.2) * (weakMelee ? 0.5 : 1) * (cover ? 0.75 : 1));
     if (lucky) dmg *= 2;
+    if (enemy.shielded) { dmg = Math.max(1, Math.round(dmg * 0.5)); enemy.shielded = false; }
+    if (hero.omen) { dmg = Math.max(1, Math.round(dmg * 0.5)); hero.omen = false; }
     dmg = Math.max(1, dmg);
     enemy.hp = Math.max(0, enemy.hp - dmg);
     enemy.alive = enemy.hp > 0;
@@ -1646,6 +1729,7 @@ export class Game {
     this.syncBattleTotals(bs);
     if (bs.units.every((u) => !u.alive)) {
       bs.active = false;
+      bs.cutIn = null;
       bs.outcome = 'defeat';
       this.emit('battle_lost', {
         stage_id: bs.stageId, enemy: bs.stage.name,
@@ -1663,6 +1747,7 @@ export class Game {
         return true;
       }
       bs.active = false;
+      bs.cutIn = null;
       bs.outcome = 'victory';
       // HoH stars: 3 for a clean win, fewer when the squad limps home.
       const hpPct = bs.playerHp / (bs.playerMaxHp || 1);
@@ -1986,6 +2071,13 @@ export class Game {
       return { result: 'noop' };
     }
     if (target_id === 'btn_hero_levelup') {
+      // No Arena yet: the button is a guide, not a dead end. Close the Hall
+      // and open the Buildings menu on the Military tab at the Arena card.
+      if (!this.buildings.some((b) => b.type === 'hero_arena' && b.status === 'done')) {
+        this.modal = null;
+        this.pendingBuild = 'hero_arena';
+        return { result: 'ui' };
+      }
       return this.levelUpHero(this.selectedHero, reject);
     }
     if (target_id.startsWith('btn_levelup_')) {

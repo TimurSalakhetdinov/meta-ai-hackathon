@@ -6,10 +6,10 @@ import { urlParams } from './clock.js';
 import {
   BUILDINGS, BUILD_ORDER, ALL_BUILD_ORDER, CAMPAIGN_STAGES, ENCOUNTERS, ERA_LABEL, Game,
   QUESTS, RESOURCES, ALL_RESOURCES, RESOURCE_LABEL, TECHS, UPGRADABLE_TYPES,
-} from './game.js?v=75';
+} from './game.js?v=76';
 import { Sfx, defaultMuted } from './audio.js?v=23';
 import { IsoRenderer } from './iso_renderer.js?v=68';
-import { loadSprites, spriteUrl } from './sprites.js?v=66';
+import { loadSprites, spriteUrl } from './sprites.js?v=67';
 import { TechTreeView } from './tech_tree.js?v=52';
 import { initOverlay } from './overlay.js';
 
@@ -50,7 +50,7 @@ const kaelenVoice = {
       'Improve more of our buildings', 'Open Research and learn Irrigation, Chief.',
       'Prepare Tor for the fight', 'Raise Tor\'s level through training, Chief.',
       'Conquer Sabertooth Canyon in the Campaign, Chief.', 'Build a Barracks or a Copper Smelter, Chief.',
-      'Gather your best heroes for Shadowclaw, Chief.', 'Defeat Shadowclaw in the Campaign, Chief.',
+      'Gather your best heroes for the White Bean Sí, Chief.', 'Face the White Bean Sí in the Campaign, Chief.',
       'Raise your Empire Score by building',
     ];
     const isHint = text.startsWith('Open Research') || text.startsWith('Choose Basic Toolmaking')
@@ -106,8 +106,8 @@ const kaelenVoice = {
       ['Raise Tor\'s level through training, Chief.', 'kaelen_ch5_tor.mp3'],
       ['Conquer Sabertooth Canyon in the Campaign, Chief.', 'kaelen_ch5_stage6.mp3'],
       ['Build a Barracks or a Copper Smelter, Chief.', 'kaelen_ch5_barracks.mp3'],
-      ['Gather your best heroes for Shadowclaw, Chief.', 'kaelen_ch6_open.mp3'],
-      ['Defeat Shadowclaw in the Campaign, Chief.', 'kaelen_ch6_boss.mp3'],
+      ['Gather your best heroes for the White Bean Sí, Chief.', 'kaelen_ch6_open.mp3'],
+      ['Face the White Bean Sí in the Campaign, Chief.', 'kaelen_ch6_boss.mp3'],
       ['Raise your Empire Score by building', 'kaelen_ch6_score.mp3'],
     ];
     // Dynamic warnings carry numbers that cannot be pre-rendered; the
@@ -724,6 +724,14 @@ class Hud {
 
   update() {
     const g = this.game;
+    // The Train button asked us to guide the player to a building card.
+    if (g.pendingBuild) {
+      const target = g.pendingBuild;
+      g.pendingBuild = null;
+      $('build-bar')?.classList.remove('collapsed');
+      this.setBuildCategory('military');
+      requestAnimationFrame(() => document.querySelector(`[data-target="card_${target}"]`)?.scrollIntoView({ block: 'nearest' }));
+    }
     const res = g.roundedResources();
 
     // Resources HUD
@@ -1109,14 +1117,16 @@ class Hud {
     // itself: a ready-looking button whose refusal hides behind this
     // modal reads as a dead button.
     const arena = g.buildings.find((b) => b.type === 'hero_arena' && b.status === 'done');
+    const barracks = g.buildings.find((b) => b.type === 'barracks' && b.status === 'done');
     const canUpgrade = sel.unlocked && sel.level < sel.maxLevel && g.resources.food >= costFood && !training && !!arena;
     const lvlBtn = $('btn_hero_levelup');
     if (lvlBtn) {
-      lvlBtn.disabled = !canUpgrade;
+      // Without an Arena the button stays clickable: it guides to building one.
+      lvlBtn.disabled = !!training || sel.level >= sel.maxLevel || (!!arena && !canUpgrade);
       lvlBtn.textContent = training
         ? `⚔️ Training at the Arena… ${Math.max(0, Math.ceil(training.completeAt - g.clock.t))}s`
         : sel.level >= sel.maxLevel ? 'Max Rank'
-        : !arena ? '⚔️ Train at Arena · Build the Heroes\' Arena first (needs Barracks)'
+        : !arena ? `⚔️ Train at Arena · Build the Heroes' Arena${barracks ? '' : ' (needs Barracks first)'}`
         : `⚔️ Train at Arena · Lv.${sel.level + 1} (+15 Score)`;
     }
     if (!arena && !training) {
@@ -1187,6 +1197,9 @@ class Hud {
     }
     const waveBtn = $('btn_battle_wave_continue');
     if (waveBtn) waveBtn.hidden = !bs.awaitingWave;
+    // At battle end the modal owns the screen: log and turn order step aside.
+    if (logEl) logEl.style.display = bs.outcome ? 'none' : '';
+    if (initEl) initEl.style.display = bs.outcome ? 'none' : '';
 
     // No hero cards on the battle screen: charge shows on the canvas bar
     // under the active hero, and tapping that hero at full charge fires it.

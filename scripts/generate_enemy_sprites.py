@@ -1,6 +1,7 @@
-"""Generate the 27 rival-clan enemy sprites with Muse Image and cut them out.
+"""Generate the ten Otherworld guardian sprites with Muse Image and cut them out.
 
-Prompts are the visual descriptions from the Astra enemy roster. Each image
+Prompts are the approved guardian descriptions (inspired by Irish and
+Scottish folklore). Each image
 comes back on a plain cream background; a border flood-fill turns that
 background transparent and the result is cropped to the figure. Existing
 sprites are skipped, so a rerun only pays for what is missing.
@@ -26,33 +27,16 @@ SPRITES = ROOT / "frontend" / "static" / "assets" / "sprites"
 BASE = "One human, full-body side view facing left, plain cream background, cozy painted style; "
 
 PROMPTS: dict[str, str] = {
-    "enemy_ash_clubman": BASE + "stocky, shaved head, clean-shaven, wearing an ochre tunic and charcoal trousers, holding a short oak club low, no shield.",
-    "enemy_reed_slinger": BASE + "slender, short auburn curls, wearing a sage shirt and beige knee wraps, holding an extended leather sling, large pebble pouch at hip.",
-    "enemy_birch_knifer": BASE + "wiry, cropped chestnut hair, wearing a cream sleeveless tunic and rust sash, holding a short seax beside the thigh, leaning forward, no cloak.",
-    "enemy_flint_axeman": BASE + "broad shoulders, bald crown and thick sideburns, wearing a brick-red coat and tan leggings, holding an iron hand axe, empty off hand.",
-    "enemy_moss_bowhand": BASE + "compact figure, hair hidden by an olive hood, wearing a mustard tunic, holding a short wooden bow at half draw, small quiver, no cloak.",
-    "enemy_oak_doorward": BASE + "heavyset, square clean-shaven jaw, wearing an umber padded vest over cream sleeves, holding a tall rectangular plank shield and low seax, bare head.",
-    "enemy_thorn_runner": BASE + "long-legged, short black hair swept back, wearing a teal short tunic and brown leg wraps, holding a light javelin overhead, no shield or fur.",
-    "enemy_reed_herbkeeper": BASE + "older, grey hair in a compact bun, wearing a dusty rose apron over an oatmeal robe, holding a wooden salve bowl and linen bandage, sheathed belt knife, no staff.",
-    "enemy_flint_hookman": BASE + "tall and lean, narrow moustache, close-fitting leather cap, wearing slate and ochre, holding a long hooked axe diagonally with both hands, no shield.",
-    "enemy_ash_drumhand": BASE + "sturdy, short sandy hair, wearing terracotta and charcoal, holding a wooden beater over a waist-slung hide drum, sheathed seax, no helmet.",
-    "enemy_frost_guard": BASE + "broad, clean-shaven, wearing a rounded iron cap and pale blue quilted coat, holding a plain oval iron-grey shield and short sword, no fur or braids.",
-    "enemy_cinder_dartman": BASE + "narrow shoulders, short greying hair, wearing a saffron vest over burgundy sleeves, holding a heavy throwing dart with more in a leather hip case, no fire effects.",
-    "enemy_boar_cleaver": BASE + "muscular, cropped fair hair and short unbraided beard, wearing plum and brown, holding a broad iron axe across the body, brass boar clasp, no animal headgear.",
-    "enemy_gale_scout": BASE + "athletic, short dark curls beneath a cream headband, wearing sea-green and cream, holding paired short seaxes in a low running stance, no cloak.",
-    "enemy_thorn_longbow": BASE + "very tall and thin, hood up, wearing chestnut and muted yellow, holding a long wooden bow upright with an arrow nocked, back quiver, narrow silhouette.",
-    "enemy_tusk_shieldwall": BASE + "squat and powerful, wearing a plain dull bronze helmet and deep red coat, holding a broad cream oval shield marked with a red tusk and a short iron axe.",
-    "enemy_tusk_spearcast": BASE + "lean, shaved head and small moustache, wearing sand and crimson, holding a heavy throwing spear at shoulder height with spares in the other hand, no shield.",
-    "enemy_raven_standard": BASE + "upright, straight chin-length silver hair, wearing an indigo long coat and cream scarf, holding a tall forked cream banner with an indigo raven emblem, sword sheathed.",
-    "enemy_iron_swordsman": BASE + "medium build, cropped brown hair beneath a low nasal helmet, wearing rust-red and charcoal, holding an iron sword forward and a small unpainted metal buckler.",
-    "enemy_gale_harrier": BASE + "wiry, red hair tied in a small unbraided knot, wearing pale grey and turquoise, holding a hand axe forward and a seax low, wide mobile stance.",
-    "enemy_frost_bonewright": BASE + "stout older healer, bald and clean-shaven, wearing muted blue and cream, holding rolled bandages and wooden splints, leather medicine satchel and sheathed knife, no staff or magic.",
-    "enemy_night_gateward": BASE + "tall and broad, wearing a plain nasal helmet and navy coat, holding a rectangular navy shield with copper edging and a short iron mace, no fur.",
-    "enemy_night_bowguard": BASE + "lean, black hair in a neat low bun, wearing violet and charcoal, holding a recurved bow across the chest, hip quiver, bare head, no supernatural effects.",
-    "enemy_iron_breaker": BASE + "imposing, shaved head and short copper moustache, wearing ochre and dark teal, holding a long narrow-bladed iron war axe with both hands, no maul, fur, or shield.",
-    "enemy_tusk_chief": BASE + "broad older rival, bald with a short grey moustache, wearing ivory and crimson, holding a broad iron axe and dark red oval shield with a cream tusk emblem, bronze collar, no horns.",
-    "enemy_raven_marshal": BASE + "tall, angular, cropped silver hair, wearing a deep green coat and short cream cloth mantle, holding a longbow with a nocked arrow, sword at hip, small raven clasp, no staff.",
-    "enemy_shadowclaw": BASE + "lean veteran, slicked-back grey hair, clean-shaven, wearing midnight blue and muted gold with leather forearm guards, holding an iron sword and hooked seax, no shield, mask, claws, or monster features.",
+    "enemy_marshlight": "One magical marsh spirit, full-body side view facing left, plain cream background, cozy painted storybook style; a drifting lantern-like wisp of cold green light with a soft trailing glow, no face, no fireball, no text.",
+    "enemy_mound_sentinel": "One elegant fairy mound guardian, full-body side view facing left, plain cream background, cozy painted storybook style; tall uncanny sentinel in bronze leaf-shaped armour with a moss-green mantle, holding a long slender blade low, calm and still, no helmet horns.",
+    "enemy_hawthorn": "One walking hawthorn tree guardian, full-body side view facing left, plain cream background, cozy painted storybook style; twisted pale trunk body, crown of white blossoms, red berries, root legs and branch arms, gentle guardian face in the bark.",
+    "enemy_selkie": "One selkie mistweaver, full-body side view facing left, plain cream background, cozy painted storybook style; graceful figure in a sleek dark sealskin mantle, wet silver hair, dark kind eyes, holding a small mist orb, calm healer, no staff.",
+    "enemy_cu_sith": "One huge fairy hound, full-body side view facing left, plain cream background, cozy painted storybook style; shaggy dark green dog the size of a calf, sweeping plumed tail, kind dark eyes, alert stance, no collar, no glowing monster parts.",
+    "enemy_bean_si": "One elegant bean si omen-bearer, full-body side view facing left, plain cream background, cozy painted storybook style; tall pale spirit woman with long silver hair and a soft grey-green mantle, mournful gentle expression, hands folded, no weapon, no screaming.",
+    "enemy_ogham_warden": "One ogham stone warden, full-body side view facing left, plain cream background, cozy painted storybook style; a single tall leaning standing stone with carved ogham rune strokes along one edge, moss at its base, two simple stone arms, ancient and still, no face.",
+    "enemy_omen_crow": "One oversized omen crow, full-body side view facing left, plain cream background, cozy painted storybook style; large glossy black crow with wings half spread, bright intelligent eye, a few grey feathers, perched stance ready to fly, no rider.",
+    "enemy_kelpie": "One majestic kelpie water horse, full-body side view facing left, plain cream background, cozy painted storybook style; glossy dark horse with riverweed in its wet mane, droplets on its coat, uncanny gentle eyes, standing proudly, no rider, no ghost transparency.",
+    "enemy_puca": "One puca shapeshifter spirit, full-body side view facing left, plain cream background, cozy painted storybook style; sturdy goat-like creature with long hare ears and dark shaggy fur, mischievous golden eyes, playful stance, no horns like a demon, no human parts.",
 }
 
 
