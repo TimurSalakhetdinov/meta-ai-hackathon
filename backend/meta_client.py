@@ -528,7 +528,7 @@ class MetaClient:
         """High-salience Research emblem for a Variant B proposal. Stub mode draws one locally."""
         out_path = Path(out_path)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        base = {"run_id": run_id, "provider_mode": self.provider_mode, "model_id": "muse-image",
+        base = {"run_id": run_id, "provider_mode": self.provider_mode, "model_id": "muse-image-1.0",
                 "model_mode": "standard", "bucket": bucket, "images": 1}
         if self.provider_mode != "meta":
             out_path.write_bytes(_procedural_emblem(prompt))
@@ -546,9 +546,9 @@ class MetaClient:
         """Muse Image call for game art, cached by prompt and size. Needs provider_mode 'meta'."""
         if self.provider_mode != "meta":
             raise RuntimeError("Muse Image needs META_PROVIDER=meta and META_API_KEY in .env")
-        key = hashlib.sha256(json.dumps(["muse-image", prompt, size]).encode()).hexdigest()
+        key = hashlib.sha256(json.dumps(["muse-image-1.0", prompt, size]).encode()).hexdigest()
         cache = self.runs_dir / ".cache" / "muse_image" / f"{key}.png"
-        base = {"run_id": run_id, "provider_mode": self.provider_mode, "model_id": "muse-image",
+        base = {"run_id": run_id, "provider_mode": self.provider_mode, "model_id": "muse-image-1.0",
                 "model_mode": "standard", "bucket": bucket}
         if cache.exists():
             self.ledger.log({**base, "images": 0, "cache_hit": True})
@@ -584,10 +584,8 @@ class MetaClient:
         return boxes
 
     def _call_image_api(self, prompt: str, size: str = "256x256") -> bytes:
-        url = os.environ.get("META_IMAGE_URL")
-        if not url:
-            raise RuntimeError("META_IMAGE_URL is not set")
-        resp = self._client().post(url, headers=self._auth(), json={"model": "muse-image", "prompt": prompt,
+        url = os.environ.get("META_IMAGE_URL") or "https://api.meta.ai/v1/images/generations"
+        resp = self._client().post(url, headers=self._auth(), json={"model": "muse-image-1.0", "prompt": prompt,
                                                                     "size": size})
         resp.raise_for_status()
         return base64.b64decode(resp.json()["data"][0]["b64_json"])

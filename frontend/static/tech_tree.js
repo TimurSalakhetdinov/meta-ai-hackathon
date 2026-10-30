@@ -3,25 +3,50 @@
 
 import { RESOURCE_LABEL, TECHS, TECH_ORDER } from './game.js';
 
-// Five columns; each chain sits on one row so its arrows run straight.
-// The era chain runs along the bottom row and Irrigation (a Bronze Age tech) is last.
-// Nodes are wide enough that names and effects never clip.
-const COL = [0, 178, 356, 534, 712];
-const ROW = [0, 134, 268];
+// Horizontal tree, scrolled left to right like the reference: Toolmaking
+// branches into three chains, they join at Bronze Age, Irrigation is last.
+const COL = [0, 205, 410, 615, 820, 1025];
+const ROW = [0, 150];
+const MID = 75;
 const NODE_POS = {
-  tech_toolmaking: [COL[0], ROW[1]],
-  tech_woodworking: [COL[1], ROW[0]],
-  tech_baskets: [COL[1], ROW[1]],
-  tech_masonry: [COL[1], ROW[2]],
-  tech_construction: [COL[2], ROW[0]],
-  tech_stone_age: [COL[2], ROW[2]],
-  tech_bronze_age: [COL[3], ROW[2]],
-  tech_irrigation: [COL[4], ROW[2]],
+  tech_toolmaking: [COL[0], MID],
+  tech_baskets: [COL[1], MID],
+  tech_woodworking: [COL[2], ROW[0]],
+  tech_masonry: [COL[2], ROW[1]],
+  tech_construction: [COL[3], ROW[0]],
+  tech_stone_age: [COL[3], ROW[1]],
+  tech_bronze_age: [COL[4], MID],
+  tech_irrigation: [COL[5], MID],
 };
-const NODE_W = 166;
-const NODE_H = 118;
-const TREE_W = COL[4] + NODE_W;
-const TREE_H = ROW[2] + NODE_H;
+const NODE_W = 170;
+const NODE_H = 110;
+
+// Painted emblem per tech (Muse Image), replacing the plain emoji icons.
+const TECH_EMBLEM = {
+  tech_toolmaking: 'emblem_toolmaking',
+  tech_baskets: 'emblem_baskets',
+  tech_woodworking: 'emblem_woodworking',
+  tech_masonry: 'emblem_masonry',
+  tech_construction: 'emblem_construction',
+  tech_stone_age: 'emblem_stone_age',
+  tech_bronze_age: 'emblem_bronze_age',
+  tech_irrigation: 'emblem_irrigation',
+};
+
+// Display arrows only (gameplay prerequisites in TECHS are wider). One
+// clean elbow per pair, so no dashed trunks overlap or lose their heads.
+const DISPLAY_EDGES = [
+  ['tech_toolmaking', 'tech_baskets'],
+  ['tech_baskets', 'tech_woodworking'],
+  ['tech_baskets', 'tech_masonry'],
+  ['tech_woodworking', 'tech_construction'],
+  ['tech_masonry', 'tech_stone_age'],
+  ['tech_construction', 'tech_bronze_age'],
+  ['tech_stone_age', 'tech_bronze_age'],
+  ['tech_bronze_age', 'tech_irrigation'],
+];
+const TREE_W = COL[5] + NODE_W;
+const TREE_H = ROW[1] + NODE_H;
 
 // True if `req` is already implied by another requirement of `id` (e.g. Toolmaking -> Masonry -> Stone Age).
 function implied(id, req) {
@@ -34,6 +59,22 @@ export class TechTreeView {
     this.root = root;
     this.rpLabel = rpLabel;
     this.signature = '';
+    // Scroll the tree left/right with the wheel or by dragging its background.
+    root.addEventListener('wheel', (e) => {
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        root.scrollLeft += e.deltaY;
+        e.preventDefault();
+      }
+    }, { passive: false });
+    let drag = null;
+    root.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('button')) return;
+      drag = { x: e.clientX, left: root.scrollLeft };
+    });
+    root.addEventListener('pointermove', (e) => {
+      if (drag) root.scrollLeft = drag.left - (e.clientX - drag.x);
+    });
+    root.addEventListener('pointerup', () => { drag = null; });
   }
 
   update(game) {
@@ -44,14 +85,15 @@ export class TechTreeView {
     const sig = JSON.stringify([res.food, res.wood, res.stone, res.rp, [...game.techs], this.flash?.until]);
     if (sig === this.signature) return;
     this.signature = sig;
-    this.root.innerHTML = this.edgesSvg(game) + TECH_ORDER.map((id) => this.node(game, id)).join('');
+    this.root.innerHTML = `<div class="tech-inner" style="width:${TREE_W}px;height:${TREE_H}px">`
+      + this.edgesSvg(game) + TECH_ORDER.map((id) => this.node(game, id)).join('') + '</div>';
   }
 
   // Shake a node the player could not afford and say what is missing.
   flashRejected(id, game) {
     const st = game.techStatus(id);
     const msg = !st.available
-      ? (st.reason === 'too_early' ? 'The Bronze Age opens later in the game' : `Learn ${TECHS[st.requires].label} first`)
+      ? `Learn ${TECHS[st.requires].label} first`
       : st.missing ? `Need ${st.missing.required} ${RESOURCE_LABEL[st.missing.resource]} · have ${Math.floor(st.missing.available)}` : '';
     this.flash = { id, msg, until: performance.now() + 2500 };
     this.signature = '';
@@ -59,12 +101,11 @@ export class TechTreeView {
     setTimeout(() => { this.signature = ''; }, 2600);
   }
 
-  // Right-angled arrows through the middle of the column gap; implied edges are left out.
+  // Right-angled arrows through the middle of the column gap.
   edgesSvg(game) {
     const lines = [];
-    for (const id of TECH_ORDER) {
-      for (const req of TECHS[id].requires) {
-        if (implied(id, req)) continue;
+    for (const [req, id] of DISPLAY_EDGES) {
+      {
         const [ax, ay] = NODE_POS[req];
         const [bx, by] = NODE_POS[id];
         const x1 = ax + NODE_W;
@@ -102,16 +143,14 @@ export class TechTreeView {
       cost = Object.entries(st.costs).filter(([, v]) => v > 0)
         .map(([r, v]) => `<span class="${res[r] < v ? 'short' : ''}">${v} ${RESOURCE_LABEL[r]}</span>`).join(' · ');
       // Shorten the lock label ("Stone Age Awakening" -> "Stone Age") so it fits the node.
-      if (!st.available) cost = st.reason === 'too_early'
-        ? `\u{1F512} Opens at ${Math.floor((st.unlocksAtSec || 0) / 60)} min`
-        : `\u{1F512} ${TECHS[st.requires].label.replace(/ (Awakening|Dawn)$/, '')}`;
+      if (!st.available) cost = `\u{1F512} ${TECHS[st.requires].label.replace(/ (Awakening|Dawn)$/, '')}`;
     }
     if (this.flash?.id === id && performance.now() < this.flash.until) {
       cls += ' shake';
       cost = this.flash.msg;
     }
     return `<button class="${cls}" data-target="${id}" style="left:${x}px;top:${y}px">
-      <span class="t-ico">${spec.icon}</span>
+      <span class="t-ico">${TECH_EMBLEM[id] ? `<img src="/static/assets/sprites/${TECH_EMBLEM[id]}.png" alt="">` : spec.icon}</span>
       <span class="t-name">${spec.label}</span>
       <span class="t-eff">${spec.effect}</span>
       <span class="t-cost">${cost}</span>

@@ -476,7 +476,7 @@ def summary_name(patch_id: str) -> str:
 
 def run_playtest(patch_id: str, *, configs_dir: Path, runs_dir: Path, client: MetaClient,
                  personas: Optional[list[str]] = None, seeds: Optional[list[int]] = None,
-                 run_type: str = "full_window", session_fn: Any = None,
+                 run_type: str = "full_window", speed: int = 4, session_fn: Any = None,
                  on_log: Any = None) -> dict[str, Any]:
     """Paired A/B playtest of an approved feature patch against its baseline patch."""
     import asyncio
@@ -493,7 +493,7 @@ def run_playtest(patch_id: str, *, configs_dir: Path, runs_dir: Path, client: Me
         baseline = None
     personas = personas or list(load_personas(configs_dir))
     exp = Experiment(configs_dir=configs_dir, runs_dir=runs_dir, clients={"A": client, "B": client},
-                     run_type=run_type, session_fn=session_fn, experiment_id=f"studio_{patch_id}",
+                     run_type=run_type, speed=speed, session_fn=session_fn, experiment_id=f"studio_{patch_id}",
                      summary_name=summary_name(patch_id))
     if on_log is not None:
         exp.log = on_log

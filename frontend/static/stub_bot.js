@@ -80,7 +80,9 @@ const EXPANSION_LINES = {
 };
 
 export class StubBot {
-  constructor({ runId, persona, seed, clickAt, ringAt, onThought, onDone }) {
+  constructor({ runId, persona, seed, clickAt, ringAt, onThought, onDone, maxSimSec = null, stuckSec = null }) {
+    this.maxSimSec = maxSimSec || MAX_SIM_SEC;
+    this.stuckSec = stuckSec || 60;
     this.runId = runId;
     this.persona = persona;
     this.policy = { ...DEFAULT_POLICY, ...(persona?.stub_policy || {}) };
@@ -102,6 +104,8 @@ export class StubBot {
     this.avoid = new Map();
     this.seenAchievement = 0;
     this.featureUses = 0;
+    this.lastProgressSig = null;
+    this.lastProgressAt = 0;
   }
 
   start() {
@@ -133,7 +137,12 @@ export class StubBot {
     this.idleSince = null;
 
     if (state.achieved && ++this.seenAchievement > 2) return this.finish('first_achievement');
-    if (state.sim_elapsed_sec > MAX_SIM_SEC) return this.finish('bot_time_limit');
+    if (state.sim_elapsed_sec > this.maxSimSec) return this.finish('bot_time_limit');
+    // Progress watchdog: same step, quest and score for 60 sim seconds
+    // means the bot is looping. End as stuck instead of idling forever.
+    const sig = `${state.step_id}|${state.quest_index}|${state.score}`;
+    if (sig !== this.lastProgressSig) { this.lastProgressSig = sig; this.lastProgressAt = state.sim_elapsed_sec || 0; }
+    else if ((state.sim_elapsed_sec || 0) - this.lastProgressAt >= this.stuckSec) return this.finish('stuck_abort');
 
     const { decision, targets } = this.plan();
     const index = this.stepIndex++;
@@ -482,7 +491,8 @@ export class StubBot {
     this.done = true;
     this.running = false;
     clearTimeout(this.timer);
-    const why = { first_achievement: 'Stone Age reached. Session complete.', bronze_age_mastery: 'Bronze Age mastered. Session complete.' };
+    const why = { first_achievement: 'Stone Age reached. Session complete.', bronze_age_mastery: 'Bronze Age mastered. Session complete.',
+      stuck_abort: 'No progress for a while. Ending the session as stuck.', stopped_by_tester: 'Stopped by the tester. Ending the session.' };
     this.onThought({ index: this.stepIndex, thought: why[reason] || 'Time limit reached. Ending the session.', target_id: null });
     this.onDone(reason);
   }

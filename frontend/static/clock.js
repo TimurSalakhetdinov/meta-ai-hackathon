@@ -64,8 +64,13 @@ export function urlParams() {
     replayB: p.get('replay_b'),
     dev: p.get('dev') === '1',
     bot: p.get('bot') === '1',
+    video: p.get('video') === '1',
     // The Playwright runner drives the clicks itself and only borrows the page hooks.
     externalBot: p.get('bot') === 'external',
+    playMin: Number(p.get('playmin')) || null,
+    flow: p.get('flow') || null,
+    safety: Number(p.get('safety')) || 1,
+    stuckSec: Number(p.get('stucksec')) || null,
     noTelemetry: p.get('telemetry') === '0',
     dock: p.get('dock'),
     analysisRun: p.get('analysis_run'),

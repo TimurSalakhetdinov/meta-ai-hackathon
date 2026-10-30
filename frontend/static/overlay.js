@@ -32,6 +32,7 @@ export function initOverlay(ctx) {
       <div class="council-title"><span class="crest-gem">✦</span> AI Playtest Studio
         <small>Test a feature idea on AI playtesters before real players see it</small></div>
       ${slide ? '<button class="council-close" id="council-close" aria-label="Close the studio">✕</button>' : ''}
+      <button class="mgr-justplay" id="mgr-back" title="Back to the Game Manager menu">← Game Manager</button>
     </div>
     <div class="pill" id="pill">
       <div class="pill-row"><span class="step" id="pill-step">-</span>
@@ -40,7 +41,9 @@ export function initOverlay(ctx) {
       <div class="pill-row"><span class="checklist" id="pill-check"></span><span class="muted">First click <b id="pill-ttfa">-</b></span></div>
     </div>
     <nav class="stepper" id="stepper" aria-label="Studio steps">
-      ${STEPS.map(([n, label]) => `<button class="step-btn" data-step="${n}"><b>${n}</b>${label}</button>`).join('')}
+      ${(ctx.params.flow === 'bug' || ctx.params.bot || ctx.params.externalBot)
+        ? '<button class="step-btn" data-bugstep="live"><b>1</b>Bug hunting</button><button class="step-btn" data-bugstep="report"><b>2</b>Report</button>'
+        : STEPS.map(([n, label]) => `<button class="step-btn" data-step="${n}"><b>${n}</b>${label}</button>`).join('')}
     </nav>
     <div class="director" id="director">
       <div class="tab-body" id="tab-forge"></div>
@@ -95,6 +98,17 @@ class Overlay {
     // The stepper is a progress indicator, not navigation: steps advance
     // only through the panel actions (forge, approve, run playtest).
     document.getElementById('live-link').addEventListener('click', () => this.showTab('live'));
+    // Back to the Game Manager menu: a plain visit opens it.
+    document.getElementById('mgr-back')?.addEventListener('click', () => { location.href = '/'; });
+    // Bug-hunt sessions get a two-step Studio: watch the hunt, then the Report.
+    this.bugMode = !!(ctx.params.flow === 'bug' || ctx.params.bot || ctx.params.externalBot);
+    if (this.bugMode) {
+      const title = document.querySelector('.council-title small');
+      if (title) title.textContent = 'Bug hunting: watch the tester, then read the report';
+      document.getElementById('live-link').hidden = true;
+      document.querySelectorAll('#stepper [data-bugstep]').forEach((b) =>
+        b.addEventListener('click', () => this.showTab(b.dataset.bugstep)));
+    }
 
     this.personasReady = fetch('/api/personas').then((r) => r.json()).catch(() => []).then((rows) => {
       // Nobody starts selected: a click always means "add this playtester".
@@ -109,7 +123,7 @@ class Overlay {
     if (this.game) setInterval(() => this.poll(), POLL_MS);
     const start = { analyst: 'report', report: 'report', live: 'live' }[ctx.params.dock];
     if (start) this.showTab(start);
-    else if (ctx.params.bot || ctx.params.externalBot) this.showTab('live');
+    else if (ctx.params.bot || ctx.params.externalBot || ctx.params.flow === 'bug') this.showTab('live');
   }
 
   // Steps 1-3 are sections of the Forge panel; step 4 is the Report panel.
@@ -136,6 +150,13 @@ class Overlay {
     const done = { 1: !!f, 2: ['approved', 'rejected'].includes(f?.status), 3: !!this.reportPatch, 4: false };
     const current = this.tab === 'report' ? 4 : this.tab === 'forge' ? this.step : 0;
     document.querySelectorAll('#stepper .step-btn').forEach((b) => {
+      if (b.dataset.bugstep) {
+        b.classList.toggle('current', this.tab === b.dataset.bugstep);
+        b.classList.toggle('done', b.dataset.bugstep === 'live' && this.tab === 'report');
+        b.classList.remove('locked');
+        b.disabled = false;
+        return;
+      }
       const n = Number(b.dataset.step);
       b.classList.toggle('current', n === current);
       b.classList.toggle('done', done[n] && n !== current);
@@ -187,6 +208,7 @@ class Overlay {
       <div class="row"><select class="persona" id="persona-select" aria-label="Persona"></select>
         <span class="badge" title="Map and policy seed">seed ${p.seed}</span></div>
       <button class="bot-btn" id="bot-btn">▶ Watch Bot Play</button>
+      <button class="bot-btn bot-stop" id="bot-stop" hidden>■ Stop Bot</button>
       <div class="note" id="bot-note" style="margin-top:4px">${botMode
         ? 'Stub persona policy, variant-blind: it only sees rendered targets. Live Muse Spark runs come from the Playwright runner (--mode meta).'
         : 'Reloads this variant with a scripted persona bot driving real clicks.'}</div>
@@ -230,20 +252,53 @@ class Overlay {
       const persona = this.personas.find((x) => x.persona_id === select.value) || null;
       this.bot = new StubBot({
         runId: this.ctx.runId, persona, seed: p.seed,
+        maxSimSec: p.playMin ? p.playMin * 60 * (p.speed || 1) * (p.safety || 1) : null,
+        stuckSec: p.stuckSec,
         clickAt: this.ctx.clickAt, ringAt: ringAt,
         onThought: ({ index, thought, target_id }) => this.addStream(
           `<span class="t">#${index}</span> <span class="thought">\u{1F4AD} ${esc(thought)}</span>${target_id ? ` <span class="t">→ ${esc(target_id)}</span>` : ''}`),
         onDone: async (reason) => {
           this.game.end(reason);
           await this.ctx.telemetry.drain();
+          await this.stopRunRecorder?.();
           this.setBotButton('done');
+          const stopBtn = document.getElementById('bot-stop');
+          if (stopBtn) stopBtn.hidden = true;
           window.__BOT_DONE__ = reason;
+          this.addStream(`<span class="thought">🏁 Bot finished: ${esc(reason)}. Opening the Report step…</span>`);
+          this.showTab('report');
         },
       });
       window.__STUB_BOT__ = this.bot;
       this.bot.start();
       this.setBotButton('running');
+      const stopBtn = document.getElementById('bot-stop');
+      if (stopBtn) {
+        stopBtn.hidden = false;
+        stopBtn.addEventListener('click', () => { if (this.bot && !this.bot.done) this.bot.finish('stopped_by_tester'); });
+      }
+      if (p.video) this.startRunRecorder();
     }
+  }
+
+  // Record the game canvas as video.webm for this run (Game Manager option).
+  startRunRecorder() {
+    try {
+      const canvas = document.getElementById('world');
+      if (!canvas?.captureStream || typeof MediaRecorder === 'undefined') return;
+      const chunks = [];
+      const rec = new MediaRecorder(canvas.captureStream(30), { mimeType: 'video/webm' });
+      rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+      rec.start(1000);
+      this.stopRunRecorder = async () => {
+        this.stopRunRecorder = null;
+        await new Promise((resolve) => { rec.onstop = resolve; rec.stop(); });
+        const blob = new Blob(chunks, { type: 'video/webm' });
+        if (!blob.size) return;
+        await fetch(`/api/runs/${encodeURIComponent(this.ctx.runId)}/video`, { method: 'POST', body: blob }).catch(() => {});
+        this.addStream('<span class="thought">🎬 Run video saved (video.webm).</span>');
+      };
+    } catch { /* recording is optional; the run continues without it */ }
   }
 
   toggleBot() {
@@ -572,10 +627,15 @@ class Overlay {
   async summon() {
     const note = document.getElementById('summon-note');
     const personas = this.personas.map((x) => x.persona_id).filter((id) => this.chosen.has(id));
+    const ab = this.abSettings || JSON.parse(localStorage.getItem('doe_ab_settings') || 'null') || {};
+    const base = ab.seedSet === 'varied' ? 100 : 42;
+    const seeds = ab.seedSet === 'single' ? [42]
+      : Array.from({ length: ab.runs || 5 }, (_, i) => base + i);
     try {
       const r = await fetch('/api/feature_studio/playtest', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ patch_id: this.feature.patch_id, personas, mode: 'stub' }),
+        body: JSON.stringify({ patch_id: this.feature.patch_id, personas, mode: ab.runner || 'stub',
+          seeds, run_type: ab.runType || 'full_window', speed: ab.speed || 4 }),
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
@@ -632,6 +692,8 @@ class Overlay {
   }
 
   // ------------------------------------------------------ Game Manager
+  // First screen (Astra design): two jobs only, Find bugs and Compare a
+  // feature, plus a quiet Just play. Each job opens a prefilled setup.
   async openManager() {
     const app = document.getElementById('app');
     const el = document.createElement('div');
@@ -639,23 +701,127 @@ class Overlay {
     el.className = 'manager';
     el.innerHTML = `
       <div class="mgr-panel">
-        <div class="mgr-head"><h1>✦ Game Manager</h1>
-          <p>Choose a new feature for Dawn of Empires. You approve it, the game opens with it switched on,
-            and then AI playtesters try it before real players do.</p></div>
-        <div class="mgr-section">Prebuilt features</div>
-        <div class="mgr-cards" id="mgr-cards"><div class="note">Loading…</div></div>
-        <div class="mgr-section">Or describe your own idea</div>
-        <div class="mgr-own">
-          <textarea id="mgr-prompt" rows="2" maxlength="600" placeholder="A bonfire after the tutorial that costs 15 wood and gives 30 food."></textarea>
-          <button class="game-btn emerald" id="mgr-forge">✦ Ask Muse Spark</button>
+        <div class="mgr-screen" id="mgr-home">
+          <div class="mgr-head"><div class="mgr-game">DAWN OF EMPIRES</div><h1>Game Manager</h1>
+            <p>What would you like to test?</p></div>
+          <div class="mgr-two">
+            <div class="mgr-choice">
+              <div class="mc-title">FIND BUGS</div>
+              <div class="mc-text">Send a tester through the valley and review what went wrong.</div>
+              <button class="game-btn amber" id="mgr-to-bug">Set up bug hunt</button>
+            </div>
+            <div class="mgr-choice">
+              <div class="mc-title">A/B TEST A FEATURE</div>
+              <div class="mc-text">Run the same tester through the current game and a proposed change.</div>
+              <button class="game-btn amber" id="mgr-to-compare">Set up A/B test</button>
+            </div>
+          </div>
+          <button class="game-btn amber mgr-play-btn" id="mgr-skip">Just play</button>
+          <div class="mgr-foot">Testing never changes the live game automatically.</div>
         </div>
-        <div class="mgr-note" id="mgr-note"></div>
-        <div id="mgr-draft"></div>
-        <button class="mgr-skip" id="mgr-skip">Just play, no new feature →</button>
+
+        <div class="mgr-screen" id="mgr-bug" hidden>
+          <div class="mgr-head"><h1>Find problems in the valley</h1></div>
+          <div class="mgr-fields">
+            <label class="mgr-field">Persona <select id="bug-persona"></select></label>
+            <label class="mgr-field">Game version <select id="bug-version"><option value="A" selected>Current game: A</option><option value="B">Variant B (approved feature, if any)</option></select></label>
+            <label class="mgr-field">Speed <select id="bug-speed"><option value="4" selected>×4</option><option value="2">×2</option><option value="1">×1</option></select></label>
+            <label class="mgr-field">Play time <select id="bug-playtime"><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="20" selected>20 minutes</option><option value="30">30 minutes</option></select></label>
+            <label class="mgr-field">Seed <select id="bug-seed"><option value="" selected>Automatic (42)</option><option value="42">42</option><option value="43">43</option><option value="44">44</option><option value="7">7</option><option value="123">123</option></select></label>
+          </div>
+          <details class="mgr-adv"><summary>Advanced settings</summary>
+            <div class="mgr-fields">
+              <label class="mgr-field">Runner <select id="bug-runner"><option value="stub" selected>Scripted bot: no model cost</option><option value="meta">Meta bot (paid, via Playwright runner)</option></select></label>
+              <label class="mgr-field">Safety limit <select id="bug-safety"><option value="1" selected>Play time, elapsed</option><option value="1.5">Play time + 50%</option><option value="2">Play time ×2</option></select></label>
+              <label class="mgr-field">No-progress limit <select id="bug-stuck"><option value="30">30 sim seconds without progress</option><option value="60" selected>60 sim seconds without progress</option><option value="120">120 sim seconds without progress</option></select></label>
+              <label class="mgr-field">Run video <span class="mgr-static"><input type="checkbox" id="bug-video"> Record video.webm</span></label>
+            </div>
+          </details>
+          <div class="mgr-note">The scripted bot drives this tab with real clicks. Meta-bot hunts run from the Playwright runner in a terminal.</div>
+          <div class="mgr-actions">
+            <button class="game-btn amber" id="bug-start">Start bug hunt</button>
+            <button class="mgr-justplay" data-back>Back</button>
+          </div>
+        </div>
+
+        <div class="mgr-screen" id="mgr-compare" hidden>
+          <div class="mgr-head"><h1>A/B test a proposed feature</h1></div>
+          <div class="mgr-section">Feature</div>
+          <div class="mgr-cards" id="mgr-cards"><div class="note">Loading…</div></div>
+          <div class="mgr-section">Or describe your own idea</div>
+          <div class="mgr-own">
+            <textarea id="mgr-prompt" rows="2" maxlength="600" placeholder="A bonfire after the tutorial that costs 15 wood and gives 30 food."></textarea>
+            <button class="game-btn emerald" id="mgr-forge">✦ Ask Muse Spark</button>
+          </div>
+          <div class="mgr-note" id="mgr-note"></div>
+          <div id="mgr-draft"></div>
+          <div class="mgr-fields">
+            <label class="mgr-field">Persona <select id="cmp-persona"></select></label>
+            <label class="mgr-field">Seed set <select id="cmp-seeds"><option value="baseline" selected>Saved baseline, paired (42…)</option><option value="varied">Varied seeds, paired (100…)</option><option value="single">Single seed 42, paired</option></select></label>
+            <label class="mgr-field">Runs per variant <select id="cmp-runs"><option value="1">1</option><option value="3">3</option><option value="5" selected>5</option><option value="10">10</option></select></label>
+            <label class="mgr-field">Runner <select id="cmp-runner"><option value="stub" selected>Scripted bot: no model cost</option><option value="meta">Meta bot (paid, Muse Spark)</option></select></label>
+            <label class="mgr-field">Speed <select id="cmp-speed"><option value="1">×1</option><option value="2">×2</option><option value="4" selected>×4</option></select></label>
+            <label class="mgr-field">Run length <select id="cmp-runlength"><option value="full_window" selected>Full journey: Chapters I–VI</option><option value="onboarding">Onboarding only: Chapter I</option></select></label>
+            <label class="mgr-field">Play time per run <select id="cmp-playtime"><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="20" selected>20 minutes</option><option value="30">30 minutes</option></select></label>
+          </div>
+          <div class="mgr-summary" id="cmp-summary">A · Current game<br>B · Current game + (pick a feature above)<br><br>Success target: More runs complete onboarding<br>Guardrails: No new blockers or worse chapter completion</div>
+          <div class="mgr-actions">
+            <button class="game-btn amber" id="cmp-start">Run comparison</button>
+            <button class="mgr-justplay" data-back>Back</button>
+          </div>
+        </div>
       </div>`;
     app.appendChild(el);
+    const show = (id) => {
+      el.querySelectorAll('.mgr-screen').forEach((s) => { s.hidden = s.id !== id; });
+    };
     el.querySelector('#mgr-skip').addEventListener('click', () => this.closeManager(false));
+    el.querySelector('#mgr-to-bug').addEventListener('click', () => show('mgr-bug'));
+    el.querySelector('#mgr-to-compare').addEventListener('click', () => show('mgr-compare'));
+    el.querySelectorAll('[data-back]').forEach((b) => b.addEventListener('click', () => show('mgr-home')));
     el.querySelector('#mgr-forge').addEventListener('click', () => this.managerForge());
+    el.querySelector('#bug-start').addEventListener('click', () => {
+      const persona = document.getElementById('bug-persona').value;
+      if (document.getElementById('bug-runner').value === 'meta') {
+        // The Meta bot is driven by the Playwright runner, not this tab.
+        document.querySelector('#mgr-bug .mgr-note').textContent =
+          `Meta bot runs from a terminal: .venv/bin/python -m backend.cli run-session --variant ${document.getElementById('bug-version').value} --persona ${persona} --seed ${document.getElementById('bug-seed').value || '42'} --mode meta`;
+        return;
+      }
+      const url = new URL(location.href);
+      url.searchParams.set('bot', '1');
+      url.searchParams.set('flow', 'bug');
+      url.searchParams.set('persona', persona);
+      url.searchParams.set('variant', document.getElementById('bug-version').value);
+      url.searchParams.set('speed', document.getElementById('bug-speed').value);
+      const seed = document.getElementById('bug-seed').value;
+      if (seed) url.searchParams.set('seed', seed); else url.searchParams.delete('seed');
+      url.searchParams.set('safety', document.getElementById('bug-safety').value);
+      url.searchParams.set('stucksec', document.getElementById('bug-stuck').value);
+      if (document.getElementById('bug-video')?.checked) url.searchParams.set('video', '1');
+      else url.searchParams.delete('video');
+      url.searchParams.set('playmin', document.getElementById('bug-playtime').value);
+      url.searchParams.delete('run_id');
+      location.href = url.toString();
+    });
+    this.comparePreset = null;
+    el.querySelector('#cmp-start').addEventListener('click', () => {
+      if (!this.comparePreset) {
+        document.getElementById('mgr-note').textContent = 'Pick a feature above first, or describe your own idea.';
+        return;
+      }
+      localStorage.setItem('doe_ab_play_min', document.getElementById('cmp-playtime').value);
+      this.abSettings = {
+        persona: document.getElementById('cmp-persona').value,
+        seedSet: document.getElementById('cmp-seeds').value,
+        runs: Number(document.getElementById('cmp-runs').value),
+        runner: document.getElementById('cmp-runner').value,
+        speed: Number(document.getElementById('cmp-speed').value),
+        runType: document.getElementById('cmp-runlength').value,
+      };
+      localStorage.setItem('doe_ab_settings', JSON.stringify(this.abSettings));
+      this.managerPick(this.comparePreset);
+    });
 
     let status = { meta_ready: false, muse_model_id: '' };
     try { status = await (await fetch('/api/feature_studio/status')).json(); } catch { /* stub */ }
@@ -663,6 +829,15 @@ class Overlay {
     document.getElementById('mgr-note').textContent = status.meta_ready
       ? `Your idea goes live to the designer agent (${status.muse_model_id}). It takes about half a minute.`
       : 'No META_API_KEY in .env, so the offline stub designer drafts your idea.';
+
+    await this.personasReady;
+    const personaOpts = this.personas.map((x) => `<option value="${esc(x.persona_id)}">${esc(x.emblem || '')} ${esc(x.archetype || x.label)}</option>`).join('');
+    for (const id of ['bug-persona', 'cmp-persona']) {
+      const sel = document.getElementById(id);
+      sel.innerHTML = personaOpts;
+      const imp = this.personas.find((x) => x.persona_id === 'impatient_newcomer');
+      if (imp) sel.value = imp.persona_id;
+    }
 
     await this.presetsReady;
     const badges = (obj, sign) => Object.entries(obj || {}).map(([k, v]) => `<span class="res-badge ${sign === '-' ? 'cost' : 'gain'}">${RES_ICON[k] || ''} ${sign}${esc(v)}</span>`).join('');
@@ -674,14 +849,22 @@ class Overlay {
         <div class="mc-text">${esc(x.summary)}</div>
         <div class="mc-when">Unlocks: ${esc(x.unlock_at_step === 'free_play' ? 'after the tutorial' : STEP_LABEL[x.unlock_at_step] || x.unlock_at_step)}</div>
         <div class="res-row">${badges(x.costs, '-')}${badges(x.rewards, '+')}</div>
-        <button class="game-btn amber" data-id="${esc(x.preset_id)}">✔ Approve &amp; play</button>
+        <button class="game-btn amber" data-id="${esc(x.preset_id)}">Select feature</button>
       </div>`).join('');
-    cards.querySelectorAll('button[data-id]').forEach((b) => b.addEventListener('click', () => this.managerPick(b.dataset.id)));
+    cards.querySelectorAll('button[data-id]').forEach((b) => b.addEventListener('click', () => {
+      this.comparePreset = b.dataset.id;
+      cards.querySelectorAll('.mgr-card').forEach((c) => c.classList.remove('selected'));
+      b.closest('.mgr-card').classList.add('selected');
+      const x = this.presets.find((p) => p.preset_id === this.comparePreset);
+      document.getElementById('cmp-summary').innerHTML = `A · Current game<br>B · Current game + ${esc(x.label)}<br><br>Success target: More runs complete onboarding<br>Guardrails: No new blockers or worse chapter completion<br><br>${esc(document.getElementById('cmp-runs').value)} matched pairs · ${esc(document.getElementById('cmp-runner').selectedOptions[0].textContent)} · ×${esc(document.getElementById('cmp-speed').value)}`;
+    }));
   }
 
   // Clicking "Approve & play" is the human approval: forge the prebuilt patch, approve it, open the game.
   async managerPick(presetId) {
     const x = this.presets.find((p) => p.preset_id === presetId);
+    // The Persona picked on the A/B setup starts pre-selected in the guild.
+    if (this.abSettings?.persona) { this.chosen = new Set([this.abSettings.persona]); this.renderGuild?.(); }
     document.getElementById('forge-prompt').value = x.prompt;
     document.getElementById('mgr-note').textContent = `Preparing ${x.label}…`;
     await this.forge(presetId);

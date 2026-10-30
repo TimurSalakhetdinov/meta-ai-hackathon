@@ -56,6 +56,7 @@ class PlaytestRequest(BaseModel):
     personas: Optional[list[str]] = None
     seeds: Optional[list[int]] = None
     run_type: Literal["onboarding", "full_window"] = "full_window"
+    speed: int = 4
 
 
 class ReworkRequest(BaseModel):
@@ -159,6 +160,16 @@ def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = No
             return {"written": store.ingest(batch)}
         except ValueError as exc:
             raise HTTPException(400, str(exc))
+
+    @app.post("/api/runs/{run_id}/video")
+    async def post_run_video(run_id: str, request: Request):
+        body = await request.body()
+        if not body:
+            raise HTTPException(400, "empty video")
+        d = store.run_dir(run_id)
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "video.webm").write_bytes(body)
+        return {"ok": True, "bytes": len(body)}
 
     @app.post("/api/runs/{run_id}/bot_steps")
     def post_bot_step(run_id: str, step: BotStepRecord):
@@ -270,7 +281,7 @@ def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = No
             try:
                 feature_studio.run_playtest(req.patch_id, configs_dir=configs_dir, runs_dir=runs_dir,
                                             client=studio_client(req.mode), personas=req.personas,
-                                            seeds=req.seeds, run_type=req.run_type,
+                                            seeds=req.seeds, run_type=req.run_type, speed=req.speed,
                                             session_fn=app.state.studio_session_fn, on_log=log)
                 job["status"] = "done"
             except Exception as exc:  # surfaced to the studio UI

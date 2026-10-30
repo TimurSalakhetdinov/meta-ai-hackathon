@@ -55,6 +55,7 @@ class SessionSpec:
     run_type: str = "onboarding"
     speed: int = 4
     experiment_mode: bool = False
+    record_video: bool = True
 
 
 @dataclass
@@ -124,7 +125,12 @@ class BotRunner:
     async def run_session(self, browser: Any, spec: SessionSpec) -> SessionResult:
         persona = self.personas[spec.persona_id]
         memory = BotMemory()
-        context = await browser.new_context(viewport=VIEWPORT, device_scale_factor=1)
+        video_tmp = self.runs_dir / spec.run_id / "video_tmp"
+        context_kwargs: dict[str, Any] = {"viewport": VIEWPORT, "device_scale_factor": 1}
+        if spec.record_video:
+            context_kwargs["record_video_dir"] = str(video_tmp)
+            context_kwargs["record_video_size"] = VIEWPORT
+        context = await browser.new_context(**context_kwargs)
         page = await context.new_page()
         errors: list[str] = []
         page.on("pageerror", lambda e: errors.append(str(e)))
@@ -192,6 +198,14 @@ class BotRunner:
         finally:
             summary = await self._end(page, spec, stop)
             await context.close()
+            # Playwright finalizes the webm only when the context closes:
+            # keep it as the run's video.webm and drop the temp folder.
+            if spec.record_video and video_tmp.exists():
+                webms = sorted(video_tmp.rglob("*.webm"))
+                if webms:
+                    webms[-1].replace(self.runs_dir / spec.run_id / "video.webm")
+                import shutil
+                shutil.rmtree(video_tmp, ignore_errors=True)
         if errors and error is None:
             error = f"page errors: {errors[:3]}"
         return SessionResult(spec, stop, steps, summary, round(cost, 6), memory, error)

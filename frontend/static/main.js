@@ -6,11 +6,11 @@ import { urlParams } from './clock.js';
 import {
   BUILDINGS, BUILD_ORDER, ALL_BUILD_ORDER, CAMPAIGN_STAGES, ENCOUNTERS, ERA_LABEL, Game,
   QUESTS, RESOURCES, ALL_RESOURCES, RESOURCE_LABEL, TECHS, UPGRADABLE_TYPES,
-} from './game.js';
-import { Sfx, defaultMuted } from './audio.js?v=12';
-import { IsoRenderer } from './iso_renderer.js?v=13';
-import { loadSprites, spriteUrl } from './sprites.js?v=10';
-import { TechTreeView } from './tech_tree.js';
+} from './game.js?v=73';
+import { Sfx, defaultMuted } from './audio.js?v=23';
+import { IsoRenderer } from './iso_renderer.js?v=65';
+import { loadSprites, spriteUrl } from './sprites.js?v=65';
+import { TechTreeView } from './tech_tree.js?v=52';
 import { initOverlay } from './overlay.js';
 
 const PROVIDERS = ['human', 'stub', 'open_weights', 'meta'];
@@ -25,11 +25,57 @@ const params = urlParams();
 const kaelenVoice = {
   last: '',
   unlocked: false,
+  spokenAt: new Map(),
+  spokenHints: new Set(),
   speak(text) {
     if (!text || text === this.last) return;
+    // The Elder never talks during a battle: stop any line in flight, stay silent.
+    if (window.__IN_BATTLE__) {
+      this.last = text;
+      if (this.current) { this.current.pause(); this.current = null; }
+      if ('speechSynthesis' in window && speechSynthesis.speaking) speechSynthesis.cancel();
+      return;
+    }
+    // Silent behind the Game Manager: the Elder starts when the game does.
+    // Remember the line so the first-click replay can still say it.
+    if (document.getElementById('manager')) { this.last = text; return; }
+    // Chapter hint lines (Open Research / Choose Toolmaking) are spoken
+    // exactly once per run; the bubble text stays, the voice does not nag.
+    const CHAPTER_VOICE_PREFIXES = [
+      'Our foundations hold, Chief.', 'Open Research and learn Masonry, Chief.',
+      'Raise a Stone Quarry, Chief.', 'Open Research and awaken the Stone Age, Chief.',
+      'Bring fire, craft, and trained heroes', 'Build a Copper Smelter, Chief.',
+      'Improve a building to its next level, Chief.', 'Finish the Bronze Age research, Chief.',
+      'Fill our stores, strengthen our buildings', 'Build a Granary, Chief.',
+      'Improve more of our buildings', 'Open Research and learn Irrigation, Chief.',
+      'Prepare Tor for the fight', 'Raise Tor\'s level through training, Chief.',
+      'Conquer Sabertooth Canyon in the Campaign, Chief.', 'Build a Barracks or a Copper Smelter, Chief.',
+      'Gather your best heroes for Shadowclaw, Chief.', 'Defeat Shadowclaw in the Campaign, Chief.',
+      'Raise your Empire Score by building',
+    ];
+    const isHint = text.startsWith('Open Research') || text.startsWith('Choose Basic Toolmaking')
+      || text.startsWith('Now raise a Woodcutter')
+      || CHAPTER_VOICE_PREFIXES.some((p) => text.startsWith(p));
+    if (isHint && this.spokenHints.has(text)) { this.last = text; return; }
+    // The Chapter I story line already announces Basic Toolmaking once;
+    // the research hint voice must not announce the same research a second
+    // time. This guard is only for the two research hints: the Woodcutter
+    // announcement must still sound after that story line.
+    const isResearchHint = text.startsWith('Open Research, Chief.') || text.startsWith('Choose Basic Toolmaking');
+    const storyTold = [...this.spokenAt.keys()].some((t) => t.startsWith('We have shelter and supper'));
+    if (isResearchHint && storyTold) { this.last = text; return; }
+    // Any other line is not spoken again within 90 seconds.
+    const nowMs = performance.now();
+    if (nowMs - (this.spokenAt.get(text) || -1e9) < 90000) { this.last = text; return; }
     this.last = text;
+    // While audio is locked (no first click yet) do not stamp the line as
+    // spoken: the unlock replay must still be able to say it.
     if (!this.unlocked) return;
+    this.spokenAt.set(text, nowMs);
     if (window.__SFX_MUTED__ || params.bot || params.replayA || params.replayB) return;
+    // Mark a hint as spoken only when it is actually about to play, never
+    // while audio was still locked or muted.
+    if (isHint) this.spokenHints.add(text);
     // Pre-rendered ElevenLabs lines (scripts/generate_kaelen_voice.py).
     // Until the full set is approved, only the welcome line has a file;
     // any other text falls back to the browser voice below.
@@ -42,6 +88,27 @@ const kaelenVoice = {
       ['The Bronze Age is ours, Chief.', 'kaelen_bronze.mp3'],
       ['Open Research, Chief.', 'kaelen_hint_research.mp3'],
       ['Choose Basic Toolmaking and learn it, Chief.', 'kaelen_hint_toolmaking.mp3'],
+      ['Now raise a Woodcutter, Chief.', 'kaelen_build_woodcutter.mp3'],
+      ['Well worked, Chief.', 'kaelen_claim_reward.mp3'],
+      ['Our foundations hold, Chief.', 'kaelen_ch2_open.mp3'],
+      ['Open Research and learn Masonry, Chief.', 'kaelen_ch2_masonry.mp3'],
+      ['Raise a Stone Quarry, Chief.', 'kaelen_ch2_quarry.mp3'],
+      ['Open Research and awaken the Stone Age, Chief.', 'kaelen_ch2_stone_age.mp3'],
+      ['Bring fire, craft, and trained heroes', 'kaelen_ch3_open.mp3'],
+      ['Build a Copper Smelter, Chief.', 'kaelen_ch3_smelter.mp3'],
+      ['Improve a building to its next level, Chief.', 'kaelen_ch3_upgrade.mp3'],
+      ['Finish the Bronze Age research, Chief.', 'kaelen_ch3_bronze.mp3'],
+      ['Fill our stores, strengthen our buildings', 'kaelen_ch4_open.mp3'],
+      ['Build a Granary, Chief.', 'kaelen_ch4_granary.mp3'],
+      ['Improve more of our buildings', 'kaelen_ch4_upgrade2.mp3'],
+      ['Open Research and learn Irrigation, Chief.', 'kaelen_ch4_irrigation.mp3'],
+      ['Prepare Tor for the fight', 'kaelen_ch5_open.mp3'],
+      ['Raise Tor\'s level through training, Chief.', 'kaelen_ch5_tor.mp3'],
+      ['Conquer Sabertooth Canyon in the Campaign, Chief.', 'kaelen_ch5_stage6.mp3'],
+      ['Build a Barracks or a Copper Smelter, Chief.', 'kaelen_ch5_barracks.mp3'],
+      ['Gather your best heroes for Shadowclaw, Chief.', 'kaelen_ch6_open.mp3'],
+      ['Defeat Shadowclaw in the Campaign, Chief.', 'kaelen_ch6_boss.mp3'],
+      ['Raise your Empire Score by building', 'kaelen_ch6_score.mp3'],
     ];
     // Dynamic warnings carry numbers that cannot be pre-rendered; the
     // bubble shows them as text and the voice speaks a generic elder line.
@@ -58,8 +125,11 @@ const kaelenVoice = {
     ];
     const generic = /need|not enough|no free|spent/i.test(text)
       ? GENERIC.find(([re]) => re.test(text)) : null;
+    // Any other Elder text (dynamic task fallbacks, feature lines) still
+    // gets a voice: the generic not-ready line, never silence.
     const hit = FILES.find(([prefix]) => text.startsWith(prefix))
-      || (generic ? [null, generic[1]] : null);
+      || (generic ? [null, generic[1]] : null)
+      || [null, 'kaelen_not_ready.mp3'];
     if (hit) {
       if ('speechSynthesis' in window) speechSynthesis.cancel();
       // Never overlap lines: stop the previous line before starting a new one.
@@ -73,12 +143,21 @@ const kaelenVoice = {
     // voice was removed entirely; Kaelen only speaks real recorded lines.
   },
 };
-window.addEventListener('pointerdown', () => {
+function unlockVoice() {
+  // Clicks on the Game Manager do not unlock: audio starts with the game.
+  if (document.getElementById('manager')) return;
+  window.removeEventListener('pointerdown', unlockVoice);
   kaelenVoice.unlocked = true;
-  // First click unlocks audio: replay the line already on screen.
+  // First click unlocks audio: replay the line already on screen. It was
+  // stamped as spoken while still locked, so clear that stamp first.
   const cur = document.getElementById('advisor-text')?.textContent;
-  if (cur && cur === kaelenVoice.last) { kaelenVoice.last = ''; kaelenVoice.speak(cur); }
-}, { once: true });
+  if (cur && cur === kaelenVoice.last) {
+    kaelenVoice.last = '';
+    kaelenVoice.spokenAt.delete(cur);
+    kaelenVoice.speak(cur);
+  }
+}
+window.addEventListener('pointerdown', unlockVoice);
 
 // The layout is a fixed 1280x540 stage (bots and screenshots rely on it).
 // Scale it to fit the window; all game coordinates stay in stage pixels.
@@ -228,43 +307,31 @@ async function boot() {
     const setCollapsed = (collapsed) => {
       buildBar.classList.toggle('collapsed', collapsed);
       buildToggle.innerHTML = collapsed
-        ? '<span class="d-ico">&#x1F528;</span><span class="d-label">Buildings &#x25B8;</span>'
-        : '<span class="d-ico">&#x1F528;</span><span class="d-label">Buildings &#x25BE;</span>';
+        ? '<img class="d-ico-img" src="/static/assets/sprites/icon_hammer.png" alt=""><span class="d-label">Buildings</span><span class="d-chev" aria-hidden="true">&#x25B8;</span>'
+        : '<img class="d-ico-img" src="/static/assets/sprites/icon_hammer.png" alt=""><span class="d-label">Buildings</span><span class="d-chev" aria-hidden="true">&#x25BE;</span>';
       localStorage.setItem('doe_build_bar_collapsed', collapsed ? '1' : '0');
     };
     setCollapsed(localStorage.getItem('doe_build_bar_collapsed') === '1');
+    // The expanded menu closes itself after 10 idle seconds; any use of the
+    // menu (opening it, tapping a filter or card) restarts the timer.
+    let buildBarTimer = null;
+    const armBuildBarTimer = () => {
+      if (buildBarTimer) clearTimeout(buildBarTimer);
+      buildBarTimer = null;
+      if (buildBar.classList.contains('collapsed')) return;
+      buildBarTimer = setTimeout(() => setCollapsed(true), 10000);
+    };
+    buildBar.addEventListener('pointerdown', armBuildBarTimer);
     buildToggle.addEventListener('click', () => {
       setCollapsed(!buildBar.classList.contains('collapsed'));
       sfx.play('click');
+      armBuildBarTimer();
     });
+    armBuildBarTimer();
   }
   const hud = new Hud(game, config, sfx);
   const techView = new TechTreeView($('tech-tree'), $('tech-rp'));
   fxHandlers.push((fx) => hud.onFx(fx));
-
-  // The Tech Tree window can be dragged by its header (e.g. to the right,
-  // out of the way of the map). Rendered targets follow the moved box.
-  {
-    const modal = document.querySelector('#research-modal .tech-modal');
-    const head = modal?.querySelector('.tech-head');
-    if (modal && head) {
-      head.style.cursor = 'grab';
-      let drag = null;
-      head.addEventListener('pointerdown', (e) => {
-        if (e.target.closest('button')) return;
-        const m = /translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(modal.style.transform || '');
-        drag = { x: e.clientX, y: e.clientY, tx: m ? +m[1] : 0, ty: m ? +m[2] : 0 };
-        head.setPointerCapture(e.pointerId);
-      });
-      head.addEventListener('pointermove', (e) => {
-        if (!drag) return;
-        const tx = Math.max(-560, Math.min(560, drag.tx + e.clientX - drag.x));
-        const ty = Math.max(-200, Math.min(200, drag.ty + e.clientY - drag.y));
-        modal.style.transform = `translate(${tx}px, ${ty}px)`;
-      });
-      head.addEventListener('pointerup', () => { drag = null; });
-    }
-  }
 
   const root = $('game-root');
   const getTargets = () => renderedTargets(game, renderer, config);
@@ -583,7 +650,7 @@ class Hud {
 
   renderCards() {
     $('cards').innerHTML = ALL_BUILD_ORDER.map((type) => `
-      <button class="card" data-target="card_${type}" data-btype="${type}" title="${BUILDINGS[type].label}" ${type === 'barracks' ? 'hidden' : ''}>
+      <button class="card" data-target="card_${type}" data-btype="${type}" title="${BUILDINGS[type].label}">
         <img src="${spriteUrl(type)}" alt="">
         <span class="c-name">${BUILDINGS[type].label}</span>
         <span class="c-cost"></span>
@@ -621,14 +688,14 @@ class Hud {
     if (grid) {
       // A proper campaign map: stage medallions on a winding trail over the
       // painted province backdrop, not a grid of cards.
-      const POS = [[7, 68], [19, 34], [33, 62], [45, 28], [58, 58], [69, 30], [81, 55], [92, 22]];
+      const POS = [[9, 70], [21, 30], [34, 68], [47, 28], [60, 66], [72, 27], [84, 62], [92, 22]];
       const trail = POS.map(([x, y]) => `${x},${y}`).join(' ');
       grid.innerHTML = `<svg class="map-trail" viewBox="0 0 100 100" preserveAspectRatio="none">
           <polyline points="${trail}" fill="none" stroke="rgba(90,55,20,0.55)" stroke-width="3" stroke-dasharray="1 7" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
           <polyline points="${trail}" fill="none" stroke="rgba(255,240,200,0.8)" stroke-width="3" stroke-dasharray="1 7" stroke-linecap="round" vector-effect="non-scaling-stroke" transform="translate(0.35,0.5)"/>
         </svg>`
         + CAMPAIGN_STAGES.map((s, i) => `
-        <button class="map-node ${s.reqPower ? 'level-check' : ''} ${i === CAMPAIGN_STAGES.length - 1 ? 'boss' : ''}" data-target="${s.legacyId || s.id}" id="stage-card-${s.id}"
+        <button class="map-node ${s.reqPower ? 'level-check' : ''} ${i === CAMPAIGN_STAGES.length - 1 ? 'boss' : ''} ${POS[i][0] <= 12 ? 'edge-l' : ''} ${POS[i][0] >= 85 ? 'edge-r' : ''}" data-target="${s.legacyId || s.id}" id="stage-card-${s.id}"
                 style="left:${POS[i][0]}%;top:${POS[i][1]}%" title="${s.name} — ${s.enemies}, Power ${s.enemyPower}, Loot: ${costText(s.reward)}">
           <span class="node-stars" id="stars-${s.id}">☆☆☆</span>
           <span class="node-medal">${i + 1}</span>
@@ -696,12 +763,21 @@ class Hud {
     $('era-banner').classList.toggle('stone', g.era !== 'dawn_age');
     $('era-banner').classList.toggle('bronze', g.era === 'bronze_age');
 
-    const stepLabel = { onb_01_shelter: 'First teaching', onb_02_forager: 'Second teaching', onb_03_handoff: 'Last teaching', free_play: 'Your valley now' };
-    $('step-chip').textContent = g.achieved ? ERA_LABEL[g.era] : stepLabel[g.step_id];
+    window.__IN_BATTLE__ = !!(g.battleState && (g.battleState.active || g.battleState.outcome));
     const text = g.advisorText();
     if ($('advisor-text').textContent !== text) {
       $('advisor-text').textContent = text;
       kaelenVoice.speak(text);
+      // A new Elder message shows the bubble again and restarts its timer.
+      this.advisorShownAt = performance.now();
+      $('advisor').classList.remove('elder-gone');
+    }
+    // The Elder's last message leaves the screen after 15 seconds; the next
+    // new message brings the bubble back. The timer holds while a menu is
+    // open, so a message announced behind a menu is still there at close.
+    if (g.modal) this.advisorShownAt = performance.now();
+    if (this.advisorShownAt && performance.now() - this.advisorShownAt > 15000) {
+      $('advisor').classList.add('elder-gone');
     }
     if (window.__SFX_MUTED__) {
       if ('speechSynthesis' in window && speechSynthesis.speaking) speechSynthesis.cancel();
@@ -746,7 +822,7 @@ class Hud {
     this.updateBattleHud();
     // In battle the city UI (build bar, dock, advisor, quests) leaves the screen.
     const inBattle = !!(g.battleState && (g.battleState.active || g.battleState.outcome));
-    for (const id of ['build-bar', 'action-dock', 'advisor', 'quest-card']) {
+    for (const id of ['hud', 'build-bar', 'action-dock', 'advisor', 'quest-card']) {
       const el = $(id);
       if (el) el.hidden = inBattle;
     }
@@ -872,7 +948,7 @@ class Hud {
     const sig = JSON.stringify([pb.stageId, pb.deployed, Object.values(g.heroes).map((h) => h.unlocked)]);
     if (sig !== this.pbSig) {
       this.pbSig = sig;
-      $('prebattle-deploy').innerHTML = Object.keys(g.heroes).map((id) => {
+      $('prebattle-deploy').innerHTML = ['aurelius', 'vaelen', 'lyra', 'ignis'].filter((id) => g.heroes[id]).map((id) => {
         const h = g.heroes[id];
         const on = pb.deployed.includes(id);
         return `<button class="pb-hero ${on ? 'on' : ''}" data-target="btn_deploy_${id}" ${h.unlocked ? '' : 'disabled'}>
@@ -902,10 +978,6 @@ class Hud {
         el.hidden = true;
         continue;
       }
-      if ((type === 'barracks' || type === 'hero_arena') && this.buildCategory === 'all') {
-        el.hidden = true;
-        continue;
-      }
       el.hidden = false;
       const st = g.cardStatus(type);
       const costs = BUILDINGS[type].costs(this.config);
@@ -931,6 +1003,11 @@ class Hud {
     const sig = JSON.stringify([g.questIndex, g.questClaimable, q && q.objectives.map(([, fn]) => fn(g))]);
     if (sig === this.questSig) return;
     this.questSig = sig;
+    // The Elder announces a finished chapter once, when Claim appears.
+    if (g.questClaimable && !this.wasClaimable) {
+      kaelenVoice.speak('Well worked, Chief. The chapter is complete. Claim your reward; the tribe has earned every bit of it.');
+    }
+    this.wasClaimable = g.questClaimable;
     const card = $('quest-card');
     if (!q) {
       $('quest-title').textContent = 'All 6 Chapters Complete 👑';
@@ -963,6 +1040,11 @@ class Hud {
       if (starsEl) starsEl.textContent = cleared ? '⭐'.repeat(earned || 3) + '☆'.repeat(3 - (earned || 3)) : '☆☆☆';
       const hintEl = card.querySelector('.node-tap-hint');
       if (hintEl) hintEl.textContent = cleared ? '✅ Cleared' : (s.reqPower && g.squadPower() < s.reqPower ? `⚠️ Power: ${g.squadPower()}/${s.reqPower}` : '⚡ Tap to Battle');
+      // Declutter: only the next uncleared stage shows its hint pill; the
+      // rest keep just medal and label.
+      const nextStage = CAMPAIGN_STAGES.find((x) => !(g.encountersCleared.has(x.id) || (x.legacyId && g.encountersCleared.has(x.legacyId))));
+      card.classList.toggle('is-next', !!nextStage && s.id === nextStage.id);
+      card.classList.toggle('power-warn', !cleared && !!s.reqPower && g.squadPower() < s.reqPower);
     }
   }
 
@@ -977,7 +1059,9 @@ class Hud {
       .map((h) => [h.id, h.level, h.unlocked, g.selectedHero === h.id, g.heroStats(h.id).power]));
     if (rosterEl && rosterSig !== this.rosterSig) {
       this.rosterSig = rosterSig;
-      rosterEl.innerHTML = Object.values(g.heroes).map((h) => {
+      // Tor the Stone-Breaker leads the roster list.
+      const rosterOrder = [...Object.values(g.heroes)].sort((a, b) => (b.id === 'aurelius') - (a.id === 'aurelius'));
+      rosterEl.innerHTML = rosterOrder.map((h) => {
         const stats = g.heroStats(h.id);
         const isSel = g.selectedHero === h.id;
         return `
@@ -1016,13 +1100,22 @@ class Hud {
     $('hero-upgrade-cost').textContent = `Cost: ${costFood} 🌾 Food ${costScrolls > 0 ? `+ ${costScrolls} 📜 Scrolls` : ''}`;
 
     const training = g.heroTraining;
-    const canUpgrade = sel.unlocked && sel.level < sel.maxLevel && g.resources.food >= costFood && !training;
+    // Training needs the Heroes' Arena standing. Say so on the button
+    // itself: a ready-looking button whose refusal hides behind this
+    // modal reads as a dead button.
+    const arena = g.buildings.find((b) => b.type === 'hero_arena' && b.status === 'done');
+    const canUpgrade = sel.unlocked && sel.level < sel.maxLevel && g.resources.food >= costFood && !training && !!arena;
     const lvlBtn = $('btn_hero_levelup');
     if (lvlBtn) {
       lvlBtn.disabled = !canUpgrade;
       lvlBtn.textContent = training
         ? `⚔️ Training at the Arena… ${Math.max(0, Math.ceil(training.completeAt - g.clock.t))}s`
-        : sel.level >= sel.maxLevel ? 'Max Rank' : `⚔️ Train at Arena · Lv.${sel.level + 1} (+15 Score)`;
+        : sel.level >= sel.maxLevel ? 'Max Rank'
+        : !arena ? '⚔️ Train at Arena · Build the Heroes\' Arena first (needs Barracks)'
+        : `⚔️ Train at Arena · Lv.${sel.level + 1} (+15 Score)`;
+    }
+    if (!arena && !training) {
+      $('hero-upgrade-cost').textContent += ' · Heroes\' Arena not built yet';
     }
   }
 
@@ -1069,16 +1162,41 @@ class Hud {
 
     const turnEl = $('battle-turn-text');
     if (turnEl) {
+      const activeUnit = bs.units?.find((u) => u.id === bs.selectedUnit);
       turnEl.textContent = bs.outcome ? 'Battle over'
-        : bs.selectedUnit ? `${(g.heroes[bs.selectedUnit]?.name || 'Hero').split(' ')[0]} picked: tap an enemy to attack`
-        : `Round ${bs.round || 1}: pick a hero, then tap an enemy`;
+        : bs.selectedUnit ? `${(g.heroes[bs.selectedUnit]?.name || 'Hero').split(' ')[0]}'s turn — move ${activeUnit?.moveLeft ?? 0}, then attack`
+        : `Round ${bs.round || 1}`;
     }
     const logEl = $('battle-log');
-    if (logEl) logEl.innerHTML = (bs.log || []).map((l) => `<div>${l}</div>`).join('');
+    // Only the latest battle line: the full log stacked pills over the bars.
+    if (logEl) logEl.textContent = (bs.log || []).slice(-1)[0] || '';
 
-    // Rage fills
-    $('rage-fill-vaelen').style.width = `${bs.vaelenRage || 0}%`;
-    $('rage-fill-lyra').style.width = `${bs.lyraRage || 0}%`;
+    // Initiative strip: who acts next this round, fastest first.
+    const initEl = $('battle-initiative');
+    if (initEl) {
+      const nameOf = (ref) => ref.kind === 'hero'
+        ? (bs.units.find((u) => u.id === ref.id)?.name || ref.id).split(' ')[0]
+        : (bs.enemies[ref.idx]?.name || 'Enemy');
+      initEl.innerHTML = (bs.queue || []).map((ref, i) =>
+        `<span class="init-chip ${i === 0 ? 'now' : ''} ${ref.kind}">${i + 1}. ${nameOf(ref)}</span>`).join('');
+    }
+    // Inspection strip: the attack preview, else the active unit's numbers.
+    const inspEl = $('battle-inspect');
+    if (inspEl) {
+      const active = bs.units?.find((u) => u.id === bs.selectedUnit);
+      inspEl.textContent = bs.preview?.text
+        || (active ? `${active.name} · ${Math.max(0, active.hp)}/${active.maxHp} HP · ATK ${active.atk} · move ${active.moveLeft}/${active.speed} · charge ${Math.round(active.rage || 0)}%${active.defending ? ' · defending (−30% damage)' : ''}${active.retaliated ? ' · retaliation spent' : ''}`
+          : 'Tap a glowing hex to move; tap an enemy once to preview, again to attack.');
+    }
+    const waveBtn = $('btn_battle_wave_continue');
+    if (waveBtn) waveBtn.hidden = !bs.awaitingWave;
+
+    // Hero cards: exact HP as text; the charge bar lives on the canvas only.
+    for (const [id, elId] of [['vaelen', 'rage-hp-vaelen'], ['lyra', 'rage-hp-lyra']]) {
+      const u = bs.units?.find((x) => x.id === id);
+      const el = $(elId);
+      if (el) el.textContent = u ? `${Math.max(0, u.hp)}/${u.maxHp} HP · charge ${Math.round(u.rage || 0)}%` : '';
+    }
     $('btn_ult_vaelen').classList.toggle('ready', (bs.vaelenRage || 0) >= 100);
     $('btn_ult_lyra').classList.toggle('ready', (bs.lyraRage || 0) >= 100);
 
@@ -1206,11 +1324,27 @@ class Hud {
     const id = this.game.modal === 'welcome' ? null : this.game.guideTarget();
     if (!id) { arrow.hidden = true; return; }
     const t = window.__GAME_DEBUG__?.getRenderedTargets().find((x) => x.target_id === id && x.visible);
-    if (!t) { arrow.hidden = true; return; }
+    if (!t) {
+      // A building card hidden inside the collapsed Buildings menu cannot be
+      // pointed at: point at the Buildings toggle instead, so the player
+      // opens the menu first.
+      const toggle = $('btn_buildings_toggle');
+      if (id.startsWith('card_') && toggle && $('build-bar')?.classList.contains('collapsed')) {
+        const root = $('game-root').getBoundingClientRect();
+        const r = toggle.getBoundingClientRect();
+        arrow.hidden = false;
+        arrow.style.left = `${(r.left - root.left) / uiScale + r.width / uiScale / 2 - 8}px`;
+        arrow.style.top = `${Math.max(46, (r.top - root.top) / uiScale - 30)}px`;
+        return;
+      }
+      arrow.hidden = true; return;
+    }
     arrow.hidden = false;
-    arrow.style.left = `${t.x + t.w / 2 - 14}px`;
-    // Float well clear of the target so the bob never covers the house or card it points at.
-    arrow.style.top = `${Math.max(46, t.y - 48)}px`;
+    // On a building the hand points at the collect bubble from its upper
+    // left, so the finger never covers the resource icon inside it.
+    const onBuilding = t.kind === 'building';
+    arrow.style.left = `${t.x + t.w / 2 - (onBuilding ? 30 : 8)}px`;
+    arrow.style.top = `${Math.max(46, t.y - (onBuilding ? 52 : 30))}px`;
   }
 
   afterClick() {}

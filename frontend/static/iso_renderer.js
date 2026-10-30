@@ -19,6 +19,9 @@ export function tileToScreen(i, j) {
 }
 
 // Fixed settlement layout. Pads are where the player can build.
+export const BATTLE_COLS = 15;
+export const BATTLE_ROWS = 9;
+export const BATTLE_BLOCKED = [[7, 2], [7, 6], [8, 4]];
 export const TOWN_CENTER_TILE = [5, 5];
 export const RESEARCH_TENT_TILE = [2, 6];
 export const PADS = [
@@ -29,7 +32,7 @@ export const PADS = [
   { id: 'pad_5', tile: [8, 8] },
   { id: 'pad_6', tile: [5, 2] },
   { id: 'pad_7', tile: [2, 9] },
-  { id: 'pad_8', tile: [9, 0] },
+  { id: 'pad_8', tile: [9, 1] },
 ];
 
 export const EXPANSION_PADS = {
@@ -338,7 +341,7 @@ export class IsoRenderer {
       items.push({ y: pos.y, draw: () => this.drawBuilding(ctx, game, b, pos) });
     }
     this.updateVillagers(game, simDt);
-    for (const v of this.villagers.values()) items.push({ y: v.y, draw: () => drawVillager(ctx, v, this.time) });
+    for (const v of this.villagers.values()) items.push({ y: v.y, draw: () => drawVillager(ctx, v, this.time, this.sprites[v.variant]?.img || this.sprites.villager?.img, this.sprites[`${v.variant}_b`]?.img) });
     items.sort((a, b) => a.y - b.y);
     for (const it of items) it.draw();
     this.drawPlacementPreview(ctx, game);
@@ -378,7 +381,7 @@ export class IsoRenderer {
       }
       // Flowing river: dashed current lines and foam dots travel along the
       // painted river (bottom right, under the bridge) so the water moves.
-      const riverPts = [[-10, 368], [140, 394], [279, 429], [454, 471], [593, 492], [698, 464], [758, 442], [812, 420], [872, 392], [962, 356]];
+      const riverPts = [[-10, 397], [90, 413], [190, 470], [260, 490], [340, 500], [430, 520], [540, 523], [640, 503], [720, 475], [800, 450], [880, 394], [962, 364]];
       const riverPoint = (t) => {
         const seg = Math.max(0, Math.min(riverPts.length - 2, Math.floor(t * (riverPts.length - 1))));
         const lt = t * (riverPts.length - 1) - seg;
@@ -390,11 +393,14 @@ export class IsoRenderer {
       // of it. Nothing is drawn between them, so no flow can cross the bridge.
       // Short segments that follow the water only; gaps at the rocks and
       // bends keep the dashes off the grass banks.
+      // Three segments between the left edge and the bridge, each fitted
+      // to the painted river: inflow, the rapids dip, then the rise to
+      // the bridge. A fourth runs right of the bridge.
       const riverSegs = [
-        [[-10, 368], [140, 394], [279, 429]],
-        [[320, 442], [454, 471], [560, 488]],
-        [[620, 478], [698, 464], [750, 444]],
-        [[852, 392], [962, 356]],
+        [[-10, 397], [90, 413], [190, 470]],
+        [[225, 460], [300, 490], [380, 513]],
+        [[470, 527], [580, 520], [680, 490], [745, 465]],
+        [[850, 407], [962, 364]],
       ];
       ctx.save();
       for (const [off, wdt, alpha] of [[0, 3, 0.40], [14, 2, 0.32], [28, 2, 0.26]]) {
@@ -501,8 +507,8 @@ export class IsoRenderer {
     const sheepPos = [
       { x: 120, y: 375 },
       { x: 148, y: 395 },
-      { x: 835, y: 190 },
-      { x: 865, y: 215 },
+      { x: 800, y: 342 },
+      { x: 832, y: 360 },
     ];
     for (let i = 0; i < sheepPos.length; i++) {
       const s = sheepPos[i];
@@ -596,7 +602,7 @@ export class IsoRenderer {
     // (borderless tile fills merge into a single glow, no checkerboard), and
     // only the guide target gets an outline.
     const pulse = 0.5 + 0.5 * Math.sin(this.time * 5);
-    const pads = game.activePads ? game.activePads() : PADS;
+    const pads = game.padsFor ? game.padsFor(game.selectedCard) : (game.activePads ? game.activePads() : PADS);
     ctx.fillStyle = `rgba(255,238,170,${0.10 + 0.04 * pulse})`;
     for (const p of pads) {
       if (game.buildingAt(p.id)) continue;
@@ -606,7 +612,9 @@ export class IsoRenderer {
     }
     // Outline the whole buildable diamond so painted meadow outside the
     // field does not look placeable.
-    const n = tileToScreen(0, 0), e = tileToScreen(GRID - 1, 0), s = tileToScreen(GRID - 1, GRID - 1), w = tileToScreen(0, GRID - 1);
+    // One row less on the top-right: the outline runs along j=1, not j=0,
+    // so the forest row at the top-right stays outside the building box.
+    const n = tileToScreen(0, 1), e = tileToScreen(GRID - 1, 1), s = tileToScreen(GRID - 1, GRID - 1), w = tileToScreen(0, GRID - 1);
     ctx.save();
     ctx.beginPath();
     ctx.moveTo(n.x, n.y - TILE_H / 2);
@@ -641,6 +649,25 @@ export class IsoRenderer {
         ctx.lineTo(x - 10, y + 5);
         ctx.stroke();
       }
+    }
+    // The pine woods on the far left and far right are outside the field:
+    // mark them blocked too, so they do not look placeable.
+    const pineTiles = [[-1, 10], [-1, 12], [-1, 14], [0, 14], [-2, 12], [-2, 14],
+      [10, -1], [12, -1], [14, -1], [14, 0], [12, -2], [14, -2]];
+    for (const [i, j] of pineTiles) {
+      const { x, y } = tileToScreen(i, j);
+      if (x < -20 || x > VIEW_W + 20) continue;
+      diamondPath(ctx, x, y, TILE_W * 0.96, TILE_H * 0.96);
+      ctx.fillStyle = 'rgba(200,60,40,0.16)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(220,70,50,0.45)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x - 10, y - 5);
+      ctx.lineTo(x + 10, y + 5);
+      ctx.moveTo(x + 10, y - 5);
+      ctx.lineTo(x - 10, y + 5);
+      ctx.stroke();
     }
     const guide = game.guideTarget ? game.guideTarget() : null;
     for (const p of pads) {
@@ -910,12 +937,20 @@ export class IsoRenderer {
       ctx.beginPath();
       ctx.arc(x, top + bob, 15, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.font = '17px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#000';
-      ctx.fillText(RESOURCE_ICON[b.produces], x, top + bob + 1);
-      ctx.textBaseline = 'alphabetic';
+      // Painted resource icon (Muse Image) in the bubble; emoji fallback.
+      const resImg = this.sprites[`res_${b.produces}`]?.img;
+      if (resImg) {
+        const iw = 23;
+        const ih = iw * (resImg.naturalHeight / resImg.naturalWidth);
+        ctx.drawImage(resImg, x - iw / 2, top + bob - ih / 2, iw, ih);
+      } else {
+        ctx.font = '17px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#000';
+        ctx.fillText(RESOURCE_ICON[b.produces], x, top + bob + 1);
+        ctx.textBaseline = 'alphabetic';
+      }
       return;
     }
     const p = game.productionProgress(b);
@@ -1016,7 +1051,11 @@ export class IsoRenderer {
         if (!last || Math.hypot(last.x - approach.x, last.y - approach.y) > 4) pts.push(approach);
         pts.push({ x: bp.x, y: bp.y + 14 });
         const r = this.fxRand;
+        // Each building's villager keeps one of the four Viking looks.
+        let vhash = 0;
+        for (const ch of b.key) vhash += ch.charCodeAt(0);
         this.villagers.set(b.key, {
+          variant: existing ? existing.variant : ['villager_m_black', 'villager_m_blond', 'villager_f_black', 'villager_f_blond'][vhash % 4],
           pts, signature, s: existing ? existing.s : r.range(0, 0.3), dir: existing ? existing.dir : 1,
           pause: 0, inside: 0, x: pts[0].x, y: pts[0].y,
           tunic: existing ? existing.tunic : r.pick(['#a8432f', '#3e6fa8', '#6b8d2f', '#8a5aa8', '#c07a2a']),
@@ -1193,24 +1232,39 @@ export class IsoRenderer {
 
   // ------------------------------------------------------------ battle arena
   // Fixed unit slots: heroes left, enemies right. Units stand still.
-  battleUnitPos(kind, idx) {
-    return kind === 'hero' ? { x: 235, y: 200 + idx * 105 } : { x: 725, y: 200 + idx * 105 };
+  // HoMM3 hex field: flat-top hexagons in odd-r offset. Tiles must tile
+  // without overlap: horizontal step is 3/4 of the hex width, vertical
+  // step is the full hex height, odd rows shifted by half a step.
+  battleHexCenter(gx, gy) {
+    return { x: 66 + gx * 56 + (gy % 2 ? 28 : 0), y: 108 + gy * 46 };
+  }
+
+  battleUnitPos(unit) {
+    const c = this.battleHexCenter(unit.gx ?? 1, unit.gy ?? 3);
+    return { x: c.x, y: c.y + 16 };
   }
 
   battleTargets(game) {
     const bs = game.battleState;
     if (!bs || !bs.active) return [];
     const out = [];
-    (bs.units || []).forEach((u, i) => {
+    (bs.units || []).forEach((u) => {
       if (!u.alive) return;
-      const p = this.battleUnitPos('hero', i);
-      out.push({ target_id: `unit_hero_${u.id}`, kind: 'battle_hero', x: p.x - 48, y: p.y - 78, w: 96, h: 112, affordable: !u.acted });
+      const p = this.battleUnitPos(u);
+      out.push({ target_id: `unit_hero_${u.id}`, kind: 'battle_hero', x: p.x - 48, y: p.y - 120, w: 96, h: 132, affordable: !!u.activeTurn });
     });
-    (bs.enemies || []).forEach((e, i) => {
+    (bs.enemies || []).forEach((e) => {
       if (!e.alive) return;
-      const p = this.battleUnitPos('enemy', i);
-      out.push({ target_id: `unit_enemy_${e.idx}`, kind: 'battle_enemy', x: p.x - 48, y: p.y - 78, w: 96, h: 112, affordable: true });
+      const p = this.battleUnitPos(e);
+      out.push({ target_id: `unit_enemy_${e.idx}`, kind: 'battle_enemy', x: p.x - 48, y: p.y - 120, w: 96, h: 132, affordable: true });
     });
+    // Glowing hexes the active hero can still reach this turn.
+    if (game.battleReachableTiles) {
+      for (const t of game.battleReachableTiles()) {
+        const c = this.battleHexCenter(t.gx, t.gy);
+        out.push({ target_id: `battle_hex_${t.gx}_${t.gy}`, kind: 'battle_hex', x: c.x - 33, y: c.y - 21, w: 66, h: 42, affordable: true });
+      }
+    }
     return out;
   }
 
@@ -1252,22 +1306,47 @@ export class IsoRenderer {
       ctx.stroke();
     }
 
-    // Overhead Banner: Stage Name and Wave
-    const stageTitle = bs.stage?.name || `Stage ${bs.stageId || 1}`;
-    roundRect(ctx, VIEW_W / 2 - 150, 18, 300, 36, 18, 'rgba(20, 12, 8, 0.88)');
-    ctx.strokeStyle = '#f0c24b';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(VIEW_W / 2 - 150, 18, 300, 36, 18);
-    ctx.stroke();
-    ctx.fillStyle = '#fff4c2';
-    ctx.font = 'bold 14px Georgia, serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(`${stageTitle} · Wave ${bs.wave || 1}/${bs.totalWaves || 1}`, VIEW_W / 2, 36);
-    ctx.textBaseline = 'alphabetic';
+    // No canvas banner here: the HTML battle top bar already shows the
+    // stage name and wave, and drawing both put one menu behind the other.
 
-    // Turn-based units: fixed slots, no marching, no bobbing. A gold ring
+    // HoMM3 hex grid: every tile outlined, rock hexes blocked, and the
+    // active hero's reachable hexes glowing gold.
+    const hexPath = (cx, cy) => {
+      ctx.beginPath();
+      const pts = [[-37, 0], [-18, -23], [18, -23], [37, 0], [18, 23], [-18, 23]];
+      pts.forEach(([dx, dy], i) => (i ? ctx.lineTo(cx + dx, cy + dy) : ctx.moveTo(cx + dx, cy + dy)));
+      ctx.closePath();
+    };
+    const reachable = game.battleReachableTiles ? game.battleReachableTiles() : [];
+    const reachSet = new Set(reachable.map((t) => `${t.gx},${t.gy}`));
+    for (let gx = 0; gx < BATTLE_COLS; gx++) {
+      for (let gy = 0; gy < BATTLE_ROWS; gy++) {
+        const c = this.battleHexCenter(gx, gy);
+        const blocked = BATTLE_BLOCKED.some(([x, y]) => x === gx && y === gy);
+        hexPath(c.x, c.y);
+        if (blocked) {
+          // Blocked rock hex: a soft stone tint only, no dark spot.
+          ctx.fillStyle = 'rgba(90,78,64,0.28)';
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        } else if (reachSet.has(`${gx},${gy}`)) {
+          // Reachable hexes glow white only: no yellow checkerboard.
+          ctx.fillStyle = `rgba(255,255,255,${0.10 + 0.03 * Math.sin(this.time * 5)})`;
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        } else {
+          // The grid itself stays barely visible over the painting.
+          ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+      }
+    }
+    // Turn-based units on their hexes: no marching, no bobbing. A gold ring
     // marks the picked hero; a dimmed unit has already acted this round.
     const drawUnit = (u, p, spriteKey, accent) => {
       ctx.save();
@@ -1291,26 +1370,27 @@ export class IsoRenderer {
         circle(ctx, p.x, p.y - 24, 20, accent);
       }
       ctx.restore();
-      // Name + HP bar above the unit.
+      // Compact health bar below the feet; names and exact numbers live in
+      // the inspection strip, not over heads. The active unit gets its name.
       const pct = Math.max(0, Math.min(1, u.hp / (u.maxHp || 1)));
-      roundRect(ctx, p.x - 42, p.y - 86, 84, 10, 5, 'rgba(15,12,10,0.85)');
-      roundRect(ctx, p.x - 41, p.y - 85, 82 * pct, 8, 4, u.kind === 'hero' ? '#22c55e' : '#ef4444');
-      ctx.fillStyle = '#fff4c2';
-      ctx.font = 'bold 10px Georgia, serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(u.kind === 'hero' ? u.name.split(' ')[0] : u.name, p.x, p.y - 92);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '9px Georgia, serif';
-      ctx.fillText(u.alive ? `${u.hp}/${u.maxHp} HP${u.acted ? ' · acted' : ''}` : 'fallen', p.x, p.y - 64);
+      roundRect(ctx, p.x - 30, p.y + 14, 60, 6, 3, 'rgba(15,12,10,0.75)');
+      roundRect(ctx, p.x - 29, p.y + 15, 58 * pct, 4, 2, u.kind === 'hero' ? '#22c55e' : '#ef4444');
+      if (u.activeTurn || (bs.selectedUnit && u.id === bs.selectedUnit)) {
+        ctx.fillStyle = '#fff4c2';
+        ctx.font = 'bold 10px Georgia, serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(u.kind === 'hero' ? u.name.split(' ')[0] : u.name, p.x, p.y + 32);
+      }
       if (u.kind === 'hero' && u.alive) {
-        roundRect(ctx, p.x - 42, p.y + 16, 84, 5, 2.5, 'rgba(15,12,10,0.85)');
-        roundRect(ctx, p.x - 41, p.y + 17, 82 * Math.min(1, (u.rage || 0) / 100), 3, 1.5,
+        roundRect(ctx, p.x - 30, p.y + 22, 60, 4, 2, 'rgba(15,12,10,0.75)');
+        roundRect(ctx, p.x - 29, p.y + 23, 58 * Math.min(1, (u.rage || 0) / 100), 2, 1,
           (u.rage || 0) >= 100 ? '#ffd700' : '#f97316');
       }
     };
-    (bs.units || []).forEach((u, i) => drawUnit(u, this.battleUnitPos('hero', i), `hero_${u.id}`, '#d97706'));
-    (bs.enemies || []).forEach((e, i) => drawUnit(e, this.battleUnitPos('enemy', i),
-      e.name === 'Alpha Beast' ? 'boss_shadowclaw' : 'enemy_beast_pack', '#991b1b'));
+    (bs.units || []).forEach((u) => drawUnit(u, this.battleUnitPos(u), `hero_${u.id}`, '#d97706'));
+    (bs.enemies || []).forEach((e) => drawUnit(e, this.battleUnitPos(e),
+      (e.sprite && this.sprites[e.sprite]?.img) ? e.sprite
+        : (e.name === 'Warlord' || e.role === 'boss' ? 'enemy_viking_boss' : 'enemy_viking'), '#991b1b'));
 
 
     // 4. Dramatic diagonal comic-book slash banner if bs.cutIn is active
@@ -1375,9 +1455,11 @@ export class IsoRenderer {
   }
 }
 
-function drawVillager(ctx, v, time) {
+function drawVillager(ctx, v, time, img, imgB) {
   if (v.inside > 0) return; // inside the building, out of sight
   const step = v.moving ? Math.sin(time * 10 + v.phase) : 0;
+  // Two-frame walk: swap to the opposite-leg pose on the other half-step.
+  if (img && imgB && v.moving && step < 0) img = imgB;
   const { x, y } = v;
   // Fade only while crossing the doorstep (last steps of the final
   // segment), so the villager slips through the door, not through a wall.
@@ -1387,6 +1469,18 @@ function drawVillager(ctx, v, time) {
   ctx.beginPath();
   ctx.ellipse(x, y + 1, 5, 2, 0, 0, Math.PI * 2);
   ctx.fill();
+  if (img) {
+    // Painted villager sprite (Muse Image): bob while walking, face the
+    // way he walks, feet on the ground point.
+    const h = 30;
+    const w = h * (img.naturalWidth / img.naturalHeight);
+    const bob = v.moving ? Math.abs(step) * 1.6 : 0;
+    ctx.translate(x, y + 1 - bob);
+    if ((v.facing || 1) < 0) ctx.scale(-1, 1);
+    ctx.drawImage(img, -w / 2, -h, w, h);
+    ctx.restore();
+    return;
+  }
   ctx.strokeStyle = '#3b2a1c';
   ctx.lineWidth = 1.6;
   ctx.beginPath();

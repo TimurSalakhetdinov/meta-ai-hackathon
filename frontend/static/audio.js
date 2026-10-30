@@ -157,7 +157,7 @@ export class Sfx {
       'harvest_food', 'harvest_wood', 'harvest_stone', 'harvest_coins', 'research_select',
       'dock_heroes', 'dock_campaign', 'dock_research', 'dock_upgrades', 'claim_reward', 'ambient_wind', 'upgrade'];
     for (const n of NAMES) {
-      fetch(`/static/assets/audio/sfx/${n}.mp3?v=10`)
+      fetch(`/static/assets/audio/sfx/${n}.mp3?v=18`)
         .then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
         .then((data) => new Promise((ok, fail) => this.ctx.decodeAudioData(data, ok, fail)))
         .then((buf) => { this.sfxFiles[n] = buf; })
@@ -176,9 +176,18 @@ export class Sfx {
     const file = ALIAS[name] || name;
     const buf = this.sfxFiles && this.sfxFiles[file];
     if (!buf) return false;
+    // Per-sound levels: the wood collect file is hot and noisy at full gain.
+    const VOL = { harvest_wood: 0.65 };
     const src = this.ctx.createBufferSource();
     src.buffer = buf;
-    src.connect(bus);
+    if (VOL[file]) {
+      const g = this.ctx.createGain();
+      g.gain.value = VOL[file];
+      src.connect(g);
+      g.connect(bus);
+    } else {
+      src.connect(bus);
+    }
     src.start();
     return true;
   }
@@ -412,6 +421,8 @@ export class Sfx {
   }
 
   startMusic() {
+    // No music behind the Game Manager: it starts when the game does.
+    if (typeof document !== 'undefined' && document.getElementById('manager')) return;
     if (this.musicRunning) return;
     const ctx = this._init();
     if (!ctx) return;

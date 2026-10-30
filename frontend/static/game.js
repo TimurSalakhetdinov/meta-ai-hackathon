@@ -4,7 +4,7 @@
 // replay view relies on that to re-simulate recorded runs.
 
 import { SimClock } from './clock.js';
-import { PADS, RESEARCH_TENT_TILE, TOWN_CENTER_TILE } from './iso_renderer.js';
+import { PADS, RESEARCH_TENT_TILE, TOWN_CENTER_TILE, BATTLE_COLS, BATTLE_ROWS, BATTLE_BLOCKED } from './iso_renderer.js';
 
 export const STEPS = ['onb_01_shelter', 'onb_02_forager', 'onb_03_handoff', 'free_play'];
 export const RESOURCES = ['food', 'wood', 'stone', 'rp'];
@@ -88,7 +88,7 @@ export const TECHS = {
     costs: (c) => ({ wood: c.research_toolmaking_wood_cost }),
   },
   tech_woodworking: {
-    label: 'Woodworking', icon: '\u{1FAB5}', requires: ['tech_toolmaking'], score: 10,
+    label: 'Woodworking', icon: '\u{1FAB5}', requires: ['tech_toolmaking', 'tech_baskets'], score: 10,
     effect: '+50% Woodcutter yield.',
     costs: (c) => ({ food: c.research_woodworking_food_cost, rp: c.research_tier2_rp_cost }),
   },
@@ -98,7 +98,7 @@ export const TECHS = {
     costs: (c) => ({ food: c.research_baskets_food_cost, rp: c.research_tier2_rp_cost }),
   },
   tech_masonry: {
-    label: 'Masonry', icon: '\u{1FAA8}', requires: ['tech_toolmaking'], score: 10,
+    label: 'Masonry', icon: '\u{1FAA8}', requires: ['tech_toolmaking', 'tech_baskets'], score: 10,
     effect: 'Unlocks the Stone Quarry.',
     costs: (c) => ({ wood: c.research_masonry_wood_cost, rp: c.research_tier2_rp_cost }),
   },
@@ -108,7 +108,7 @@ export const TECHS = {
     costs: (c) => ({ food: c.research_stone_age_food_cost, stone: c.research_stone_age_stone_cost, rp: c.research_stone_age_rp_cost }),
   },
   tech_construction: {
-    label: 'Sturdy Construction', icon: '🏗️', requires: ['tech_toolmaking'], score: 10,
+    label: 'Sturdy Construction', icon: '🏗️', requires: ['tech_toolmaking', 'tech_woodworking'], score: 10,
     effect: 'Unlocks building upgrades to Lv.2.',
     costs: (c) => ({ wood: c.research_masonry_wood_cost, rp: c.research_tier2_rp_cost }),
   },
@@ -172,7 +172,7 @@ export const QUESTS = [
   {
     id: 'chapter_5', title: 'Chapter V: Breaking the Sabertooth Wall',
     objectives: [
-      ['Level Bera to Lv.3+', (g) => (g.heroes?.vaelen?.level || 1) >= 3],
+      ['Level Tor to Lv.3+', (g) => (g.heroes?.aurelius?.level || 1) >= 3],
       ['Conquer Stage 6: Sabertooth Canyon', (g) => g.encountersCleared.has('stage_6')],
       ['Build Barracks or Smelter', (g) => g.hasBuilt('barracks') || g.hasBuilt('smelter')],
     ],
@@ -196,15 +196,49 @@ export const ENCOUNTERS = [
 ];
 
 export const CAMPAIGN_STAGES = [
-  { id: 'stage_1', legacyId: 'encounter_misty_river', name: '1. Misty River Crossing', enemyPower: 120, slots: 1, waves: 1, enemies: 'Dire Wolves Lv.1', reward: { rp: 6, stone: 15, score: 15, scrolls: 10 } },
-  { id: 'stage_2', legacyId: 'encounter_megalithic_ruins', name: '2. Sunlit Glade Ambush', enemyPower: 165, slots: 1, waves: 1, enemies: 'Razor Boars Lv.1', reward: { rp: 6, stone: 15, score: 15, tokens: 1 } },
-  { id: 'stage_3', legacyId: 'encounter_quarry_ridge', name: '3. Megalithic Ruins', enemyPower: 240, slots: 2, waves: 2, enemies: 'Wolf & Boar Pack Lv.2', reward: { rp: 8, stone: 15, score: 20, scrolls: 15 } },
-  { id: 'stage_4', legacyId: null, name: '4. Whispering Pine Gorge', enemyPower: 310, slots: 2, waves: 2, enemies: 'Armored Boars Lv.2', reward: { rp: 10, stone: 20, score: 20, coins: 25 } },
-  { id: 'stage_5', legacyId: null, name: '5. Quarry Ridge Outpost', enemyPower: 390, slots: 3, waves: 2, enemies: 'Ridge Stalkers Lv.3', reward: { rp: 12, stone: 25, score: 25, tokens: 1 } },
-  { id: 'stage_6', legacyId: null, name: '6. Sabertooth Canyon', enemyPower: 520, slots: 3, waves: 3, reqPower: 460, enemies: 'Sabertooth Pack Lv.4', reward: { rp: 15, stone: 35, score: 35, coins: 40 } },
-  { id: 'stage_7', legacyId: null, name: '7. Obsidian Crag', enemyPower: 640, slots: 4, waves: 3, reqPower: 580, enemies: 'Elder Sabertooths Lv.5', reward: { rp: 20, stone: 40, score: 40, scrolls: 30 } },
-  { id: 'stage_8', legacyId: null, name: "8. BOSS: Shadowclaw's Lair", enemyPower: 780, slots: 4, waves: 3, reqPower: 700, enemies: 'Alpha Shadowclaw Lv.6', reward: { rp: 30, stone: 60, score: 60, coins: 100 } },
+  { id: 'stage_1', legacyId: 'encounter_misty_river', name: '1. Misty River Crossing', enemyPower: 120, slots: 1, waves: 1, enemies: 'Ash Clan Patrol Lv.1', reward: { rp: 6, stone: 15, score: 15, scrolls: 10 } },
+  { id: 'stage_2', legacyId: 'encounter_megalithic_ruins', name: '2. Sunlit Glade Ambush', enemyPower: 165, slots: 1, waves: 1, enemies: 'Boar Clan Raiders Lv.1', reward: { rp: 6, stone: 15, score: 15, tokens: 1 } },
+  { id: 'stage_3', legacyId: 'encounter_quarry_ridge', name: '3. Megalithic Ruins', enemyPower: 240, slots: 2, waves: 2, enemies: 'Flint Clan Warband Lv.2', reward: { rp: 8, stone: 15, score: 20, scrolls: 15 } },
+  { id: 'stage_4', legacyId: null, name: '4. Whispering Pine Gorge', enemyPower: 310, slots: 2, waves: 2, enemies: 'Frost Clan Raiders Lv.2', reward: { rp: 10, stone: 20, score: 20, coins: 25 } },
+  { id: 'stage_5', legacyId: null, name: '5. Quarry Ridge Outpost', enemyPower: 390, slots: 3, waves: 2, enemies: 'Gale Clan Stalkers Lv.3', reward: { rp: 12, stone: 25, score: 25, tokens: 1 } },
+  { id: 'stage_6', legacyId: null, name: '6. Sabertooth Canyon', enemyPower: 520, slots: 3, waves: 3, reqPower: 460, enemies: 'Tusk Clan Warband Lv.4', reward: { rp: 15, stone: 35, score: 35, coins: 40 } },
+  { id: 'stage_7', legacyId: null, name: '7. Obsidian Crag', enemyPower: 640, slots: 4, waves: 3, reqPower: 580, enemies: 'Raven Clan Warband Lv.5', reward: { rp: 20, stone: 40, score: 40, scrolls: 30 } },
+  { id: 'stage_8', legacyId: null, name: "8. BOSS: Shadowclaw's Lair", enemyPower: 780, slots: 4, waves: 3, reqPower: 700, enemies: 'Shadowclaw Lv.6', reward: { rp: 30, stone: 60, score: 60, coins: 100 } },
 ];
+
+// Rival clan roster (Astra design, docs in Downloads/enemy-roster.md):
+// every battle draws its enemies randomly from the stage's tier band.
+export const ENEMY_ROSTER = [
+  { name: 'Ash Clan Clubman', tier: 1, role: 'melee', speed: 4, sprite: 'enemy_ash_clubman' },
+  { name: 'Reed Clan Slinger', tier: 1, role: 'ranged', speed: 5, sprite: 'enemy_reed_slinger' },
+  { name: 'Birch Clan Knifer', tier: 1, role: 'skirmisher', speed: 6, sprite: 'enemy_birch_knifer' },
+  { name: 'Flint Clan Axeman', tier: 2, role: 'melee', speed: 4, sprite: 'enemy_flint_axeman' },
+  { name: 'Moss Clan Bowhand', tier: 2, role: 'ranged', speed: 5, sprite: 'enemy_moss_bowhand' },
+  { name: 'Oak Clan Doorward', tier: 2, role: 'tank', speed: 3, sprite: 'enemy_oak_doorward' },
+  { name: 'Thorn Clan Runner', tier: 3, role: 'skirmisher', speed: 7, sprite: 'enemy_thorn_runner' },
+  { name: 'Reed Clan Herbkeeper', tier: 3, role: 'healer', speed: 4, sprite: 'enemy_reed_herbkeeper' },
+  { name: 'Flint Clan Hookman', tier: 3, role: 'melee', speed: 4, sprite: 'enemy_flint_hookman' },
+  { name: 'Ash Clan Drumhand', tier: 4, role: 'support', speed: 4, sprite: 'enemy_ash_drumhand' },
+  { name: 'Frost Clan Guard', tier: 4, role: 'tank', speed: 3, sprite: 'enemy_frost_guard' },
+  { name: 'Cinder Clan Dartman', tier: 4, role: 'ranged', speed: 6, sprite: 'enemy_cinder_dartman' },
+  { name: 'Boar Clan Cleaver', tier: 5, role: 'melee', speed: 4, sprite: 'enemy_boar_cleaver' },
+  { name: 'Gale Clan Scout', tier: 5, role: 'skirmisher', speed: 7, sprite: 'enemy_gale_scout' },
+  { name: 'Thorn Clan Longbow', tier: 5, role: 'ranged', speed: 4, sprite: 'enemy_thorn_longbow' },
+  { name: 'Tusk Clan Shieldwall', tier: 6, role: 'tank', speed: 3, sprite: 'enemy_tusk_shieldwall' },
+  { name: 'Tusk Clan Spearcast', tier: 6, role: 'ranged', speed: 5, sprite: 'enemy_tusk_spearcast' },
+  { name: 'Raven Clan Standard', tier: 6, role: 'support', speed: 4, sprite: 'enemy_raven_standard' },
+  { name: 'Iron Clan Swordsman', tier: 7, role: 'melee', speed: 5, sprite: 'enemy_iron_swordsman' },
+  { name: 'Gale Clan Harrier', tier: 7, role: 'skirmisher', speed: 7, sprite: 'enemy_gale_harrier' },
+  { name: 'Frost Clan Bonewright', tier: 7, role: 'healer', speed: 4, sprite: 'enemy_frost_bonewright' },
+  { name: 'Night Clan Gateward', tier: 8, role: 'tank', speed: 3, sprite: 'enemy_night_gateward' },
+  { name: 'Night Clan Bowguard', tier: 8, role: 'ranged', speed: 5, sprite: 'enemy_night_bowguard' },
+  { name: 'Iron Clan Breaker', tier: 8, role: 'melee', speed: 4, sprite: 'enemy_iron_breaker' },
+];
+export const ENEMY_BOSSES = {
+  stage_6: { name: 'Tusk Chief', role: 'melee', speed: 4, sprite: 'enemy_tusk_chief' },
+  stage_7: { name: 'Raven Marshal', role: 'ranged', speed: 5, sprite: 'enemy_raven_marshal' },
+  stage_8: { name: 'Shadowclaw', role: 'melee', speed: 6, sprite: 'enemy_shadowclaw' },
+};
 
 const BATTLE_REWARD = { rp: 6, stone: 15, score: 15 };
 const MAP_PREFIXES = ['pad_', 'building_', 'card_', 'upgrade_', 'worker_', 'free_', 'exp_'];
@@ -221,7 +255,85 @@ export const ADVISOR_TEXT = {
 const HINT_TEXT = {
   btn_research: 'Open Research, Chief. There\'s learning waiting, and I\'ve only so much wisdom left to repeat.',
   tech_toolmaking: 'Choose Basic Toolmaking and learn it, Chief. A good edge saves hard work, and these old shoulders approve.',
+  card_woodcutter_hut: 'Now raise a Woodcutter, Chief. Axes in the greenwood will fill our woodpile, and a full woodpile builds a village.',
 };
+
+// Chapter openings and per-task Elder lines, Chapters II to VI (Astra-edited).
+// tasks align with the chapter's objective order; Chapter VI has no Bronze
+// line because researching Bronze enters the era at once (index 0 is null).
+const CHAPTER_ANNOUNCE = {
+  chapter_2: {
+    open: 'Our foundations hold, Chief. Learn to work stone and strengthen the village; winter seldom knocks before coming in.',
+    tasks: [
+      'Open Research and learn Masonry, Chief. A well-laid stone wall keeps the wind outside, where it can grumble without me.',
+      'Raise a Stone Quarry, Chief. The mountain can spare us some stone; it has stood there doing precious little all winter.',
+      'Open Research and awaken the Stone Age, Chief. Let us give this village something sturdier than my knees to stand on.',
+    ],
+  },
+  chapter_3: {
+    open: 'Bring fire, craft, and trained heroes to the village, Chief. Stone walls are a fine start, but they cannot do all the work.',
+    tasks: [
+      'Build a Copper Smelter, Chief. A steady furnace turns copper into useful tools; my hearth mostly turns supper into smoke.',
+      'Improve a building to its next level, Chief. These old walls deserve some care; they shelter more useful things than my opinions.',
+      'Finish the Bronze Age research, Chief. Learn the craft before we promise bronze tools; promises make poor axe heads.',
+    ],
+  },
+  chapter_4: {
+    open: 'Fill our stores, strengthen our buildings, and bring water to the fields, Chief. Let winter find us ready for a change.',
+    tasks: [
+      'Build a Granary, Chief. Keep our grain dry and safely stored; winter is a poor season to discover the mice have eaten better than us.',
+      'Improve more of our buildings to their next level, Chief. A village needs sound roofs all round, especially with our rain.',
+      'Open Research and learn Irrigation, Chief. Bring water to our fields; waiting on the clouds is work best left to old men.',
+    ],
+  },
+  chapter_5: {
+    open: 'Prepare Tor for the fight at Sabertooth Canyon, Chief. Those beasts have blocked our road long enough to start charging rent.',
+    tasks: [
+      'Raise Tor\'s level through training, Chief. Let him sharpen his skills here before the canyon beasts offer their own lessons.',
+      'Conquer Sabertooth Canyon in the Campaign, Chief. Clear those beasts from the road; I prefer my walks without teeth at the end.',
+      'Build a Barracks or a Copper Smelter, Chief. Our warriors need somewhere to train or better tools; songs can wait until supper.',
+    ],
+  },
+  chapter_6: {
+    open: 'Gather your best heroes for Shadowclaw, Chief. We have a fine valley growing here, and he has been a thoroughly poor neighbour.',
+    tasks: [
+      null,
+      'Defeat Shadowclaw in the Campaign, Chief. Send your best heroes to settle the matter; these hills could use a quieter neighbour.',
+      'Raise your Empire Score by building, researching, and winning Campaign battles, Chief. Give this old man a village worth boasting about.',
+    ],
+  },
+};
+
+// HoMM3 hex field (odd-r offset, cube math for distance and neighbours).
+function hexCube(gx, gy) { const q = gx - (gy - (gy & 1)) / 2; return [q, -q - gy, gy]; }
+function cubeHex(q, s, r) { return [q + (r - (r & 1)) / 2, r]; }
+const HEX_DIRS = [[1, 0, -1], [1, -1, 0], [0, -1, 1], [-1, 0, 1], [-1, 1, 0], [0, 1, -1]];
+function hexNeighbors(gx, gy) {
+  const [q, s, r] = hexCube(gx, gy);
+  return HEX_DIRS.map(([dq, ds, dr]) => cubeHex(q + dq, s + ds, r + dr));
+}
+function hexDistance(a, b) {
+  const [aq, as, ar] = hexCube(a.gx, a.gy);
+  const [bq, bs, br] = hexCube(b.gx, b.gy);
+  return Math.max(Math.abs(aq - bq), Math.abs(as - bs), Math.abs(ar - br));
+}
+// True when the centre-to-centre shot line crosses a rock hex interior:
+// that rock grants the target cover (25% less ranged damage).
+function shotHasCover(a, b) {
+  const [aq, as, ar] = hexCube(a.gx, a.gy);
+  const [bq, bs2, br] = hexCube(b.gx, b.gy);
+  const steps = Math.max(Math.abs(aq - bq), Math.abs(as - bs2), Math.abs(ar - br));
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    let q = aq + (bq - aq) * t, s = as + (bs2 - as) * t, r = ar + (br - ar) * t;
+    let rq = Math.round(q), rs = Math.round(s), rr = Math.round(r);
+    const dq = Math.abs(rq - q), ds = Math.abs(rs - s), dr = Math.abs(rr - r);
+    if (dq > ds && dq > dr) rq = -rs - rr; else if (ds > dr) rs = -rq - rr; else rr = -rq - rs;
+    const [gx, gy] = cubeHex(rq, rs, rr);
+    if (BATTLE_BLOCKED.some(([x, y]) => x === gx && y === gy)) return true;
+  }
+  return false;
+}
 
 export class Game {
   constructor(config, opts = {}) {
@@ -272,6 +384,9 @@ export class Game {
     this.featureIntro = null;
     this.lastProgressT = 0;
     this.hint = null;
+    this.woodcutterAnnounced = false;
+    this.chapterOpenFor = null;
+    this.chapterOpenPending = false;
     this.nextHeartbeat = HEARTBEAT_SEC;
     this.lastTick = 0;
     this.ended = false;
@@ -286,7 +401,7 @@ export class Game {
       vaelen: {
         id: 'vaelen', name: 'Bera the Shield-Hunter', title: 'Shield of the Tribe',
         role: 'Hide Shield & Bone Spear', stars: 3, unlocked: true, level: 1, maxLevel: 7,
-        baseHp: 180, baseAtk: 28, baseDef: 18,
+        baseHp: 180, baseAtk: 28, baseDef: 18, speed: 4,
         ultName: 'Earthshatter Stomp',
         ultDesc: 'Deals 160% AoE shockwave damage to all enemies and stuns for 1.5s.',
         sprite: 'hero_vaelen', portrait: 'portrait_vaelen',
@@ -294,7 +409,7 @@ export class Game {
       lyra: {
         id: 'lyra', name: 'Sunweaver Lyra', title: 'Voice of the Dawn',
         role: 'Reed Sun-Disc Healer', stars: 2, unlocked: false, level: 1, maxLevel: 7,
-        baseHp: 130, baseAtk: 24, baseDef: 12,
+        baseHp: 130, baseAtk: 24, baseDef: 12, speed: 6,
         ultName: 'Solar Salve',
         ultDesc: 'Restores +45% max HP to all allied Heroes and grants a Golden Sun Shield.',
         sprite: 'hero_lyra', portrait: 'portrait_lyra',
@@ -302,15 +417,15 @@ export class Game {
       ignis: {
         id: 'ignis', name: 'Ember-Keeper Ignis', title: 'Keeper of the First Fire',
         role: 'Clay Fire Pot Caster', stars: 4, unlocked: false, level: 1, maxLevel: 7,
-        baseHp: 110, baseAtk: 38, baseDef: 10,
+        baseHp: 110, baseAtk: 38, baseDef: 10, speed: 7,
         ultName: 'Ember Storm',
         ultDesc: 'Hurls the sacred fire pot, raining embers for 220% damage.',
         sprite: 'hero_ignis', portrait: 'portrait_ignis',
       },
       aurelius: {
         id: 'aurelius', name: 'Tor the Stone-Breaker', title: 'Breaker of Stone',
-        role: 'Stone Maul Brute', stars: 5, unlocked: false, level: 1, maxLevel: 7,
-        baseHp: 220, baseAtk: 34, baseDef: 24,
+        role: 'Stone Maul Brute', stars: 5, unlocked: true, level: 1, maxLevel: 7,
+        baseHp: 220, baseAtk: 34, baseDef: 24, speed: 3,
         ultName: 'Mountain Smash',
         ultDesc: 'Slams his stone maul down, knocking back all foes.',
         sprite: 'hero_aurelius', portrait: 'portrait_aurelius',
@@ -353,6 +468,7 @@ export class Game {
       for (let j = 0; j < 14; j++) {
         if (covered.has(`${i},${j}`)) continue;
         if (i + j <= 3) continue;    // forest corner
+        if (j === 0) continue;       // top-right forest row: not buildable
         if (i + j >= 25) continue;   // river-bank corner
         pads.push({ id: `tile_${i}_${j}`, tile: [i, j] });
       }
@@ -560,11 +676,8 @@ export class Game {
     const missingReq = spec.requires.find((r) => !this.techs.has(r));
     const costs = spec.costs(this.config);
     if (missingReq) return { available: false, reason: 'requires_prerequisite', requires: missingReq, costs };
-    // Only one era upgrade in the first 20 minutes: Bronze waits for the timer.
-    if (id === 'tech_bronze_age' && this.clock.t < this.config.bronze_unlock_min_sim_sec) {
-      return { available: false, reason: 'too_early', requires: 'tech_stone_age',
-               unlocksAtSec: this.config.bronze_unlock_min_sim_sec, costs };
-    }
+    // The Bronze Age is gated by research prerequisites and its resource
+    // costs, not by time: when the tribe can pay, it can enter the era.
     const missing = this.missing(costs);
     if (missing) return { available: true, affordable: false, reason: `insufficient_${missing.resource}`, missing, costs };
     return { available: true, affordable: true, costs };
@@ -630,34 +743,89 @@ export class Game {
       if (hut) return hut.ready ? `building_${hut.key}` : null;
       return this.buildGuide('forager_hut');
     }
-    // Onboarding runs through Chapter II (the Stone Age): keep the arrow on the
-    // current quest objective until the first achievement, like the tutorial steps.
-    if (this.step_id === 'free_play' && this.quest
-        && (this.quest.id === 'chapter_1' || this.quest.id === 'chapter_2')) {
-      if (this.questClaimable) return 'btn_claim_quest';
-      const next = this.quest.objectives.find(([, fn]) => !fn(this));
-      if (next) {
-        const label = next[0];
-        // Only point at an action the player can actually take right now;
-        // otherwise the arrow loops on an unaffordable card or tech while
-        // the player should be gathering the missing resource first.
-        const buildArrow = (type) => (this.selectedCard === type || this.cardStatus(type).affordable)
-          ? this.buildGuide(type) : null;
-        const researchArrow = (tech) => this.modal === 'research' ? tech
-          : (this.techStatus(tech).affordable ? 'btn_research' : null);
-        if (label.includes('Woodcutter')) return buildArrow('woodcutter_hut');
-        if (label.includes('Stone Quarry')) return buildArrow('stone_quarry');
-        if (label.includes('Masonry')) return researchArrow('tech_masonry');
-        if (label.includes('Stone Age')) return researchArrow('tech_stone_age');
-        if (label.includes('Toolmaking')) return researchArrow('tech_toolmaking');
-      }
+    if (this.step_id === 'onb_03_handoff') {
+      // Point at Research only once Basic Toolmaking is actually affordable;
+      // until then the player should be gathering wood, not staring at a lock.
+      if (this.modal === 'research') return this.techStatus('tech_toolmaking').affordable ? 'tech_toolmaking' : null;
+      return this.techStatus('tech_toolmaking').affordable ? 'btn_research' : null;
     }
+    // The helping arrow guides Chapter I (and Claim at its end), then it
+    // stops for good: from Chapter II on, the player finds their own way.
+    if (this.step_id === 'free_play' && this.quest?.id === 'chapter_1') {
+      if (this.questClaimable) return 'btn_claim_quest';
+      const nextIdx = this.quest.objectives.findIndex(([, fn]) => !fn(this));
+      if (nextIdx >= 0) return this.questGuide(this.quest.id, nextIdx);
+    }
+    // No helping arrow after Chapter I, not even from a leftover hint.
+    if (this.step_id === 'free_play') return null;
     return this.hint ? this.hint.target_id : null;
   }
 
+  // Guide target for one chapter task, aligned with the task gates.
+  questGuide(chapterId, idx) {
+    const buildArrow = (type) => (this.selectedCard === type || this.cardStatus(type).affordable)
+      ? this.buildGuide(type) : null;
+    const researchArrow = (tech) => this.modal === 'research' ? tech
+      : (this.techStatus(tech).affordable ? 'btn_research' : null);
+    const ready = () => this.taskActionable(chapterId, idx);
+    const guides = {
+      chapter_1: [null, null, () => researchArrow('tech_toolmaking'), () => buildArrow('woodcutter_hut')],
+      chapter_2: [() => researchArrow('tech_masonry'), () => buildArrow('stone_quarry'), () => researchArrow('tech_stone_age')],
+      chapter_3: [() => buildArrow('smelter'), () => (ready() ? 'btn_upgrades' : null), () => researchArrow('tech_bronze_age')],
+      chapter_4: [() => buildArrow('granary'), () => (ready() ? 'btn_upgrades' : null), () => researchArrow('tech_irrigation')],
+      chapter_5: [() => (ready() ? 'btn_heroes' : null), () => (ready() ? 'btn_expedition' : 'btn_heroes'), () => buildArrow('barracks') || buildArrow('smelter')],
+      chapter_6: [() => researchArrow('tech_bronze_age'), () => (ready() ? 'btn_expedition' : 'btn_heroes'), () => 'btn_expedition'],
+    };
+    return guides[chapterId]?.[idx]?.() ?? null;
+  }
+
+  // The Granary stands by the river: only the lowest riverside band of tiles.
+  isRiverside(tile) { return tile[0] + tile[1] >= 22; }
+
+  padsFor(type) {
+    const pads = this.activePads();
+    return type === 'granary' ? pads.filter((p) => this.isRiverside(p.tile)) : pads;
+  }
+
+  // Can the player act on this chapter task right now (card or tech
+  // unlocked and affordable, hero trainable, stage within squad power)?
+  taskGate(chapterId, idx) {
+    const build = (type) => {
+      const st = this.cardStatus(type);
+      return { ready: !st.locked && !!st.affordable, missing: st.missing?.resource };
+    };
+    const tech = (id) => {
+      const st = this.techStatus(id);
+      return { ready: !!st.affordable, missing: st.missing?.resource };
+    };
+    const upgrade = () => ({
+      ready: this.buildings.some((b) => { const st = this.upgradeStatus(b); return st.available && st.affordable; }),
+    });
+    const stage = (id) => {
+      const s = CAMPAIGN_STAGES.find((x) => x.id === id);
+      return { ready: !s || this.squadPower() >= (s.reqPower || s.enemyPower || 0) };
+    };
+    const gates = {
+      chapter_2: [() => tech('tech_masonry'), () => build('stone_quarry'), () => tech('tech_stone_age')],
+      chapter_3: [() => build('smelter'), upgrade, () => tech('tech_bronze_age')],
+      chapter_4: [() => build('granary'), upgrade, () => tech('tech_irrigation')],
+      chapter_5: [
+        () => { const h = this.heroes.aurelius; const arena = this.buildings.some((b) => b.type === 'hero_arena' && b.status === 'done'); return { ready: !!h?.unlocked && arena && this.resources.food >= 10 * (h.level || 1) }; },
+        () => stage('stage_6'),
+        () => { const a = build('barracks'); const b = build('smelter'); return { ready: a.ready || b.ready, missing: a.missing }; },
+      ],
+      chapter_6: [() => tech('tech_bronze_age'), () => stage('stage_8'), () => ({ ready: true })],
+    };
+    return gates[chapterId]?.[idx]?.() || { ready: true };
+  }
+
+  taskActionable(chapterId, idx) { return this.taskGate(chapterId, idx).ready; }
+
+  taskMissing(chapterId, idx) { return this.taskGate(chapterId, idx).missing; }
+
   buildGuide(type) {
     if (this.selectedCard !== type) return `card_${type}`;
-    const pad = this.activePads().find((p) => !this.buildingAt(p.id));
+    const pad = this.padsFor(type).find((p) => !this.buildingAt(p.id));
     return pad ? pad.id : null;
   }
 
@@ -669,8 +837,53 @@ export class Game {
     if (rejText) return rejText;
     const intro = this.featureIntro;
     if (intro && this.clock.t - intro.t <= FEATURE_INTRO_SHOW_SEC) return intro.text;
-    if (this.bronzeAchieved) return ADVISOR_TEXT.bronze;
-    if (this.achieved) return ADVISOR_TEXT.achieved;
+    // Chapter announcements come before the era achievement lines below:
+    // once the Stone Age is reached, `achieved` stays true forever and
+    // would otherwise shadow every chapter line from Chapter III on.
+    // "Your valley now" (free_play) is the Chapter II send-off: it must not
+    // sound while Chapter I is still open. Until the Woodcutter stands, the
+    // Elder keeps naming that job; once the chapter is done, he points at Claim.
+    // While any chapter is still running, the Elder names the next task on
+    // the road; the "Your valley now" send-off waits until all chapters end.
+    if (this.step_id === 'free_play' && this.quest && this.quest.id !== 'chapter_1') {
+      const announce = CHAPTER_ANNOUNCE[this.quest.id];
+      if (this.chapterOpenPending && announce) return announce.open;
+      if (this.questClaimable) return 'Well worked, Chief. The chapter is complete. Claim your reward; the tribe has earned every bit of it.';
+      const nextIdx = this.quest.objectives.findIndex(([, fn]) => !fn(this));
+      if (nextIdx >= 0 && announce?.tasks[nextIdx]) {
+        // Like the Woodcutter: the announcement (bubble, voice and arrow)
+        // arrives only when the task can actually be acted on. Before
+        // that, the Elder sends the player gathering instead.
+        if (!this.taskActionable(this.quest.id, nextIdx)) {
+          const missing = this.taskMissing(this.quest.id, nextIdx);
+          return missing
+            ? `We need more ${RESOURCE_LABEL[missing]} before that, Chief. Gather first, then we build.`
+            : 'Chief, we are not ready for that yet. Gather and grow first.';
+        }
+        return announce.tasks[nextIdx];
+      }
+      if (nextIdx >= 0) {
+        const next = this.quest.objectives[nextIdx];
+        return `Chief, ${next[0].charAt(0).toLowerCase()}${next[0].slice(1)}; that is the road ahead of us.`;
+      }
+    }
+    if (this.step_id === 'free_play' && this.quest?.id === 'chapter_1') {
+      if (!this.hasBuilt('woodcutter_hut')) {
+        // The Woodcutter message, its voice and the guide arrow all arrive
+        // together: only once the hut is unlocked and affordable. Before
+        // that, the Elder sends the player gathering instead.
+        const cs = this.cardStatus('woodcutter_hut');
+        if (cs.locked) return 'That is still beyond us, Chief. Research will open the way, as it always has.';
+        if (!cs.affordable) return `We need more ${RESOURCE_LABEL[cs.missing.resource]} before the Woodcutter, Chief. Gather first, then raise it.`;
+        return HINT_TEXT.card_woodcutter_hut;
+      }
+      if (this.questClaimable) return 'Well worked, Chief. The chapter is complete. Claim your reward; the tribe has earned every bit of it.';
+    }
+    // All chapters done: the valley send-off.
+    if (this.step_id === 'free_play' && !this.quest) return ADVISOR_TEXT.free_play;
+    // The era achievement lines (achieved/bronze) are not in the rotation:
+    // they name fixed tasks (a Copper Smelter, heroes) forever, even after
+    // those tasks are done. Chapter announcements own all guidance now.
     return ADVISOR_TEXT[this.step_id];
   }
 
@@ -843,7 +1056,34 @@ export class Game {
       }
     }
     this.checkProgress();
+    // Leftover onboarding hints die with Chapter I.
+    if (this.step_id === 'free_play' && this.quest?.id !== 'chapter_1') this.hint = null;
+    // A new chapter (II to VI) opens with its own Elder announcement, once.
+    if (this.step_id === 'free_play' && this.quest && CHAPTER_ANNOUNCE[this.quest.id]
+        && this.chapterOpenFor !== this.quest.id) {
+      this.chapterOpenFor = this.quest.id;
+      this.chapterOpenPending = true;
+      this.chapterOpenAt = this.clock.t;
+    }
+    // The opening line hands over to the first task line after 15 seconds,
+    // even if the player only waits: no advancing click is required.
+    if (this.chapterOpenPending && this.clock.t - (this.chapterOpenAt || 0) >= 15) {
+      this.chapterOpenPending = false;
+    }
+    // The Elder names the next job himself once the Woodcutter is actually
+    // available to build (card unlocked and affordable): raise a Woodcutter.
+    // Said once; the bubble stays until real progress.
+    const woodcutterStatus = this.cardStatus('woodcutter_hut');
+    if (!this.hint && this.step_id === 'free_play' && this.quest?.id === 'chapter_1'
+        && !woodcutterStatus.locked && woodcutterStatus.affordable
+        && !this.hasBuilt('woodcutter_hut')
+        && !this.woodcutterAnnounced) {
+      this.woodcutterAnnounced = true;
+      this.hint = { target_id: 'card_woodcutter_hut' };
+      this.emit('hint_shown', { target_id: 'card_woodcutter_hut' });
+    }
     if (!this.hint && this.modal !== 'welcome' && ['onb_03_handoff'].includes(this.step_id)
+        && this.techStatus('tech_toolmaking').affordable
         && now - this.lastProgressT >= c.idle_hint_delay_sec) {
       const target_id = this.modal === 'research' ? 'tech_toolmaking' : 'btn_research';
       this.hint = { target_id };
@@ -866,6 +1106,7 @@ export class Game {
   progress() {
     this.lastProgressT = this.clock.t;
     this.hint = null;
+    this.chapterOpenPending = false;
   }
 
   checkProgress() {
@@ -929,9 +1170,12 @@ export class Game {
     if (!squad.length) return false;
     // Turn-based (HoMM style): stationary units, one action per hero per
     // round, then the enemy round. Nothing fights on its own.
-    const units = squad.map((id) => {
+    const units = squad.map((id, i) => {
       const st = this.heroStats(id);
       return { kind: 'hero', id, name: this.heroes[id].name, hp: st.hp, maxHp: st.hp, atk: st.atk,
+               speed: this.heroes[id].speed || 5, ranged: ['lyra', 'ignis'].includes(id),
+               defending: false, retaliated: false, activeTurn: false,
+               gx: 1, gy: [2, 3, 5, 6][i] ?? 4, moveLeft: this.heroes[id].speed || 5,
                rage: id === 'vaelen' ? 40 : 25, acted: false, alive: true };
     });
     this.battleState = {
@@ -947,25 +1191,282 @@ export class Game {
       selectedUnit: null,
       units,
       enemies: [],
-      log: [`${stage.name}: pick a hero, then tap an enemy.`],
+      log: [`${stage.name}: tap a glowing hex to move, then tap an enemy to attack.`],
       cutIn: null,
       cutInUntil: 0,
       popups: [],
+      queue: [],
+      activeRef: null,
     };
     this.spawnWave();
     this.syncBattleTotals(this.battleState);
+    this.beginRound(this.battleState);
     return true;
+  }
+
+  // HoMM3 initiative: every living unit acts once per round, fastest first.
+  buildInitiative(bs) {
+    const refs = [
+      ...bs.units.filter((u) => u.alive).map((u) => ({ kind: 'hero', id: u.id, speed: u.speed || 5 })),
+      ...bs.enemies.filter((e) => e.alive).map((e) => ({ kind: 'enemy', idx: e.idx, speed: e.speed || 5 })),
+    ];
+    refs.sort((a, b) => b.speed - a.speed || (a.kind === 'hero' ? -1 : 1));
+    return refs;
+  }
+
+  beginRound(bs) {
+    // Defend lasts until the start of that unit's next activation, so it is
+    // cleared in advanceBattle, not here. Drummer buffs add movement once.
+    for (const u of [...bs.units, ...bs.enemies]) {
+      u.acted = false; u.retaliated = false; u.waited = false;
+      u.moveLeft = (u.speed || 5) + (u.buffMove || 0); u.buffMove = 0;
+    }
+    bs.queue = this.buildInitiative(bs);
+    bs.turn = 'player';
+    this.advanceBattle();
+  }
+
+  // Run the queue until a hero must act (player input) or the battle ends.
+  advanceBattle() {
+    const bs = this.battleState;
+    if (!bs || !bs.active) return;
+    for (;;) {
+      if (this.checkBattleEnd()) return;
+      while (bs.queue.length) {
+        const ref = bs.queue[0];
+        const unit = ref.kind === 'hero' ? bs.units.find((u) => u.id === ref.id) : bs.enemies[ref.idx];
+        if (unit && unit.alive && !unit.acted) break;
+        bs.queue.shift();
+      }
+      if (!bs.queue.length) {
+        bs.round += 1;
+        this.battleLog(bs, `Round ${bs.round}.`);
+        this.beginRound(bs);
+        return;
+      }
+      const ref = bs.queue[0];
+      bs.activeRef = ref;
+      for (const u of bs.units) u.activeTurn = ref.kind === 'hero' && u.id === ref.id;
+      // A hero's Defend ends as their next activation begins; buffed attack
+      // from a standard-bearer is spent on this activation either way.
+      if (ref.kind === 'hero') {
+        const hu = bs.units.find((u) => u.id === ref.id);
+        if (hu) hu.defending = false;
+      }
+      if (ref.kind === 'enemy') {
+        this.enemyAct(bs.enemies[ref.idx]);
+        bs.queue.shift();
+        continue;
+      }
+      bs.selectedUnit = ref.id;
+      this.syncBattleTotals(bs);
+      return;
+    }
+  }
+
+  // ------------------------------------------------------------ hex movement
+  battleBlocked(gx, gy, except = null) {
+    const bs = this.battleState;
+    if (gx < 0 || gy < 0 || gx >= BATTLE_COLS || gy >= BATTLE_ROWS) return true;
+    if (BATTLE_BLOCKED.some(([x, y]) => x === gx && y === gy)) return true;
+    return [...bs.units, ...bs.enemies].some((u) => u !== except && u.alive && u.gx === gx && u.gy === gy);
+  }
+
+  // Shortest hex path from a unit to any tile matching isGoal, as a list of
+  // steps (excluding the start tile). Null when unreachable.
+  battlePath(unit, isGoal) {
+    const seen = new Map([[`${unit.gx},${unit.gy}`, null]]);
+    const queue = [[unit.gx, unit.gy]];
+    while (queue.length) {
+      const [x, y] = queue.shift();
+      if ((x !== unit.gx || y !== unit.gy) && isGoal(x, y)) {
+        const path = [];
+        let cur = [x, y];
+        while (cur) { path.unshift(cur); cur = seen.get(cur.join(',')); }
+        return path.slice(1).map(([gx, gy]) => ({ gx, gy }));
+      }
+      for (const [nx, ny] of hexNeighbors(x, y)) {
+        const k = `${nx},${ny}`;
+        if (seen.has(k) || this.battleBlocked(nx, ny, unit)) continue;
+        seen.set(k, [x, y]);
+        queue.push([nx, ny]);
+      }
+    }
+    return null;
+  }
+
+  battleReachableTiles() {
+    const bs = this.battleState;
+    if (!bs || !bs.active || bs.activeRef?.kind !== 'hero') return [];
+    const hero = bs.units.find((u) => u.id === bs.activeRef.id && u.alive && !u.acted);
+    if (!hero || !hero.moveLeft) return [];
+    const out = [];
+    for (let gx = 0; gx < BATTLE_COLS; gx++) {
+      for (let gy = 0; gy < BATTLE_ROWS; gy++) {
+        if (gx === hero.gx && gy === hero.gy) continue;
+        const path = this.battlePath(hero, (x, y) => x === gx && y === gy);
+        if (path && path.length <= hero.moveLeft) out.push({ gx, gy, cost: path.length });
+      }
+    }
+    return out;
+  }
+
+  heroMove(gx, gy) {
+    const bs = this.battleState;
+    if (!bs || !bs.active || bs.activeRef?.kind !== 'hero') return false;
+    const hero = bs.units.find((u) => u.id === bs.activeRef.id && u.alive && !u.acted);
+    if (!hero) return false;
+    const tile = this.battleReachableTiles().find((t) => t.gx === gx && t.gy === gy);
+    if (!tile) return false;
+    bs.preview = null;
+    hero.gx = gx; hero.gy = gy;
+    hero.moveLeft -= tile.cost;
+    this.syncBattleTotals(bs);
+    return true;
+  }
+
+  // Move a unit along the shortest path toward a goal, up to its movement.
+  moveToward(unit, isGoal) {
+    const path = this.battlePath(unit, isGoal);
+    if (!path) return 0;
+    const steps = Math.min(unit.moveLeft || 0, path.length);
+    if (steps > 0) { unit.gx = path[steps - 1].gx; unit.gy = path[steps - 1].gy; unit.moveLeft -= steps; }
+    return steps;
+  }
+
+  enemyAct(e) {
+    const bs = this.battleState;
+    if (!e || !e.alive) return;
+    e.acted = true;
+    const heroes = bs.units.filter((u) => u.alive);
+    if (!heroes.length) return;
+    const allies = bs.enemies.filter((x) => x.alive && x !== e);
+    const strike = (target, mult = 1) => {
+      let dmg = Math.round(e.atk * mult * (0.85 + Math.random() * 0.3));
+      if (e.buffAtk) { dmg = Math.round(dmg * 1.15); e.buffAtk = 0; }
+      if (target.defending) dmg = Math.max(1, Math.round(dmg * 0.7));
+      target.hp = Math.max(0, target.hp - dmg);
+      target.alive = target.hp > 0;
+      target.rage = Math.min(100, (target.rage || 0) + 15);
+      this.battleLog(bs, `${e.name} hits ${target.name.split(' ')[0]} for ${dmg}${target.defending ? ' (defended)' : ''}.`);
+      this.onFx({ type: 'sfx', sound: 'roar' });
+      // A hero retaliates once per round, only against an adjacent melee hit.
+      if (target.alive && hexDistance(e, target) <= 1 && !target.retaliated) {
+        target.retaliated = true;
+        const rd = Math.max(1, Math.round(target.atk * 0.5));
+        e.hp = Math.max(0, e.hp - rd);
+        e.alive = e.hp > 0;
+        this.battleLog(bs, `${target.name.split(' ')[0]} retaliates for ${rd}.`);
+      }
+    };
+    // Healer: bounded heals (2 per battle, 20% max HP, no revival), then a
+    // weak strike. Cooldown counts its own completed activations.
+    if (e.role === 'healer') {
+      if (e.supportCd > 0) e.supportCd -= 1;
+      const hurt = allies.filter((a) => a.hp < a.maxHp).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
+      if (hurt && e.healsLeft > 0 && e.supportCd <= 0) {
+        if (hexDistance(e, hurt) > 3) this.moveToward(e, (x, y) => hexDistance({ gx: x, gy: y }, hurt) <= 3);
+        if (hexDistance(e, hurt) <= 3) {
+          const heal = Math.round(hurt.maxHp * 0.2);
+          hurt.hp = Math.min(hurt.maxHp, hurt.hp + heal);
+          e.healsLeft -= 1; e.supportCd = 2;
+          this.battleLog(bs, `${e.name} heals ${hurt.name} for ${heal}.`);
+          return;
+        }
+      }
+    }
+    // Support: drummer grants +1 movement, standard +15% damage, to allies
+    // within 2 hexes on their next activation. Never stacks, 2-activation gap.
+    if (e.role === 'support') {
+      if (e.supportCd > 0) e.supportCd -= 1;
+      if (e.supportCd <= 0 && allies.length) {
+        const anchor = allies[0];
+        if (hexDistance(e, anchor) > 2) this.moveToward(e, (x, y) => hexDistance({ gx: x, gy: y }, anchor) <= 2);
+        const near = bs.enemies.filter((x) => x.alive && hexDistance(e, x) <= 2);
+        if (near.length > 1) {
+          for (const a of near) {
+            if (a === e) continue;
+            if (e.name.includes('Drum')) a.buffMove = 1; else a.buffAtk = 1;
+          }
+          e.supportCd = 2;
+          this.battleLog(bs, e.name.includes('Drum') ? `${e.name} beats the rally drum: allies move faster.` : `${e.name} raises the standard: allies strike harder.`);
+          return;
+        }
+      }
+    }
+    // Ranged: shoot from anywhere while unengaged (rock cover applies);
+    // engaged shooters step clear first, else strike weakly.
+    if (e.ranged) {
+      const engaged = heroes.some((u) => hexDistance(e, u) === 1);
+      if (engaged) {
+        this.moveToward(e, (x, y) => heroes.every((u) => hexDistance({ gx: x, gy: y }, u) >= 2));
+      }
+      if (!heroes.some((u) => hexDistance(e, u) === 1)) {
+        const target = heroes.reduce((best, u) => (u.hp < best.hp ? u : best), heroes[0]);
+        if (shotHasCover(e, target)) {
+          let dmg = Math.max(1, Math.round(e.atk * 0.75 * (0.85 + Math.random() * 0.3)));
+          if (target.defending) dmg = Math.max(1, Math.round(dmg * 0.7));
+          target.hp = Math.max(0, target.hp - dmg);
+          target.alive = target.hp > 0;
+          target.rage = Math.min(100, (target.rage || 0) + 15);
+          this.battleLog(bs, `${e.name} shoots ${target.name.split(' ')[0]} for ${dmg} (through cover).`);
+          this.onFx({ type: 'sfx', sound: 'roar' });
+        } else strike(target);
+        return;
+      }
+      const adj = heroes.find((u) => hexDistance(e, u) === 1);
+      if (adj) { strike(adj, 0.5); return; }
+    }
+    // Melee roles: skirmishers hunt ranged or wounded heroes, tanks and
+    // others take the nearest. Same movement and action rules as heroes.
+    const target = e.role === 'skirmisher'
+      ? (heroes.filter((u) => u.ranged).sort((a, b) => a.hp - b.hp)[0]
+        || heroes.reduce((best, u) => (u.hp < best.hp ? u : best), heroes[0]))
+      : heroes.reduce((best, u) => (hexDistance(e, u) < hexDistance(e, best) ? u : best), heroes[0]);
+    if (hexDistance(e, target) > 1) {
+      this.moveToward(e, (x, y) => hexDistance({ gx: x, gy: y }, target) === 1);
+      if (hexDistance(e, target) > 1) {
+        this.battleLog(bs, `${e.name} advances.`);
+        return;
+      }
+    }
+    strike(target);
   }
 
   spawnWave() {
     const bs = this.battleState;
     const total = Math.round(bs.stage.enemyPower * 1.2);
-    const count = bs.wave === bs.totalWaves && bs.totalWaves > 1 ? 3 : 2;
+    const finalWave = bs.wave === bs.totalWaves && bs.totalWaves > 1;
+    const count = finalWave ? 3 : 2;
     const hp = Math.max(20, Math.round(total / count));
-    bs.enemies = Array.from({ length: count }, (_, i) => ({
-      kind: 'enemy', idx: i, name: bs.wave === bs.totalWaves && i === 0 && bs.totalWaves > 1 ? 'Alpha Beast' : `Beast ${i + 1}`,
-      hp, maxHp: hp, atk: Math.max(6, Math.round(bs.stage.enemyPower * 0.045)), alive: true,
-    }));
+    const baseAtk = Math.max(6, Math.round(bs.stage.enemyPower * 0.045));
+    // Draw without replacement from the stage's tier band (stage N sees
+    // tiers N-1..N+1): at most one support and one healer per wave.
+    const stageN = Number((bs.stageId || 'stage_1').split('_')[1]) || 1;
+    const band = ENEMY_ROSTER.filter((e) => e.tier >= Math.max(1, stageN - 1) && e.tier <= Math.min(8, stageN + 1));
+    const pool = [...band].sort(() => Math.random() - 0.5);
+    const picked = [];
+    for (const e of pool) {
+      if (picked.length >= (finalWave && ENEMY_BOSSES[bs.stageId] ? count - 1 : count)) break;
+      if ((e.role === 'support' || e.role === 'healer')
+          && picked.some((p) => p.role === 'support' || p.role === 'healer')) continue;
+      picked.push(e);
+    }
+    while (picked.length < (finalWave && ENEMY_BOSSES[bs.stageId] ? count - 1 : count)) picked.push(band[picked.length % band.length]);
+    const roleAtk = { tank: 0.8, healer: 0.6, support: 0.6, ranged: 0.9, skirmisher: 0.95, melee: 1 };
+    const mk = (entry, i, boss = false) => ({
+      kind: 'enemy', idx: i, name: entry.name, role: entry.role, sprite: entry.sprite,
+      ranged: entry.role === 'ranged',
+      hp: boss ? Math.round(hp * 1.8) : hp, maxHp: boss ? Math.round(hp * 1.8) : hp,
+      atk: Math.max(4, Math.round(baseAtk * (roleAtk[entry.role] ?? 1) * (boss ? 1.3 : 1))),
+      gx: BATTLE_COLS - 2, gy: [2, 4, 6][i] ?? 4,
+      moveLeft: entry.speed, speed: entry.speed,
+      acted: false, retaliated: false, alive: true,
+      healsLeft: entry.role === 'healer' ? 2 : 0, supportCd: 0, buffMove: 0, buffAtk: 0,
+    });
+    bs.enemies = picked.map((e, i) => mk(e, i));
+    if (finalWave && ENEMY_BOSSES[bs.stageId]) bs.enemies.unshift(mk(ENEMY_BOSSES[bs.stageId], 0, true));
+    bs.enemies.forEach((e, i) => { e.idx = i; e.gy = [2, 4, 6][i] ?? 4; });
   }
 
   syncBattleTotals(bs) {
@@ -981,59 +1482,155 @@ export class Game {
 
   battleLog(bs, text) {
     bs.log.push(text);
-    if (bs.log.length > 4) bs.log.shift();
+    if (bs.log.length > 6) bs.log.shift();
+  }
+
+  // What an attack would do, before it is committed: the inspection strip
+  // shows this on the first tap; the second tap confirms the same numbers.
+  battlePreview(heroId, enemyIdx) {
+    const bs = this.battleState;
+    if (!bs || !bs.active) return null;
+    const hero = bs.units.find((u) => u.id === heroId && u.alive && !u.acted);
+    const enemy = bs.enemies[enemyIdx];
+    if (!hero || !enemy || !enemy.alive) return null;
+    const first = hero.name.split(' ')[0];
+    const engaged = bs.enemies.some((e) => e.alive && hexDistance(hero, e) === 1);
+    if (hero.ranged && engaged && hexDistance(hero, enemy) > 1) {
+      return { ok: false, text: `${first} is engaged and cannot shoot. Move clear, or strike the adjacent foe at half damage.` };
+    }
+    let moveCost = 0;
+    if (!hero.ranged || (hero.ranged && engaged)) {
+      if (hexDistance(hero, enemy) > 1) {
+        const path = this.battlePath(hero, (x, y) => hexDistance({ gx: x, gy: y }, enemy) === 1);
+        if (!path || path.length > hero.moveLeft) {
+          return { ok: false, text: `Cannot reach ${enemy.name} this turn. Move first; no movement was spent.` };
+        }
+        moveCost = path.length;
+      }
+    }
+    const weakMelee = hero.ranged && engaged;
+    const cover = hero.ranged && !weakMelee && shotHasCover(hero, enemy);
+    let dmg = Math.round(hero.atk * (weakMelee ? 0.5 : 1) * (cover ? 0.75 : 1));
+    const luckOn = bs.stageId !== 'stage_1';
+    const kills = dmg >= enemy.hp;
+    const retal = !kills && !enemy.retaliated && (!hero.ranged || weakMelee)
+      ? Math.max(1, Math.round(enemy.atk * 0.5)) : 0;
+    return {
+      ok: true, moveCost, dmg, cover, weakMelee,
+      text: `${first} → ${enemy.name}: ${dmg} damage${cover ? ' (rock cover)' : ''}${weakMelee ? ' (weak strike)' : ''}`
+        + `, ${enemy.name} at ${Math.max(0, enemy.hp - dmg)}/${enemy.maxHp} HP`
+        + (retal ? `; retaliation ${retal}` : '; no retaliation')
+        + (luckOn ? '; 12% chance of double damage' : '')
+        + (moveCost ? `; move ${moveCost} then attack` : '')
+        + '. Tap the enemy again to confirm.',
+    };
   }
 
   heroAttack(heroId, enemyIdx) {
     const bs = this.battleState;
-    if (!bs || !bs.active || bs.turn !== 'player') return false;
+    if (!bs || !bs.active || bs.activeRef?.kind !== 'hero' || bs.activeRef.id !== heroId) return false;
     const hero = bs.units.find((u) => u.id === heroId && u.alive && !u.acted);
     const enemy = bs.enemies[enemyIdx];
     if (!hero || !enemy || !enemy.alive) return false;
-    const dmg = Math.round(hero.atk * (0.9 + Math.random() * 0.2));
+    const preview = this.battlePreview(heroId, enemyIdx);
+    if (!preview?.ok) {
+      // Never commit a partial approach from an attack tap: explain instead.
+      if (preview) this.battleLog(bs, preview.text);
+      return false;
+    }
+    if (preview.moveCost) {
+      this.moveToward(hero, (x, y) => hexDistance({ gx: x, gy: y }, enemy) === 1);
+    }
+    const engaged = bs.enemies.some((e) => e.alive && hexDistance(hero, e) === 1);
+    const weakMelee = hero.ranged && engaged && hexDistance(hero, enemy) <= 1;
+    const cover = hero.ranged && !weakMelee && shotHasCover(hero, enemy);
+    // Luck: 12% double damage, but never in the introductory fight.
+    const lucky = bs.stageId !== 'stage_1' && Math.random() < 0.12;
+    let dmg = Math.round(hero.atk * (0.9 + Math.random() * 0.2) * (weakMelee ? 0.5 : 1) * (cover ? 0.75 : 1));
+    if (lucky) dmg *= 2;
+    dmg = Math.max(1, dmg);
     enemy.hp = Math.max(0, enemy.hp - dmg);
     enemy.alive = enemy.hp > 0;
     hero.acted = true;
     hero.rage = Math.min(100, hero.rage + 25);
     bs.selectedUnit = null;
-    this.battleLog(bs, `${hero.name.split(' ')[0]} hits ${enemy.name} for ${dmg}.`);
+    bs.preview = null;
+    this.battleLog(bs, `${hero.name.split(' ')[0]} hits ${enemy.name} for ${dmg}${lucky ? ' (Luck!)' : ''}${cover ? ' (through cover)' : ''}.`);
     this.onFx({ type: 'sfx', sound: 'hit' });
     if (hero.rage >= 100) this.onFx({ type: 'sfx', sound: 'ult_ready' });
+    // Melee targets retaliate once per round; shots never provoke it.
+    if (enemy.alive && (!hero.ranged || weakMelee) && !enemy.retaliated) {
+      enemy.retaliated = true;
+      let rd = Math.max(1, Math.round(enemy.atk * 0.5));
+      if (hero.defending) rd = Math.max(1, Math.round(rd * 0.7));
+      hero.hp = Math.max(0, hero.hp - rd);
+      hero.alive = hero.hp > 0;
+      this.battleLog(bs, `${enemy.name} retaliates for ${rd}.`);
+    }
+    bs.queue.shift();
     this.afterBattleAction();
     return true;
   }
 
-  enemyRound() {
+  // HoMM3 Wait: act after everyone else this round. Defend: skip the
+  // action, take 30% less damage until the next round.
+  battleWait() {
     const bs = this.battleState;
-    if (bs.enemies.some((e) => e.alive)) this.onFx({ type: 'sfx', sound: 'roar' });
-    for (const e of bs.enemies) {
-      if (!e.alive) continue;
-      const alive = bs.units.filter((u) => u.alive);
-      if (!alive.length) break;
-      // Melee beasts hit the front line first (deployment order), like HoMM.
-      const target = alive[0];
-      const dmg = Math.round(e.atk * (0.85 + Math.random() * 0.3));
-      target.hp = Math.max(0, target.hp - dmg);
-      target.alive = target.hp > 0;
-      target.rage = Math.min(100, target.rage + 15);
-      this.battleLog(bs, `${e.name} hits ${target.name.split(' ')[0]} for ${dmg}.`);
-    }
-    for (const u of bs.units) u.acted = false;
-    bs.round += 1;
-    bs.turn = 'player';
+    if (!bs || !bs.active || bs.activeRef?.kind !== 'hero') return false;
+    const active = bs.units.find((u) => u.id === bs.activeRef.id);
+    // Wait is once per activation, and only before any movement.
+    if (!active || active.waited) { this.battleLog(bs, 'Already waited this round.'); return false; }
+    if (active.moveLeft < (active.speed || 5)) { this.battleLog(bs, 'Cannot wait after moving.'); return false; }
+    active.waited = true;
+    const ref = bs.queue.shift();
+    bs.queue.push(ref);
+    const hero = bs.units.find((u) => u.id === ref.id);
+    this.battleLog(bs, `${hero?.name.split(' ')[0]} waits.`);
+    this.advanceBattle();
+    return true;
+  }
+
+  battleDefend() {
+    const bs = this.battleState;
+    if (!bs || !bs.active || bs.activeRef?.kind !== 'hero') return false;
+    const hero = bs.units.find((u) => u.id === bs.activeRef.id && u.alive && !u.acted);
+    if (!hero) return false;
+    hero.defending = true;
+    hero.acted = true;
+    bs.selectedUnit = null;
+    this.battleLog(bs, `${hero.name.split(' ')[0]} defends.`);
+    bs.queue.shift();
+    this.afterBattleAction();
+    return true;
   }
 
   endPlayerTurn() {
+    return this.battleDefend();
+  }
+
+  // Between waves the battle pauses on a Continue tap: heroes keep their
+  // health and charge, Defend and buffs end, formation resets.
+  battleContinueWave() {
     const bs = this.battleState;
-    if (!bs || !bs.active || bs.turn !== 'player') return false;
-    bs.turn = 'enemy';
-    this.enemyRound();
-    this.afterBattleAction();
+    if (!bs || !bs.active || !bs.awaitingWave) return false;
+    bs.awaitingWave = false;
+    bs.wave += 1;
+    for (const [i, u] of bs.units.entries()) {
+      u.defending = false; u.buffAtk = 0;
+      if (u.alive) { u.gx = 1; u.gy = [2, 3, 5, 6][i] ?? 4; }
+    }
+    this.spawnWave();
+    this.syncBattleTotals(bs);
+    this.battleLog(bs, `Wave ${bs.wave}/${bs.totalWaves} arrives!`);
+    this.beginRound(bs);
     return true;
   }
 
-  afterBattleAction() {
+  // True when the battle just ended or a new wave arrived.
+  checkBattleEnd() {
     const bs = this.battleState;
+    if (!bs) return true;
+    if (bs.awaitingWave) return true;
     this.syncBattleTotals(bs);
     if (bs.units.every((u) => !u.alive)) {
       bs.active = false;
@@ -1043,17 +1640,15 @@ export class Game {
         squad_power: this.squadPower(), required_power: bs.stage.reqPower || bs.stage.enemyPower,
       });
       this.onFx({ type: 'sfx', sound: 'reject' });
-      return;
+      return true;
     }
     if (bs.enemies.every((e) => !e.alive)) {
       if (bs.wave < bs.totalWaves) {
-        bs.wave += 1;
-        for (const u of bs.units) u.acted = false;
-        bs.turn = 'player';
-        this.spawnWave();
+        bs.awaitingWave = true;
+        bs.queue = [];
         this.syncBattleTotals(bs);
-        this.battleLog(bs, `Wave ${bs.wave}/${bs.totalWaves} arrives!`);
-        return;
+        this.battleLog(bs, `Wave ${bs.wave} cleared. The next wave approaches: tap Continue.`);
+        return true;
       }
       bs.active = false;
       bs.outcome = 'victory';
@@ -1076,23 +1671,32 @@ export class Game {
       if (bs.stageId === 'stage_6') this.heroes.aurelius.unlocked = true;
       this.emit('battle_won', { stage_id: bs.stageId, reward: bs.stage.reward });
       this.onFx({ type: 'sfx', sound: 'unlock' });
-      return;
+      return true;
     }
-    // All heroes acted: the enemy round runs automatically.
-    if (bs.turn === 'player' && bs.units.filter((u) => u.alive).every((u) => u.acted)) {
-      this.endPlayerTurn();
-    }
+    return false;
+  }
+
+  afterBattleAction() {
+    if (!this.checkBattleEnd()) this.advanceBattle();
   }
 
   triggerUltimate(heroId) {
     if (!this.battleState || !this.battleState.active) return false;
     const bs = this.battleState;
     const hero = bs.units.find((u) => u.id === heroId && u.alive);
-    // The card only fires at full rage; early taps do nothing. Using the
-    // ultimate is the hero's action for this round.
+    // The card only fires at full rage, on that hero's own turn; early taps
+    // do nothing. Using the ultimate is the hero's action for this round.
     if (!hero || hero.rage < 100 || hero.acted) return false;
+    if (bs.activeRef?.kind !== 'hero' || bs.activeRef.id !== heroId) return false;
+    // Melee ultimates need an adjacent foe; never spend charge on thin air.
+    if ((heroId === 'vaelen' || heroId === 'aurelius')
+        && !bs.enemies.some((e) => e.alive && hexDistance(hero, e) <= 1)) {
+      this.battleLog(bs, `${hero.name.split(' ')[0]}'s ultimate needs an adjacent foe.`);
+      return false;
+    }
     hero.rage = 0;
     hero.acted = true;
+    bs.queue.shift();
     bs.selectedUnit = null;
     if (heroId === 'lyra') {
       bs.cutIn = { heroId: 'lyra', name: 'Sunweaver Lyra', ult: 'SOLAR SALVE!', portrait: 'portrait_lyra' };
@@ -1105,9 +1709,21 @@ export class Game {
       const [name, ult] = names[heroId] || ['Hero', 'ULTIMATE!'];
       bs.cutIn = { heroId, name, ult, portrait: `portrait_${heroId}` };
       bs.cutInUntil = this.clock.t + 0.9;
+      // Ultimates are local, never global: Bera stomps adjacent foes, Tor
+      // smashes one adjacent foe hard, Ignis burns a foe and its neighbours.
       const dmg = Math.round(hero.atk * 2.2);
-      for (const e of bs.enemies) {
-        if (!e.alive) continue;
+      let targets = bs.enemies.filter((e) => e.alive && hexDistance(hero, e) <= 1);
+      if (heroId === 'ignis') {
+        const first = bs.enemies.filter((e) => e.alive)
+          .sort((a, b) => hexDistance(hero, a) - hexDistance(hero, b))[0];
+        targets = first ? bs.enemies.filter((e) => e.alive && hexDistance(first, e) <= 1) : [];
+      } else if (heroId === 'aurelius') {
+        targets = targets.sort((a, b) => b.hp - a.hp).slice(0, 1);
+      }
+      if (!targets.length && heroId !== 'vaelen' && heroId !== 'aurelius') {
+        targets = bs.enemies.filter((e) => e.alive).slice(0, 1);
+      }
+      for (const e of targets) {
         e.hp = Math.max(0, e.hp - dmg);
         e.alive = e.hp > 0;
       }
@@ -1196,7 +1812,9 @@ export class Game {
       if (!stage || this.encountersCleared.has(stage.id)) return { result: 'noop' };
       this.preBattle = {
         stageId: stage.id,
-        deployed: ['vaelen', ...(this.heroes.lyra.unlocked ? ['lyra'] : [])].slice(0, stage.slots || 1),
+        // Tor leads every deployment: first in the list, deployed by default.
+        deployed: ['aurelius', 'vaelen', ...(this.heroes.lyra.unlocked ? ['lyra'] : [])]
+          .filter((id) => this.heroes[id]?.unlocked).slice(0, stage.slots || 1),
       };
       this.modal = 'prebattle';
       return { result: 'ui' };
@@ -1245,17 +1863,34 @@ export class Game {
     if (target_id.startsWith('unit_hero_')) {
       const bs = this.battleState;
       const id = target_id.slice('unit_hero_'.length);
-      if (!bs || !bs.active || bs.turn !== 'player') return { result: 'noop' };
-      const u = bs.units.find((x) => x.id === id && x.alive && !x.acted);
-      if (!u) return { result: 'noop' };
-      bs.selectedUnit = bs.selectedUnit === id ? null : id;
+      if (!bs || !bs.active) return { result: 'noop' };
+      // HoMM3: only the unit whose initiative turn it is can act.
+      if (bs.activeRef?.kind !== 'hero' || bs.activeRef.id !== id) return { result: 'noop' };
+      bs.selectedUnit = id;
       return { result: 'ui' };
+    }
+    if (target_id === 'btn_battle_wait') {
+      return this.battleWait() ? { result: 'ui' } : { result: 'noop' };
+    }
+    if (target_id === 'btn_battle_defend') {
+      return this.battleDefend() ? { result: 'ui' } : { result: 'noop' };
     }
     if (target_id.startsWith('unit_enemy_')) {
       const bs = this.battleState;
       if (!bs || !bs.active || !bs.selectedUnit) return { result: 'noop' };
       const idx = Number(target_id.slice('unit_enemy_'.length));
+      // First tap previews the complete legal attack; second tap confirms.
+      if (!bs.preview || bs.preview.enemyIdx !== idx || bs.preview.heroId !== bs.selectedUnit) {
+        bs.preview = { enemyIdx: idx, heroId: bs.selectedUnit, ...(this.battlePreview(bs.selectedUnit, idx) || { ok: false, text: 'No attack possible.' }) };
+        this.battleLog(bs, bs.preview.text);
+        return { result: 'ui' };
+      }
+      bs.preview = null;
       return this.heroAttack(bs.selectedUnit, idx) ? { result: 'advanced' } : { result: 'noop' };
+    }
+    if (target_id.startsWith('battle_hex_')) {
+      const [, , gx, gy] = target_id.split('_');
+      return this.heroMove(Number(gx), Number(gy)) ? { result: 'ui' } : { result: 'noop' };
     }
     if (target_id === 'btn_end_turn') {
       return this.endPlayerTurn() ? { result: 'ui' } : { result: 'noop' };
@@ -1265,6 +1900,21 @@ export class Game {
     }
     if (target_id === 'btn_ult_lyra') {
       return this.triggerUltimate('lyra') ? { result: 'ui' } : { result: 'noop' };
+    }
+    if (target_id === 'btn_close_battle') {
+      // Retreat needs a confirming second tap: no reward, back to Campaign.
+      if (!this.battleState) return { result: 'noop' };
+      if (!this.battleState.retreatConfirm) {
+        this.battleState.retreatConfirm = true;
+        this.battleLog(this.battleState, 'Retreat? Tap the close button again to leave with no reward.');
+        return { result: 'ui' };
+      }
+      this.battleState = null;
+      this.modal = 'expedition';
+      return { result: 'ui' };
+    }
+    if (target_id === 'btn_battle_wave_continue') {
+      return this.battleContinueWave() ? { result: 'advanced' } : { result: 'noop' };
     }
     if (target_id === 'btn_battle_continue' || target_id === 'btn_victory_continue') {
       this.battleState = null;
@@ -1291,6 +1941,8 @@ export class Game {
       if (!this.heroesUnlocked()) return { result: 'noop' };
       this.modal = 'heroes';
       this.selectedCard = null;
+      // First open shows Tor the Stone-Breaker.
+      if (!this.heroesOpened) { this.heroesOpened = true; this.selectedHero = 'aurelius'; }
       return { result: 'ui' };
     }
     if (target_id === 'btn_close_heroes') {
@@ -1420,7 +2072,7 @@ export class Game {
     // Nothing is paid or built until the green check is tapped.
     if (target_id === 'btn_confirm_placement') {
       if (!this.pendingPlacement) return { result: 'noop' };
-      const pad = this.activePads().find((p) => p.id === this.pendingPlacement.padId);
+      const pad = this.padsFor(this.pendingPlacement.type).find((p) => p.id === this.pendingPlacement.padId);
       if (!pad || this.buildingAt(pad.id)) { this.pendingPlacement = null; return { result: 'noop' }; }
       return this.place(this.pendingPlacement.type, pad, reject);
     }
@@ -1429,7 +2081,7 @@ export class Game {
       return { result: 'ui' };
     }
     if (target_id.startsWith('pad_') || target_id.startsWith('tile_')) {
-      const pad = this.activePads().find((p) => p.id === target_id);
+      const pad = this.padsFor(this.selectedCard).find((p) => p.id === target_id);
       if (!pad || this.buildingAt(pad.id) || !this.selectedCard) return { result: 'noop' };
       this.pendingPlacement = { type: this.selectedCard, padId: pad.id, tile: pad.tile };
       return { result: 'ui' };

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=1280">
   <title>Dawn of Empires</title>
-  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/styles.css?v=12">
 </head>
 <body>
   <div id="app">
@@ -45,7 +45,6 @@
         <img id="advisor-portrait" class="portrait" src="/static/assets/sprites/advisor_welcome.png" alt="Elder Kaelen">
         <div class="bubble">
           <div class="speaker">Elder Kaelen</div>
-          <div id="step-chip" class="step-chip">Step 1/3</div>
           <p id="advisor-text"></p>
         </div>
       </section>
@@ -56,11 +55,11 @@
         </div>
         <ul id="quest-objectives" class="q-objectives"></ul>
         <div class="q-bar"><div id="quest-fill" class="q-fill"></div></div>
-        <button id="btn_claim_quest" class="gold-btn claim" data-target="btn_claim_quest" title="Claim Reward" hidden>&#x1F381; Claim Reward</button>
+        <button id="btn_claim_quest" class="gold-btn claim" data-target="btn_claim_quest" title="Claim Reward" hidden>Claim Reward</button>
       </section>
 
       <footer id="build-bar">
-        <button id="btn_buildings_toggle" class="buildings-toggle" title="Show or hide the buildings menu"><span class="d-ico">&#x1F528;</span><span class="d-label">Buildings</span></button>
+        <button id="btn_buildings_toggle" class="buildings-toggle" title="Show or hide the buildings menu"><img class="d-ico-img" src="/static/assets/sprites/icon_hammer.png" alt=""><span class="d-label">Buildings</span><span class="d-chev" aria-hidden="true">&#x25B8;</span></button>
         <div class="build-menu">
           <div class="build-filter-bar">
             <button class="build-cat-btn active" data-build-cat="all">All</button>
@@ -76,13 +75,13 @@
       <!-- Bottom Right Action Dock -->
       <div id="action-dock" class="action-dock">
         <button id="btn_heroes" data-target="btn_heroes" class="dock-btn heroes-btn" title="Heroes Hall" hidden>
-          <span class="d-ico">&#x1F6E1;&#xFE0F;</span><span class="d-label">Heroes</span>
+          <img class="d-ico-img" src="/static/assets/sprites/icon_shield.png" alt=""><span class="d-label">Heroes</span>
         </button>
         <button id="btn_expedition" data-target="btn_expedition" class="dock-btn expedition-btn" title="Campaign Map" hidden>
-          <span class="d-ico">&#x2694;&#xFE0F;</span><span class="d-label">Campaign</span>
+          <img class="d-ico-img" src="/static/assets/sprites/icon_swords.png" alt=""><span class="d-label">Campaign</span>
         </button>
         <button id="btn_research" data-target="btn_research" class="dock-btn research-btn sal-low" title="Research">
-          <span class="d-ico">&#x1F4DC;</span><span class="d-label">Research</span>
+          <img class="d-ico-img" src="/static/assets/sprites/icon_scroll.png" alt=""><span class="d-label">Research</span>
         </button>
       </div>
 
@@ -109,7 +108,6 @@
           <div class="tech-head">
             <h2>Tech Tree &middot; Ancient Wisdom</h2>
             <span id="tech-rp" class="tech-rp"></span>
-            <span class="tech-drag-hint">drag header to move</span>
             <button id="btn_close_research" class="close-btn" data-target="btn_close_research" title="Close">&times;</button>
           </div>
           <div id="tech-tree" class="tech-tree"></div>
@@ -228,19 +226,24 @@
             <div class="hp-bar-track"><div id="battle-allied-hp-fill" class="hp-bar-fill allied"></div></div>
           </div>
           <div class="battle-wave-center">
-            <div class="stage-tag" id="battle-stage-name">Stage 1: Misty River</div>
-            <div class="wave-tag" id="battle-wave-text">WAVE 1/1</div>
+            <div class="stage-line"><span class="stage-tag" id="battle-stage-name">Stage 1: Misty River</span> <span class="wave-tag" id="battle-wave-text">WAVE 1/1</span></div>
             <div class="battle-controls">
               <span id="battle-turn-text" class="battle-turn-tag">Your turn: pick a hero, then tap an enemy</span>
-              <button id="btn_end_turn" class="battle-ctrl-btn" data-target="btn_end_turn">End Turn</button>
+              <button id="btn_battle_wait" class="battle-ctrl-btn" data-target="btn_battle_wait" title="Act last this round">Wait</button>
+              <button id="btn_battle_defend" class="battle-ctrl-btn" data-target="btn_battle_defend" title="Skip action, take less damage">Defend</button>
+              <button id="btn_end_turn" class="battle-ctrl-btn" data-target="btn_end_turn" hidden>End Turn</button>
             </div>
-            <div id="battle-log" class="battle-log"></div>
           </div>
           <div class="team-hp enemy">
             <div class="hp-label"><span id="battle-enemy-hp-text">180/180</span> Enemy Horde</div>
             <div class="hp-bar-track"><div id="battle-enemy-hp-fill" class="hp-bar-fill enemy"></div></div>
           </div>
+          <button id="btn_close_battle" class="close-btn battle-close" data-target="btn_close_battle" title="Leave battle (back to Campaign)">&times;</button>
         </div>
+        <div id="battle-log" class="battle-log"></div>
+        <div id="battle-initiative" class="battle-initiative" title="Turn order this round, fastest first"></div>
+        <div id="battle-inspect" class="battle-inspect"></div>
+        <button id="btn_battle_wave_continue" class="gold-btn battle-wave-continue" data-target="btn_battle_wave_continue" hidden>Continue — next wave</button>
 
         <!-- Full-Screen Comic-Book Cut-In Slash -->
         <div id="battle-cutin" class="battle-cutin" hidden>
@@ -258,8 +261,8 @@
           <button id="btn_ult_vaelen" class="hero-rage-card" data-target="btn_ult_vaelen">
             <img src="/static/assets/sprites/portrait_vaelen.png" alt="" class="rage-portrait">
             <div class="rage-info">
-              <span class="rage-name">Vaelen</span>
-              <div class="rage-bar-track"><div id="rage-fill-vaelen" class="rage-bar-fill" style="width: 60%"></div></div>
+              <span class="rage-name">Bera</span>
+              <span class="rage-hp" id="rage-hp-vaelen"></span>
             </div>
             <span class="rage-ult-tag">ULT</span>
           </button>
@@ -267,7 +270,7 @@
             <img src="/static/assets/sprites/portrait_lyra.png" alt="" class="rage-portrait">
             <div class="rage-info">
               <span class="rage-name">Lyra</span>
-              <div class="rage-bar-track"><div id="rage-fill-lyra" class="rage-bar-fill" style="width: 50%"></div></div>
+              <span class="rage-hp" id="rage-hp-lyra"></span>
             </div>
             <span class="rage-ult-tag">HEAL</span>
           </button>
@@ -309,6 +312,6 @@
 
   <div id="replay-root" hidden></div>
 
-  <script type="module" src="/static/main.js?v=13"></script>
+  <script type="module" src="/static/main.js?v=81"></script>
 </body>
 </html>

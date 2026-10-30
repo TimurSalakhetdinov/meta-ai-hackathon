@@ -29,7 +29,7 @@
       "per_image": 0.0025
     },
     "muse-image": {
-      "per_image": null
+      "per_image": 0.01
     }
   }
 }
