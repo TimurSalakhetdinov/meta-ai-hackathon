@@ -626,13 +626,13 @@ body.slide-dock #right-dock.anim.open { transition: transform .28s ease; }
 #council-toggle span { color: #8a1f12; }
 #council-toggle:hover { padding-right: 10px; }
 
-.council-head { display: flex; align-items: center; gap: 6px; margin: 7px 8px 0; padding: 6px 8px;
+.council-head { position: relative; display: flex; align-items: center; gap: 6px; margin: 7px 8px 0; padding: 6px 8px;
   color: #3a2208; background: linear-gradient(#fff1b0, var(--gold) 55%, var(--gold-lo)); border: 2px solid #fff3c4;
   border-radius: 8px; box-shadow: 0 2px 0 #6b4f17, 0 4px 8px rgba(0,0,0,.45); }
 .council-title { flex: 1; min-width: 0; font: 700 14px var(--serif); text-shadow: 0 1px 0 rgba(255,255,255,.5); }
 .council-title small { display: block; font: italic 10px var(--serif); color: #5a3d1c; }
-.council-close { flex: none; width: 26px; height: 26px; border-radius: 50%; font-size: 14px; line-height: 1; color: #fff; cursor: pointer;
-  background: radial-gradient(circle at 35% 30%, #d4574e, #8f2620); border: 2px solid #fff3c4; }
+.council-close { position: absolute; top: -8px; right: -4px; z-index: 3; width: 26px; height: 26px; border-radius: 50%; font-size: 14px; line-height: 1; color: #fff; cursor: pointer;
+  background: radial-gradient(circle at 35% 30%, #d4574e, #8f2620); border: 2px solid #fff3c4; box-shadow: 0 2px 5px rgba(0,0,0,.45); }
 #mgr-back, .back-menu-btn { flex: none; margin: 0; padding: 7px 12px; border-radius: 8px; text-decoration: none;
   font: 700 12.5px var(--serif); color: #ffeec2; background: linear-gradient(#7a4a22, #54300f);
   border: 2px solid #3a2208; box-shadow: 0 2px 0 #2a1806, 0 3px 6px rgba(0,0,0,.4); cursor: pointer; }

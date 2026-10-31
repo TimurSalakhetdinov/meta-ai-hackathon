@@ -31,7 +31,7 @@ export function initOverlay(ctx) {
     <div class="council-head">
       <div class="council-title"><span class="crest-gem">✦</span> AI Playtest Studio
         <small>Test a feature idea on AI playtesters before real players see it</small></div>
-      <button class="mgr-justplay" id="mgr-back" title="Back to the Game Manager menu">← Game Manager</button>
+      <button class="mgr-justplay" id="mgr-back" title="Back to the Main Menu">← Main Menu</button>
       ${slide ? '<button class="council-close" id="council-close" aria-label="Close the studio">✕</button>' : ''}
     </div>
     <div class="pill" id="pill">
