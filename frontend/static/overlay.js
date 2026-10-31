@@ -195,6 +195,13 @@ class Overlay {
       this.liveNext = data.next;
       this.botNext = data.bot_next;
       for (const ev of data.events) if (ev.event_type === 'stuck') this.addStream(streamLine(ev), 'stuck-row');
+      // When the hunt ends, the Report (diagnosis and proposed fixes) opens
+      // on its own: no hunting for the right tab.
+      if (this.ctx.params.watch && !this.reportOpened
+          && (data.summary || data.events.some((e) => e.event_type === 'session_end'))) {
+        this.reportOpened = true;
+        this.showTab('report');
+      }
       for (const s of data.bot_steps || []) {
         this.addStream(`<span class="t">#${s.bot_step_index}</span> <span class="thought">💭 ${esc(s.thought || s.observation_summary || '')}</span>${s.target_id ? ` <span class="t">→ ${esc(s.target_id)}</span>` : ''}`);
       }
@@ -419,7 +426,7 @@ class Overlay {
         ${vsNote}
         <div class="section-h">Diagnosis</div>
         ${diagnosis}
-        ${hyps}
+        ${hyps ? `<div class="section-h">Proposed fixes</div>${hyps}` : ''}
         ${quotes ? `<div class="section-h">Playtester think-aloud</div>${quotes}` : ''}`;
       return;
     }
