@@ -195,6 +195,17 @@ class Overlay {
       this.liveNext = data.next;
       this.botNext = data.bot_next;
       for (const ev of data.events) if (ev.event_type === 'stuck') this.addStream(streamLine(ev), 'stuck-row');
+      for (const s of data.bot_steps || []) {
+        this.addStream(`<span class="t">#${s.bot_step_index}</span> <span class="thought">💭 ${esc(s.thought || s.observation_summary || '')}</span>${s.target_id ? ` <span class="t">→ ${esc(s.target_id)}</span>` : ''}`);
+      }
+      // Show the bot's latest screenshot so the hunt is visible, not just text.
+      const frame = document.getElementById('live-frame');
+      if (frame && data.bot_next > 0) {
+        const n = String(data.bot_next - 1).padStart(3, '0');
+        const src = `/api/runs/${encodeURIComponent(runId)}/artifacts/frames/step_${n}.png`;
+        if (!frame.src.endsWith(src)) frame.src = src;
+        frame.hidden = false;
+      }
       if (data.summary) this.stuckEvents = data.summary.stuck_events;
     } catch { /* server restarting; retry next tick */ }
   }
@@ -213,6 +224,7 @@ class Overlay {
         ? 'Stub persona policy, variant-blind: it only sees rendered targets. Live Muse Spark runs come from the Playwright runner (--mode meta).'
         : 'Reloads this variant with a scripted persona bot driving real clicks.'}</div>
       <div class="section-h">Event &amp; thought stream</div>
+      <img id="live-frame" class="live-frame" alt="Latest bot screenshot" hidden>
       <div class="stream" id="stream"></div>`;
     if (this.ctx.blocked) {
       el.querySelector('#bot-btn').disabled = true;
@@ -935,7 +947,9 @@ class Overlay {
       btn.disabled = false;
       return;
     }
-    note.textContent = `Meta bot is hunting (run ${job.run_id}). Screenshots, thoughts, telemetry and the diagnosis are saved to that run.`;
+    note.textContent = `Meta bot is hunting (run ${job.run_id}). Opening the watch screen…`;
+    // Watch it play: the Studio live view streams its screenshots and thoughts.
+    setTimeout(() => { location.href = `/?run_id=${encodeURIComponent(job.run_id)}&flow=bug&dock=live&telemetry=0`; }, 1200);
     const tick = async () => {
       try { job = await (await fetch(`/api/bot_hunt/${job.job_id}`)).json(); } catch { /* retry */ }
       if (job.status === 'running') {

@@ -14,6 +14,7 @@ import json
 import socket
 import threading
 import time
+import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator, Optional
@@ -194,7 +195,7 @@ class BotRunner:
         except (BudgetCapExceededError, CacheMissError) as exc:
             stop, error = type(exc).__name__, str(exc)
         except Exception as exc:  # recorded on the result; the experiment decides what to do
-            stop, error = "error", f"{type(exc).__name__}: {exc}"
+            stop, error = "error", f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
         finally:
             summary = await self._end(page, spec, stop)
             await context.close()

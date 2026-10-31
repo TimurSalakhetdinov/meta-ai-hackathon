@@ -379,11 +379,18 @@ class MetaClient:
         with Image.open(io.BytesIO(image_bytes)) as im:
             w, h = im.size
         visible = [t for t in (targets or []) if t.get("visible", True) and t.get("w") and t.get("h")]
+        # SAM accepts a limited set of object prompts: keep the 16 largest
+        # targets, clamped inside the frame.
+        visible.sort(key=lambda t: t["w"] * t["h"], reverse=True)
+        visible = visible[:16]
         if visible:
-            prompt = "<0f>" + ",".join(
-                f"{i + 1}<|box;x1={int(t['x'])};y1={int(t['y'])};"
-                f"x2={int(t['x'] + t['w'] - 1)};y2={int(t['y'] + t['h'] - 1)};w={w};h={h}|>"
-                for i, t in enumerate(visible))
+            def box(t):
+                x1 = max(0, min(w - 1, int(t['x'])))
+                y1 = max(0, min(h - 1, int(t['y'])))
+                x2 = max(x1, min(w - 1, int(t['x'] + t['w'] - 1)))
+                y2 = max(y1, min(h - 1, int(t['y'] + t['h'] - 1)))
+                return f"<|box;x1={x1};y1={y1};x2={x2};y2={y2};w={w};h={h}|>"
+            prompt = "<0f>" + ",".join(f"{i + 1}{box(t)}" for i, t in enumerate(visible))
         else:
             prompt = "game interface element"
         payload = {
@@ -397,7 +404,9 @@ class MetaClient:
         }
         text_parts: list[str] = []
         with self._client().stream("POST", url, headers=self._auth(), json=payload) as resp:
-            resp.raise_for_status()
+            if resp.status_code >= 400:
+                body = resp.read().decode(errors="replace")[:300]
+                raise RuntimeError(f"SAM API {resp.status_code}: {body}")
             for line in resp.iter_lines():
                 if not line.startswith("data:"):
                     continue
@@ -530,7 +539,12 @@ class MetaClient:
         resp.raise_for_status()
         body = resp.json()
         usage = body.get("usage") or {}
-        return body["choices"][0]["message"]["content"], {
+        choice = (body.get("choices") or [{}])[0]
+        msg = choice.get("message") or {}
+        # Reasoning models sometimes leave content empty and put the answer
+        # in reasoning_content; either way the caller gets text or "".
+        content = msg.get("content") or msg.get("reasoning_content") or choice.get("text") or ""
+        return content, {
             "prompt_tokens": int(usage.get("prompt_tokens", 0)),
             "completion_tokens": int(usage.get("completion_tokens", 0)),
         }
@@ -695,8 +709,10 @@ def draw_marks(image_bytes: bytes, marks: list[Mark]) -> bytes:
     return buf.getvalue()
 
 
-def parse_decision_json(text: str) -> dict[str, Any]:
-    """Tolerates code fences or prose around the JSON object."""
+def parse_decision_json(text: Optional[str]) -> dict[str, Any]:
+    """Tolerates code fences or prose around the JSON object. A model reply
+    with no content at all becomes a wait, never a crash."""
+    text = text or ""
     m = re.search(r"\{.*\}", text, re.S)
     if not m:
         return {"action": "wait", "thought": text.strip()[:200], "observation_summary": ""}
