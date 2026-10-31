@@ -1123,8 +1123,8 @@ class Overlay {
     for (const id of ['bug-persona', 'cmp-persona']) {
       const sel = document.getElementById(id);
       sel.innerHTML = personaOpts;
-      const imp = this.personas.find((x) => x.persona_id === 'impatient_newcomer');
-      if (imp) sel.value = imp.persona_id;
+      const dflt = this.personas.find((x) => x.persona_id === 'first_time_casual');
+      if (dflt) sel.value = dflt.persona_id;
     }
 
     await this.presetsReady;

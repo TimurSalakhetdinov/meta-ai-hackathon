@@ -117,14 +117,14 @@ def test_studio_spends_nothing(app_client: TestClient, runs_dir: Path) -> None:
 def test_five_grounded_personas(app_client: TestClient) -> None:
     rows = app_client.get("/api/personas").json()
     ids = [r["persona_id"] for r in rows]
-    assert ids == ["impatient_newcomer", "first_time_casual", "optimizer", "curious_explorer", "cautious_hoarder"]
-    assert [r["archetype"] for r in rows] == ["Rush-Clicker", "Story-Guided", "Strategist", "Tinkerer", "Hoarder"]
+    assert ids == ["first_time_casual", "optimizer", "curious_explorer", "cautious_hoarder", "impatient_newcomer"]
+    assert [r["archetype"] for r in rows] == ["Story-Guided", "Strategist", "Tinkerer", "Hoarder", "Rush-Clicker"]
     assert all(r["emblem"] and r["subtitle"] and r["grounding"] for r in rows)
     cited = " ".join(g for r in rows for g in r["grounding"])
     assert "Bartle 1996" in cited and "Nacke et al. 2014" in cited and "Yee 2015" in cited
-    hoarder = rows[-1]["stub_policy"]
+    hoarder = rows[3]["stub_policy"]
     assert hoarder["harvest"] == 0.95 and hoarder["wait_when_unsure"] == 0.7
-    assert rows[3]["stub_policy"]["curiosity"] == 1.0
+    assert rows[2]["stub_policy"]["curiosity"] == 1.0
 
 
 # -------------------------------------------------------------- approval gate

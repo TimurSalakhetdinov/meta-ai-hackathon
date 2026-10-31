@@ -25,7 +25,7 @@ export class Sfx {
   constructor({ muted = false } = {}) {
     this.muted = muted;
     this.ctx = null;
-    this.musicVolume = 0.6;
+    this.musicVolume = 0;
     this.sfxVolume = 0.9;
     this.masterGain = null;
     this.compressor = null;
@@ -122,10 +122,8 @@ export class Sfx {
     // Decode the soundtrack wavs into gapless, crossfaded loop buffers
     this._loadMusicBuffers();
 
-    // Auto-start background music on first user initialization if not muted
-    if (!this.muted && !this.musicRunning) {
-      this.startMusic();
-    }
+    // Background music never autoplays: it starts only when the player
+    // raises the Music slider in the sound menu (see applyVolumes).
 
     return this.ctx;
   }
@@ -304,8 +302,8 @@ export class Sfx {
         this.audioElements.valley.volume = 0;
         this.audioElements.battle.volume = 0;
       } else {
-        this.audioElements.valley.volume = this.musicTheme === 'valley' ? 0.70 : 0.0;
-        this.audioElements.battle.volume = this.musicTheme === 'battle' ? 0.70 : 0.0;
+        this.audioElements.valley.volume = this.musicTheme === 'valley' ? 0.70 * (this.musicVolume ?? 0) : 0.0;
+        this.audioElements.battle.volume = this.musicTheme === 'battle' ? 0.70 * (this.musicVolume ?? 0) : 0.0;
         if (this.musicRunning) {
           const activeEl = this.musicTheme === 'valley' ? this.audioElements.valley : this.audioElements.battle;
           activeEl.play().catch(() => {});
@@ -313,9 +311,7 @@ export class Sfx {
       }
     }
 
-    if (!this.muted && !this.musicRunning) {
-      this.startMusic();
-    }
+    // Unmuting restores sounds and voices; music still waits for its slider.
     if (!this.muted) this.play('click');
     return this.muted;
   }
@@ -352,7 +348,7 @@ export class Sfx {
         g.gain.linearRampToValueAtTime(name === track ? 1.0 : 0.0001, t + 0.85);
       }
     }
-    if (!this.musicRunning && !this.muted) this.startMusic();
+    // Track switches never auto-start music; the Music slider does that.
   }
 
   setMusicTheme(theme) {
@@ -385,19 +381,17 @@ export class Sfx {
       if (this.musicRunning && !this.muted) {
         if (theme === 'valley') {
           vEl.play().catch(() => {});
-          this._fadeAudioElement(vEl, 0.70, crossfadeTime);
+          this._fadeAudioElement(vEl, 0.70 * (this.musicVolume ?? 0), crossfadeTime);
           this._fadeAudioElement(bEl, 0.00, crossfadeTime);
         } else {
           bEl.play().catch(() => {});
-          this._fadeAudioElement(bEl, 0.70, crossfadeTime);
+          this._fadeAudioElement(bEl, 0.70 * (this.musicVolume ?? 0), crossfadeTime);
           this._fadeAudioElement(vEl, 0.00, crossfadeTime);
         }
       }
     }
 
-    if (!this.musicRunning && !this.muted) {
-      this.startMusic();
-    }
+    // Music starts only from the Music slider, never from a theme switch.
   }
 
   _fadeAudioElement(el, targetVol, duration) {
@@ -423,6 +417,7 @@ export class Sfx {
   startMusic() {
     // No background music on the main (manager) screen: it starts when
     // the player leaves the menu and the game actually begins.
+    if ((this.musicVolume ?? 0) <= 0) return;
     if (typeof document !== 'undefined' && document.getElementById('manager')) {
       this.musicWanted = true;
       return;

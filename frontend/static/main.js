@@ -7,11 +7,11 @@ import {
   BUILDINGS, BUILD_ORDER, ALL_BUILD_ORDER, CAMPAIGN_STAGES, ENCOUNTERS, ERA_LABEL, Game,
   QUESTS, RESOURCES, ALL_RESOURCES, RESOURCE_LABEL, TECHS, UPGRADABLE_TYPES,
 } from './game.js?v=76';
-import { Sfx, defaultMuted } from './audio.js?v=23';
+import { Sfx, defaultMuted } from './audio.js?v=25';
 import { IsoRenderer } from './iso_renderer.js?v=70';
 import { loadSprites, spriteUrl } from './sprites.js?v=69';
 import { TechTreeView } from './tech_tree.js?v=52';
-import { initOverlay } from './overlay.js';
+import { initOverlay } from './overlay.js?v=1';
 
 const PROVIDERS = ['human', 'stub', 'open_weights', 'meta'];
 const SPEEDS = [1, 2, 4];
@@ -161,13 +161,8 @@ function unlockVoice() {
   }
 }
 window.addEventListener('pointerdown', unlockVoice);
-// Music gate: once the Game Manager leaves the screen, start the music
-// that startMusic held back while the menu was up.
-new MutationObserver(() => {
-  if (!document.getElementById('manager') && window.__SFX__?.musicWanted && !window.__SFX__.musicRunning) {
-    window.__SFX__.startMusic();
-  }
-}).observe(document.body, { childList: true });
+// Music never autoplays on any screen; applyVolumes starts it only when
+// the player raises the Music slider above zero.
 
 // The layout is a fixed 1280x540 stage (bots and screenshots rely on it).
 // Scale it to fit the window; all game coordinates stay in stage pixels.
@@ -309,7 +304,12 @@ async function boot() {
     }
   };
   for (const k of ['music', 'sfx', 'voice']) {
-    $(`vol-${k}`)?.addEventListener('input', (e) => { volumes[k] = Number(e.target.value); applyVolumes(); });
+    $(`vol-${k}`)?.addEventListener('input', (e) => {
+      volumes[k] = Number(e.target.value);
+      applyVolumes();
+      // The one place music may start: the player moving its own slider.
+      if (k === 'music' && volumes.music > 0) sfx.startMusic?.();
+    });
   }
   applyVolumes();
   // Valley music track choice (volume menu), persisted.
