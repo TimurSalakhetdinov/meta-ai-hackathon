@@ -12,9 +12,9 @@
   "sam_model_id": "sam-3.1",
   "worker_pool_size": 5,
   "muse_cache_in_experiments": false,
-  "prompt_version": "playtester_v1",
+  "prompt_version": "playtester_v2",
   "muse_est_input_tokens": 2600,
-  "muse_max_output_tokens": 800,
+  "muse_max_output_tokens": 2000,
   "pricing_usd": {
     "_source": "docs/plan.md price table (dev.meta.ai/docs/pricing-rate-limits, checked 2026-10-27)",
     "muse-spark-1.3": {

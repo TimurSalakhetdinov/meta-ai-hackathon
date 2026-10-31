@@ -535,6 +535,9 @@ class MetaClient:
                                    headers=self._auth(meta=self.provider_mode == "meta"), json={
             "model": model, "messages": messages, "max_tokens": self.budget.muse_max_output_tokens,
             "response_format": {"type": "json_object"},
+            # Without this the reasoning model can spend the whole output
+            # budget thinking and return empty content (observed in hunts).
+            "reasoning_effort": "low",
         })
         resp.raise_for_status()
         body = resp.json()
