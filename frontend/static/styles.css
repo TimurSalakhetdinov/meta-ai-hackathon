@@ -633,10 +633,11 @@ body.slide-dock #right-dock.anim.open { transition: transform .28s ease; }
 .council-title small { display: block; font: italic 10px var(--serif); color: #5a3d1c; }
 .council-close { flex: none; width: 26px; height: 26px; border-radius: 50%; font-size: 14px; line-height: 1; color: #fff; cursor: pointer;
   background: radial-gradient(circle at 35% 30%, #d4574e, #8f2620); border: 2px solid #fff3c4; }
-#mgr-back { flex: none; margin: 0; padding: 7px 12px; border-radius: 8px; text-decoration: none;
+#mgr-back, .back-menu-btn { flex: none; margin: 0; padding: 7px 12px; border-radius: 8px; text-decoration: none;
   font: 700 12.5px var(--serif); color: #ffeec2; background: linear-gradient(#7a4a22, #54300f);
-  border: 2px solid #3a2208; box-shadow: 0 2px 0 #2a1806, 0 3px 6px rgba(0,0,0,.4); }
-#mgr-back:hover { background: linear-gradient(#8f5a2c, #63390f); color: #fff6da; }
+  border: 2px solid #3a2208; box-shadow: 0 2px 0 #2a1806, 0 3px 6px rgba(0,0,0,.4); cursor: pointer; }
+#mgr-back:hover, .back-menu-btn:hover { background: linear-gradient(#8f5a2c, #63390f); color: #fff6da; }
+.back-menu-btn { display: block; margin: 4px 0 10px; }
 .stepper { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; margin: 0 8px 5px; }
 .step-btn { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 4px 0 3px; cursor: pointer;
   font: 700 10px var(--serif); color: #e8d3a8; border-radius: 6px; background: linear-gradient(#7a5a3a, #5a3e22); border: 1px solid #2a1a0c; }

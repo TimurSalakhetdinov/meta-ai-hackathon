@@ -355,14 +355,16 @@ class Overlay {
     let audit = [];
     let analysis = null;
     let base = null;
-    try {
-      const r = await fetch(`/api/patches/${PATCH_ID}`);
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      ({ patch, validation, audit } = await r.json());
-      base = (await (await fetch('/api/config?variant=A')).json()).config;
-    } catch (err) {
-      el.innerHTML = `<div class="note">No patch available (${esc(err.message)}).</div>`;
-      return;
+    if (!this.bugMode) {
+      try {
+        const r = await fetch(`/api/patches/${PATCH_ID}`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        ({ patch, validation, audit } = await r.json());
+        base = (await (await fetch('/api/config?variant=A')).json()).config;
+      } catch (err) {
+        el.innerHTML = `<div class="note">No patch available (${esc(err.message)}).</div>`;
+        return;
+      }
     }
     const analysisRun = this.ctx.params.analysisRun || (this.ctx.params.variant === 'A' ? this.ctx.runId : null);
     const fetchAnalysis = async (runId) => {
@@ -386,6 +388,17 @@ class Overlay {
       : `<div class="note">No analyst diagnosis for this run yet.</div>`;
     const hyps = (analysis?.hypotheses || []).map((h) => `<div class="note">• <b>${esc(h.id)}</b> (${Math.round((h.confidence ?? 0) * 100)}%): ${esc(h.evidence)}</div>`).join('');
     const quotes = (analysis?.playtester_quotes || []).map((q) => `<div class="quote"><span class="mood mood-${esc(q.player_mood || 'engaged')}">${esc(q.player_mood || 'engaged')}</span> “${esc(q.thought)}” <span class="note">step ${esc(q.bot_step_index)} · ${esc(q.trigger)}</span></div>`).join('');
+    if (this.bugMode) {
+      el.innerHTML = `
+        <div class="section-h">Stuck frame</div>
+        <div class="frame-box">${frame}</div>
+        ${vsNote}
+        <div class="section-h">Diagnosis</div>
+        ${diagnosis}
+        ${hyps}
+        ${quotes ? `<div class="section-h">Playtester think-aloud</div>${quotes}` : ''}`;
+      return;
+    }
     const rows = Object.entries(patch.body).map(([k, v]) => `<div><span class="k">${esc(k)}</span>: <span class="from">${esc(JSON.stringify(base?.[k]))}</span> → <span class="to">${esc(JSON.stringify(v))}</span></div>`).join('');
     const valid = validation?.valid;
     const decided = ['approved', 'rejected'].includes(patch.status);
@@ -737,7 +750,7 @@ class Overlay {
               <label class="mgr-field">Run video <span class="mgr-static"><input type="checkbox" id="bug-video"> Record video.webm</span></label>
             </div>
           </details>
-          <div class="mgr-note">The scripted bot drives this tab with real clicks. Meta-bot hunts run from the Playwright runner in a terminal.</div>
+          <div class="mgr-note">The scripted bot drives this tab with real clicks. The Meta bot runs on the server and saves its whole run (screenshots, thoughts, telemetry) for the report.</div>
           <div class="mgr-actions">
             <button class="game-btn amber" id="bug-start">Start bug hunt</button>
             <button class="mgr-justplay" data-back>Back</button>
@@ -783,9 +796,14 @@ class Overlay {
     el.querySelector('#bug-start').addEventListener('click', () => {
       const persona = document.getElementById('bug-persona').value;
       if (document.getElementById('bug-runner').value === 'meta') {
-        // The Meta bot is driven by the Playwright runner, not this tab.
-        document.querySelector('#mgr-bug .mgr-note').textContent =
-          `Meta bot runs from a terminal: .venv/bin/python -m backend.cli run-session --variant ${document.getElementById('bug-version').value} --persona ${persona} --seed ${document.getElementById('bug-seed').value || '42'} --mode meta`;
+        this.startMetaBotHunt({
+          persona, variant: document.getElementById('bug-version').value,
+          seed: Number(document.getElementById('bug-seed').value || 42),
+          speed: Number(document.getElementById('bug-speed').value),
+          play_minutes: Number(document.getElementById('bug-playtime').value),
+          record_video: !!document.getElementById('bug-video')?.checked,
+          mode: 'meta',
+        });
         return;
       }
       const url = new URL(location.href);
@@ -896,6 +914,47 @@ class Overlay {
     draft.querySelector('#decree-approve').addEventListener('click', () => this.closeManager(true), { once: true });
   }
 
+  // Meta bot bug hunt, started from this menu: the server runs the
+  // Playwright session, saves the whole run, and we poll until it lands.
+  async startMetaBotHunt(settings) {
+    const note = document.querySelector('#mgr-bug .mgr-note');
+    const btn = document.getElementById('bug-start');
+    btn.disabled = true;
+    note.textContent = 'Starting the Meta bot…';
+    let job;
+    try {
+      const r = await fetch('/api/bot_hunt', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+      job = data;
+    } catch (err) {
+      note.textContent = `Could not start the Meta bot: ${err.message}`;
+      btn.disabled = false;
+      return;
+    }
+    note.textContent = `Meta bot is hunting (run ${job.run_id}). Screenshots, thoughts, telemetry and the diagnosis are saved to that run.`;
+    const tick = async () => {
+      try { job = await (await fetch(`/api/bot_hunt/${job.job_id}`)).json(); } catch { /* retry */ }
+      if (job.status === 'running') {
+        note.textContent = `Meta bot is hunting (run ${job.run_id})… ${job.steps ? `${job.steps} steps so far.` : ''}`;
+        setTimeout(tick, 3000);
+        return;
+      }
+      if (job.status === 'failed') {
+        note.textContent = `Meta bot hunt failed: ${job.error || 'unknown error'}. The partial run stays saved under ${job.run_id}.`;
+        btn.disabled = false;
+        return;
+      }
+      const a = job.artifacts || {};
+      note.textContent = `Hunt finished: ${job.steps || 0} steps, ${a.frames || 0} screenshots, ${a.bot_steps || 0} recorded thoughts. Opening the report…`;
+      setTimeout(() => { location.href = `/?run_id=${encodeURIComponent(job.run_id)}&flow=bug&dock=analyst`; }, 1200);
+    };
+    setTimeout(tick, 2000);
+  }
+
   closeManager(openStudio) {
     const decree = document.getElementById('decree');
     if (decree && decree.closest('#manager')) document.querySelector('#tab-forge [data-steps="2 3"]').appendChild(decree);
@@ -947,6 +1006,15 @@ class Overlay {
 
   async renderReport() {
     const el = document.getElementById('tab-report');
+    if (this.bugMode) {
+      // Bug hunting report: the run's diagnosis only. No feature patches,
+      // no approval gate, no A/B tables.
+      el.innerHTML = `<button class="back-menu-btn" id="report-back">← Back to Main Menu</button>
+        <div id="report-loop"></div>`;
+      el.querySelector('#report-back').addEventListener('click', () => { location.href = '/'; });
+      await this.renderAnalyst();
+      return;
+    }
     let report = this.reportPatch ? await this.fetchStudioReport(this.reportPatch) : null;
     let demos = [];
     try {
