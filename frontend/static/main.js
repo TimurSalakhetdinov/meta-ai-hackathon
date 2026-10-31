@@ -8,7 +8,7 @@ import {
   QUESTS, RESOURCES, ALL_RESOURCES, RESOURCE_LABEL, TECHS, UPGRADABLE_TYPES,
 } from './game.js?v=76';
 import { Sfx, defaultMuted } from './audio.js?v=23';
-import { IsoRenderer } from './iso_renderer.js?v=68';
+import { IsoRenderer } from './iso_renderer.js?v=69';
 import { loadSprites, spriteUrl } from './sprites.js?v=69';
 import { TechTreeView } from './tech_tree.js?v=52';
 import { initOverlay } from './overlay.js';

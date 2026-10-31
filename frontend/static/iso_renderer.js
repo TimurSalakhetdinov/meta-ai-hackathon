@@ -1236,9 +1236,10 @@ export class IsoRenderer {
   // without overlap: horizontal step is 3/4 of the hex width, vertical
   // step is the full hex height, odd rows shifted by half a step.
   battleHexCenter(gx, gy) {
-    // The field starts below the battle HUD so no figure can leave the top
-    // of the screen, and ends with room for the bars below the feet.
-    return { x: 66 + gx * 56 + (gy % 2 ? 28 : 0), y: 188 + gy * 39 };
+    // The walkable field sits only on the dirt clearing of the painted
+    // backdrop: heroes deploy on the left sand, enemies on the right sand,
+    // and nobody stands on the river, bridge or grass.
+    return { x: 150 + gx * 48 + (gy % 2 ? 24 : 0), y: 215 + gy * 34 };
   }
 
   battleUnitPos(unit) {
@@ -1266,7 +1267,7 @@ export class IsoRenderer {
     if (game.battleReachableTiles) {
       for (const t of game.battleReachableTiles()) {
         const c = this.battleHexCenter(t.gx, t.gy);
-        out.push({ target_id: `battle_hex_${t.gx}_${t.gy}`, kind: 'battle_hex', x: c.x - 33, y: c.y - 21, w: 66, h: 42, affordable: true });
+        out.push({ target_id: `battle_hex_${t.gx}_${t.gy}`, kind: 'battle_hex', x: c.x - 25, y: c.y - 18, w: 50, h: 36, affordable: true });
       }
     }
     return out;
@@ -1321,7 +1322,7 @@ export class IsoRenderer {
     // active hero's reachable hexes glowing gold.
     const hexPath = (cx, cy) => {
       ctx.beginPath();
-      const pts = [[-37, 0], [-18, -23], [18, -23], [37, 0], [18, 23], [-18, 23]];
+      const pts = [[-25, 0], [-12, -17], [12, -17], [25, 0], [12, 17], [-12, 17]];
       pts.forEach(([dx, dy], i) => (i ? ctx.lineTo(cx + dx, cy + dy) : ctx.moveTo(cx + dx, cy + dy)));
       ctx.closePath();
     };
