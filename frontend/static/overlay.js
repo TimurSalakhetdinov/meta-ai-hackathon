@@ -31,8 +31,8 @@ export function initOverlay(ctx) {
     <div class="council-head">
       <div class="council-title"><span class="crest-gem">✦</span> AI Playtest Studio
         <small>Test a feature idea on AI playtesters before real players see it</small></div>
-      ${slide ? '<button class="council-close" id="council-close" aria-label="Close the studio">✕</button>' : ''}
       <button class="mgr-justplay" id="mgr-back" title="Back to the Game Manager menu">← Game Manager</button>
+      ${slide ? '<button class="council-close" id="council-close" aria-label="Close the studio">✕</button>' : ''}
     </div>
     <div class="pill" id="pill">
       <div class="pill-row"><span class="step" id="pill-step">-</span>
@@ -218,6 +218,16 @@ class Overlay {
         if (status && last) status.textContent = `Step ${last.bot_step_index}: ${last.thought || last.observation_summary || '…'}`;
       }
       if (data.summary) this.stuckEvents = data.summary.stuck_events;
+      // Watch mode has no local game for the pill, so feed it from the run.
+      if (this.ctx.params.watch && data.summary) {
+        const s = data.summary;
+        document.getElementById('pill-step').textContent = s.where_stuck || 'playing';
+        const stuck = document.getElementById('pill-stuck');
+        stuck.textContent = s.stuck_events ?? 0;
+        stuck.classList.toggle('hot', (s.stuck_events ?? 0) > 0);
+        document.getElementById('pill-ttfa').textContent = s.time_to_first_action_sec != null
+          ? `${Number(s.time_to_first_action_sec).toFixed(1)}s` : '-';
+      }
     } catch { /* server restarting; retry next tick */ }
   }
 
