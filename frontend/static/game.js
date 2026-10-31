@@ -1906,8 +1906,11 @@ export class Game {
       return { result: 'ui' };
     }
     if (target_id === 'btn_start_arena') {
+      // The practice arena (Train at Arena / Live Arena shortcut) keeps the
+      // original arena backdrop; campaign stages get their own.
       this.modal = null;
       this.startBattleArena('stage_1');
+      if (this.battleState) this.battleState.training = true;
       return { result: 'ui' };
     }
     if (target_id.startsWith('encounter_') || target_id.startsWith('stage_')) {

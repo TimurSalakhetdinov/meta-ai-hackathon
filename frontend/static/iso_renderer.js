@@ -1276,9 +1276,13 @@ export class IsoRenderer {
     const bs = game.battleState || game.battle || game.battleArena;
     if (!bs) return;
 
-    // 1. Background (arena image or canyon/megalith fallback)
-    if (this.sprites.battle_arena_bg?.img) {
-      ctx.drawImage(this.sprites.battle_arena_bg.img, 0, 0, VIEW_W, VIEW_H);
+    // 1. Background: one painted backdrop per campaign stage, matching its
+    // place on the province map; practice fights keep the original arena.
+    const stageN = Number((bs.stageId || 'stage_1').split('_')[1]) || 1;
+    const bgKey = bs.training ? 'battle_arena_bg' : `arena_bg_stage_${stageN}`;
+    const bgSpr = this.sprites[bgKey]?.img ? this.sprites[bgKey] : this.sprites.battle_arena_bg;
+    if (bgSpr?.img) {
+      ctx.drawImage(bgSpr.img, 0, 0, VIEW_W, VIEW_H);
     } else {
       const bgGrad = ctx.createLinearGradient(0, 0, 0, VIEW_H);
       bgGrad.addColorStop(0, '#4a2416');
