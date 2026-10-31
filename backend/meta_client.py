@@ -328,7 +328,7 @@ class MetaClient:
                                     "bucket": bucket, "images": 1, "estimated_cost_usd": cost},
                                    use_reserve=self.use_reserve)
                 try:
-                    boxes, vision_mode = self._call_sam_api(image_bytes), "sam_3_1"
+                    boxes, vision_mode = self._call_sam_api(image_bytes, rendered_targets), "sam_3_1"
                     cache.parent.mkdir(parents=True, exist_ok=True)
                     cache.write_text(json.dumps(boxes))
                 except Exception:
@@ -357,18 +357,62 @@ class MetaClient:
                         "target_id": t.get("target_id")})
         return out
 
-    def _call_sam_api(self, image_bytes: bytes) -> list[dict[str, Any]]:
-        """SAM 3.1 automatic mask generation. Returns [{bbox: [x, y, w, h], score}]."""
-        url = os.environ.get("META_SAM_URL")
-        if not url:
-            raise RuntimeError("META_SAM_URL is not set; use --mode stub or configure the SAM endpoint")
-        resp = self._client().post(url, headers=self._auth(), json={
-            "model": self.budget.sam_model_id, "task": "automatic_mask_generation",
-            "image": base64.b64encode(image_bytes).decode(),
-        })
-        resp.raise_for_status()
-        masks = resp.json().get("masks", [])
-        return [{"bbox": m["bbox"], "score": float(m.get("score", 1.0))} for m in masks]
+    @staticmethod
+    def _boxes_from_sam_text(text: str) -> list[dict[str, Any]]:
+        """Boxes out of SAM 3 output grammar: id<|box;x1=..;y1=..;x2=..;y2=..;w=..;h=..|>.
+        Source x2/y2 are inclusive, so width/height gain the final pixel."""
+        out = []
+        for m in re.finditer(r"<\|box;x1=(-?\d+);y1=(-?\d+);x2=(-?\d+);y2=(-?\d+);w=(\d+);h=(\d+)(?:;c=([\d.eE+-]+))?\|>", text or ""):
+            x1, y1, x2, y2 = (int(m.group(i)) for i in range(1, 5))
+            out.append({"bbox": [x1, y1, x2 - x1 + 1, y2 - y1 + 1],
+                        "score": float(m.group(7)) if m.group(7) else 1.0})
+        return out
+
+    def _call_sam_api(self, image_bytes: bytes, targets: Optional[list[dict[str, Any]]] = None) -> list[dict[str, Any]]:
+        """SAM 3.1 over the Responses API (streamed output_text grammar).
+
+        With rendered targets we send one object prompt per target box, so SAM
+        refines known UI elements; without them a generic phrase segments the
+        whole frame. Returns [{bbox: [x, y, w, h], score}]."""
+        base = os.environ.get("META_API_BASE_URL") or "https://api.meta.ai/v1"
+        url = os.environ.get("META_SAM_URL") or (base.rstrip("/") + "/responses")
+        with Image.open(io.BytesIO(image_bytes)) as im:
+            w, h = im.size
+        visible = [t for t in (targets or []) if t.get("visible", True) and t.get("w") and t.get("h")]
+        if visible:
+            prompt = "<0f>" + ",".join(
+                f"{i + 1}<|box;x1={int(t['x'])};y1={int(t['y'])};"
+                f"x2={int(t['x'] + t['w'] - 1)};y2={int(t['y'] + t['h'] - 1)};w={w};h={h}|>"
+                for i, t in enumerate(visible))
+        else:
+            prompt = "game interface element"
+        payload = {
+            "model": self.budget.sam_model_id, "stream": True,
+            "metadata": {"include_confidence": "true"},
+            "input": [{"type": "message", "role": "user", "content": [
+                {"type": "input_text", "text": prompt},
+                {"type": "input_image",
+                 "image_url": "data:image/png;base64," + base64.b64encode(image_bytes).decode()},
+            ]}],
+        }
+        text_parts: list[str] = []
+        with self._client().stream("POST", url, headers=self._auth(), json=payload) as resp:
+            resp.raise_for_status()
+            for line in resp.iter_lines():
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if not data or data == "[DONE]":
+                    continue
+                try:
+                    ev = json.loads(data)
+                except json.JSONDecodeError:
+                    continue
+                if ev.get("type") == "response.output_text.delta" and ev.get("delta"):
+                    text_parts.append(ev["delta"])
+                elif ev.get("type") == "response.output_text.done" and ev.get("text"):
+                    text_parts.append(ev["text"])
+        return self._boxes_from_sam_text("".join(text_parts))
 
     # ------------------------------------------------------- Muse Spark
     def cache_key(self, persona_id: str, phash: str, last_actions: list[Any]) -> str:

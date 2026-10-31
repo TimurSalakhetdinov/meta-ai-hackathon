@@ -50,6 +50,17 @@ class FeatureProposeRequest(BaseModel):
     preset_id: Optional[str] = None
 
 
+class BotHuntRequest(BaseModel):
+    persona: str = "impatient_newcomer"
+    variant: Literal["A", "B"] = "A"
+    seed: int = 42
+    speed: int = 4
+    play_minutes: int = 20
+    record_video: bool = False
+    mode: Literal["meta"] = "meta"
+    run_type: Literal["onboarding", "full_window"] = "full_window"
+
+
 class PlaytestRequest(BaseModel):
     patch_id: str
     mode: Literal["stub", "meta"] = "stub"
@@ -232,6 +243,78 @@ def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = No
     def personas():
         rows = json.loads((configs_dir / "personas.json").read_text())
         return [Persona.model_validate(r).model_dump() for r in rows]
+
+    # Bug hunting (Meta bot from the browser menu) ----------------------
+    bot_hunt_jobs: dict[str, dict[str, Any]] = {}
+    app.state.bot_hunt_jobs = bot_hunt_jobs
+    # Tests inject fakes here so no browser or model starts.
+    app.state.bot_hunt_fn = None
+    app.state.bot_hunt_analyze_fn = None
+
+    def _run_bot_hunt(job: dict[str, Any], req: BotHuntRequest) -> None:
+        """Playwright Meta-bot session; every artifact lands in runs/<run_id>/
+        (frames, bot steps with thoughts, telemetry, video, analysis)."""
+        from .bot_runner import SessionSpec, run_session_sync
+        run_id = job["run_id"]
+        spec = {"variant": req.variant, "persona_id": req.persona, "seed": req.seed,
+                "run_id": run_id, "run_type": req.run_type, "speed": req.speed,
+                "record_video": req.record_video}
+        try:
+            if app.state.bot_hunt_fn is not None:
+                result = app.state.bot_hunt_fn(spec)
+            else:
+                client = MetaClient(runs_dir=runs_dir, configs_dir=configs_dir, provider_mode="meta")
+                r = run_session_sync(SessionSpec(**spec), client=client,
+                                     configs_dir=configs_dir, runs_dir=runs_dir)
+                result = {"stop_reason": r.stop_reason, "steps": r.steps, "cost_usd": r.cost_usd,
+                          "error": r.error, "summary": r.summary}
+            d = runs_dir / run_id
+            artifacts = {
+                "frames": len(list((d / "frames").glob("step_*.png"))) if (d / "frames").exists() else 0,
+                "bot_steps": len(store.read_bot_steps(run_id)) if d.exists() else 0,
+                "events": len(store.read_events(run_id)) if d.exists() else 0,
+                "video": (d / "video.webm").exists(),
+            }
+            saved = {**result, "run_id": run_id, "persona": req.persona, "variant": req.variant,
+                     "seed": req.seed, "artifacts": artifacts}
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "bot_result.json").write_text(json.dumps(saved, indent=2))
+            job.update(status="done", stop_reason=result.get("stop_reason"),
+                       steps=result.get("steps"), cost_usd=result.get("cost_usd"),
+                       artifacts=artifacts)
+            if result.get("error"):
+                job.update(status="failed", error=result["error"])
+                return
+            # Save the analyst diagnosis next to the run for the Report step.
+            try:
+                if app.state.bot_hunt_analyze_fn is not None:
+                    app.state.bot_hunt_analyze_fn(run_id)
+                else:
+                    from .agents.analyst import analyze_run
+                    analyze_run(run_id, runs_dir=runs_dir, configs_dir=configs_dir,
+                                client=MetaClient(runs_dir=runs_dir, configs_dir=configs_dir,
+                                                  provider_mode="stub"))
+                job["analysis"] = True
+            except Exception as exc:  # the run itself is still saved and usable
+                job["analysis_error"] = str(exc)
+        except Exception as exc:  # surfaced in the menu, never silent
+            job.update(status="failed", error=f"{type(exc).__name__}: {exc}")
+
+    @app.post("/api/bot_hunt", status_code=202)
+    def start_bot_hunt(req: BotHuntRequest):
+        job_id = uuid.uuid4().hex[:12]
+        run_id = f"meta_{req.persona}_s{req.seed}_{job_id[:6]}"
+        job = bot_hunt_jobs[job_id] = {"job_id": job_id, "run_id": run_id, "status": "running",
+                                       "error": None}
+        threading.Thread(target=_run_bot_hunt, args=(job, req), daemon=True).start()
+        return job
+
+    @app.get("/api/bot_hunt/{job_id}")
+    def bot_hunt_status(job_id: str):
+        job = bot_hunt_jobs.get(job_id)
+        if job is None:
+            raise HTTPException(404, f"Unknown bot hunt {job_id}")
+        return job
 
     # Feature studio ---------------------------------------------------
     jobs: dict[str, dict[str, Any]] = {}
