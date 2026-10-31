@@ -100,6 +100,7 @@ class Mark:
     locked: bool = False
     affordable: bool = True
     selected: bool = False
+    done: bool = False
 
     @property
     def center(self) -> tuple[float, float]:
@@ -256,6 +257,14 @@ not a walkthrough and never tells you the order to do quests in):
 - Numbers along the top are your food, wood, stone and other supplies.
   Building cards show their price with the same icons; if you cannot afford
   one, you need more of that supply first.
+- Research is how your tribe learns: each study in the Research tree costs
+  supplies and research points (the flask number at the top), works at
+  once, and unlocks buildings, upgrades or a new Age. A locked study names
+  the study to learn first; follow that chain back. The quest card names
+  the study you need, so match its words to a node name in the tree. A new
+  Age is a study too: awakening an Age means researching that Age node
+  once its chain is learned and you can pay its cost. Stone comes from a
+  Stone Quarry; research points come from quest and campaign rewards.
 - A building or tree with a floating icon above it is ready: tap it to collect.
 - A greyed or locked card tells you what is missing under it: a named study
   means research that first, a supply means collect more of it.
@@ -398,6 +407,7 @@ class MetaClient:
             b["locked"] = bool(target.get("locked"))
             b["affordable"] = bool(target.get("affordable", True))
             b["selected"] = bool(target.get("selected"))
+            b["done"] = bool(target.get("done"))
             if b["highlighted"]:
                 b["score"] = max(float(b.get("score", 1.0)), 10.0)
         marks = select_marks(boxes)
@@ -421,7 +431,8 @@ class MetaClient:
             out.append({"bbox": [t["x"], t["y"], t["w"], t["h"]], "score": float(score),
                         "target_id": t.get("target_id"), "label": str(t.get("label") or ""),
                         "highlighted": bool(t.get("highlighted")), "locked": bool(t.get("locked")),
-                        "affordable": bool(t.get("affordable", True)), "selected": bool(t.get("selected"))})
+                        "affordable": bool(t.get("affordable", True)), "selected": bool(t.get("selected")),
+                        "done": bool(t.get("done"))})
         return out
 
     @staticmethod
@@ -620,6 +631,8 @@ class MetaClient:
                 out += " [not affordable yet]"
             if m.selected:
                 out += " [selected]"
+            if m.done:
+                out += " [already researched]"
             return out
         marks = "; ".join(
             f"#{m.mark_id} {m.label or 'unlabeled'} at ({m.center[0]:.0f},{m.center[1]:.0f}) "
@@ -904,7 +917,7 @@ def select_marks(boxes: list[dict[str, Any]], k: int = K_MARKS) -> list[Mark]:
                          float(b.get("score", 1.0)), b.get("target_id"),
                          str(b.get("label") or ""), bool(b.get("highlighted")),
                          bool(b.get("locked")), bool(b.get("affordable", True)),
-                         bool(b.get("selected"))))
+                         bool(b.get("selected")), bool(b.get("done"))))
         if len(kept) == k:
             break
     return kept

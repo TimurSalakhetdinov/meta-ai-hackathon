@@ -65,6 +65,15 @@ def test_mark_carries_locked_and_selected_state():
     assert marks["card_shelter"].selected
 
 
+def test_mark_carries_researched_state():
+    boxes = MetaClient._boxes_from_targets([
+        _target(target_id="tech_toolmaking", kind="tech", done=True,
+                label="Basic Toolmaking, already learned"),
+    ])
+    marks = select_marks(boxes)
+    assert marks and marks[0].done
+
+
 def test_short_thought_caps_at_ten_words():
     long = "I am tapping this empty plot again because nothing else on screen seems to work"
     out = short_thought(long)

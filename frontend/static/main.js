@@ -558,6 +558,9 @@ function renderedTargets(game, renderer, config) {
       t.locked = !st.done && !st.available;
       t.affordable = !!st.affordable;
       t.done = !!st.done;
+      // A node's name, effect and price are all written on it; the generic
+      // 60-char label cut the price off, so give research nodes room.
+      t.label = (el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 140);
       t.computed_salience = st.affordable ? 'high' : 'low';
     } else if (id === 'btn_research') {
       t.computed_salience = config.research_button_salience;
