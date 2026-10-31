@@ -184,6 +184,13 @@ export class StubBot {
     const decision = this.decide(targets, owned);
     // A target that was shown as unaffordable or locked was a wasted click.
     const t = decision.target;
+    // Shared rule: three actions on the same target without progress means
+    // try a different route; park that target for a while.
+    if (t) {
+      this.repeatCount = this.repeatTarget === t.target_id ? this.repeatCount + 1 : 1;
+      this.repeatTarget = t.target_id;
+      if (this.repeatCount >= 3) { this.avoid.set(t.target_id, 8); this.repeatCount = 0; }
+    }
     this.lastRejectedTarget = t && (!t.affordable || t.locked) ? t.target_id : null;
     for (const [id, n] of this.avoid) if (n <= 1) this.avoid.delete(id); else this.avoid.set(id, n - 1);
     if (this.lastRejectedTarget) this.avoid.set(this.lastRejectedTarget, 6);
@@ -462,6 +469,13 @@ export class StubBot {
         options.push({ t, w, why: 'research' });
       }
     }
+    // Shared rule: never idle twice in a row. A second unsure moment picks
+    // the strongest available action instead of waiting again.
+    if (this.prevWait && options.length) {
+      const best = options.reduce((a, b) => (b.w > a.w ? b : a), options[0]);
+      this.prevWait = false;
+      return { target: best.t, thought: optionThought(best, this), mood: 'curious' };
+    }
     const waitW = 0.15 + p.wait_when_unsure * 0.6;
     const total = options.reduce((s, o) => s + o.w, 0) + waitW;
     let roll = r() * total;
@@ -470,9 +484,11 @@ export class StubBot {
       if (roll <= 0) {
         const thought = optionThought(o, this);
         if (o.why === 'feature' && o.t.affordable) this.featureUses += 1;
+        this.prevWait = false;
         return { target: o.t, thought, mood: o.why === 'feature' ? (o.t.affordable ? 'curious' : 'frustrated') : undefined };
       }
     }
+    this.prevWait = true;
     return { target: null, thought: ready.length ? 'Let the workers gather a bit longer.' : 'Not sure what to do next. Watch the settlement for a moment.' };
   }
 
