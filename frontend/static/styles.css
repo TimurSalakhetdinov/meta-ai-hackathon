@@ -641,7 +641,11 @@ body.slide-dock #right-dock.anim.open { transition: transform .28s ease; }
 .live-frame { width: 100%; border-radius: 8px; border: 2px solid #d9bf85; margin: 4px 0 8px; }
 body.watch-mode #game-root, body.watch-mode #hud, body.watch-mode #build-bar,
 body.watch-mode #action-dock, body.watch-mode #advisor, body.watch-mode #quest-card { display: none !important; }
-body.watch-mode #right-dock { left: auto; right: 0; width: 600px; max-width: 96vw; }
+body.watch-mode #right-dock { left: auto; right: 0; width: 352px; }
+#watch-screen { position: absolute; left: 0; top: 0; width: 928px; height: 540px; background: #17110b; }
+#watch-screen img { width: 100%; height: 100%; object-fit: contain; display: block; }
+#watch-status { position: absolute; left: 10px; bottom: 10px; max-width: 90%; padding: 5px 12px; border-radius: 999px;
+  background: rgba(20,12,8,.78); color: #f3e2b8; font: 12px var(--ui); }
 .stepper { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; margin: 0 8px 5px; }
 .step-btn { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 4px 0 3px; cursor: pointer;
   font: 700 10px var(--serif); color: #e8d3a8; border-radius: 6px; background: linear-gradient(#7a5a3a, #5a3e22); border: 1px solid #2a1a0c; }

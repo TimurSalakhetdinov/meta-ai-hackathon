@@ -234,7 +234,8 @@ async function boot() {
   // Watch mode: no local game at all, only the bot's saved stream and frames.
   if (params.watch) {
     document.body.classList.add('watch-mode');
-    initOverlay({ dock: $('right-dock'), game: null, params, runId: params.runId, telemetry: null, provider: 'human' });
+    $('watch-screen').hidden = false;
+    initOverlay({ dock: $('right-dock'), game: null, params, runId: params.runId, telemetry: null, provider: 'meta' });
     return;
   }
   const provider = params.bot ? 'stub' : (PROVIDERS.includes(params.provider) ? params.provider : 'human');

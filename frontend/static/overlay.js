@@ -199,12 +199,16 @@ class Overlay {
         this.addStream(`<span class="t">#${s.bot_step_index}</span> <span class="thought">💭 ${esc(s.thought || s.observation_summary || '')}</span>${s.target_id ? ` <span class="t">→ ${esc(s.target_id)}</span>` : ''}`);
       }
       // Show the bot's latest screenshot so the hunt is visible, not just text.
-      const frame = document.getElementById('live-frame');
-      if (frame && data.bot_next > 0) {
+      if (data.bot_next > 0) {
         const n = String(data.bot_next - 1).padStart(3, '0');
         const src = `/api/runs/${encodeURIComponent(runId)}/artifacts/frames/step_${n}.png`;
-        if (!frame.src.endsWith(src)) frame.src = src;
-        frame.hidden = false;
+        for (const img of document.querySelectorAll('#live-frame, #watch-img')) {
+          if (!img.src.endsWith(src)) img.src = src;
+          img.hidden = false;
+        }
+        const last = (data.bot_steps || []).slice(-1)[0];
+        const status = document.getElementById('watch-status');
+        if (status && last) status.textContent = `Step ${last.bot_step_index}: ${last.thought || last.observation_summary || '…'}`;
       }
       if (data.summary) this.stuckEvents = data.summary.stuck_events;
     } catch { /* server restarting; retry next tick */ }
@@ -215,6 +219,14 @@ class Overlay {
     const el = document.getElementById('tab-live');
     const p = this.ctx.params;
     const botMode = !!p.bot;
+    if (p.watch) {
+      // Watching a server-run hunt: the play fills the main screen; here
+      // only the thought stream, no local bot controls.
+      el.innerHTML = `
+        <div class="section-h">Bot thoughts, live</div>
+        <div class="stream" id="stream"></div>`;
+      return;
+    }
     el.innerHTML = `
       <div class="row"><select class="persona" id="persona-select" aria-label="Persona"></select>
         <span class="badge" title="Map and policy seed">seed ${p.seed}</span></div>
