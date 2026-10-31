@@ -1603,7 +1603,7 @@ export class Game {
         + (retal ? `; retaliation ${retal}` : '; no retaliation')
         + (luckOn ? '; 12% chance of double damage' : '')
         + (moveCost ? `; move ${moveCost} then attack` : '')
-        + '. Tap the enemy again to confirm.',
+        + '.',
     };
   }
 
@@ -1991,12 +1991,14 @@ export class Game {
       const bs = this.battleState;
       if (!bs || !bs.active || !bs.selectedUnit) return { result: 'noop' };
       const idx = Number(target_id.slice('unit_enemy_'.length));
-      // First tap previews the complete legal attack; second tap confirms.
-      if (!bs.preview || bs.preview.enemyIdx !== idx || bs.preview.heroId !== bs.selectedUnit) {
-        bs.preview = { enemyIdx: idx, heroId: bs.selectedUnit, ...(this.battlePreview(bs.selectedUnit, idx) || { ok: false, text: 'No attack possible.' }) };
-        this.battleLog(bs, bs.preview.text);
+      // One tap attacks: the preview numbers ride the battle log, and an
+      // attack that cannot legally happen spends nothing and says why.
+      const preview = this.battlePreview(bs.selectedUnit, idx);
+      if (preview && !preview.ok) {
+        this.battleLog(bs, preview.text);
         return { result: 'ui' };
       }
+      if (preview) this.battleLog(bs, preview.text);
       bs.preview = null;
       return this.heroAttack(bs.selectedUnit, idx) ? { result: 'advanced' } : { result: 'noop' };
     }

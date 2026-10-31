@@ -1250,15 +1250,17 @@ export class IsoRenderer {
     const bs = game.battleState;
     if (!bs || !bs.active) return [];
     const out = [];
-    (bs.units || []).forEach((u) => {
-      if (!u.alive) return;
-      const p = this.battleUnitPos(u);
-      out.push({ target_id: `unit_hero_${u.id}`, kind: 'battle_hero', x: p.x - 48, y: p.y - 120, w: 96, h: 132, affordable: !!u.activeTurn });
-    });
+    // Enemies first: adjacent figures overlap, and a tap on the enemy must
+    // attack, not reselect the hero standing in front of it.
     (bs.enemies || []).forEach((e) => {
       if (!e.alive) return;
       const p = this.battleUnitPos(e);
       out.push({ target_id: `unit_enemy_${e.idx}`, kind: 'battle_enemy', x: p.x - 48, y: p.y - 120, w: 96, h: 132, affordable: true });
+    });
+    (bs.units || []).forEach((u) => {
+      if (!u.alive) return;
+      const p = this.battleUnitPos(u);
+      out.push({ target_id: `unit_hero_${u.id}`, kind: 'battle_hero', x: p.x - 48, y: p.y - 120, w: 96, h: 132, affordable: !!u.activeTurn });
     });
     // Glowing hexes the active hero can still reach this turn.
     if (game.battleReachableTiles) {
@@ -1405,9 +1407,9 @@ export class IsoRenderer {
         ctx.fillText(u.kind === 'hero' ? u.name.split(' ')[0] : u.name, p.x, p.y + 32);
       }
       if (u.kind === 'hero' && u.alive) {
+        // Second line: movement steps left this round (moveLeft of speed).
         roundRect(ctx, p.x - 30, p.y + 22, 60, 4, 2, 'rgba(15,12,10,0.75)');
-        roundRect(ctx, p.x - 29, p.y + 23, 58 * Math.min(1, (u.rage || 0) / 100), 2, 1,
-          (u.rage || 0) >= 100 ? '#ffd700' : '#f97316');
+        roundRect(ctx, p.x - 29, p.y + 23, 58 * Math.min(1, (u.moveLeft || 0) / (u.speed || 5)), 2, 1, '#7dd3fc');
       }
     };
     (bs.units || []).forEach((u) => drawUnit(u, this.battleUnitPos(u), `hero_${u.id}`, '#d97706'));
