@@ -1390,6 +1390,7 @@ export class Game {
       }
     }
     const strike = (target, mult = 1) => {
+      this.markAttack(bs, e);
       let dmg = Math.round(e.atk * mult * (0.85 + Math.random() * 0.3));
       if (e.buffAtk) { dmg = Math.round(dmg * (e.buffAtk === 2 ? 1.5 : 1.15)); e.buffAtk = 0; }
       if (e.sprite === 'enemy_puca' && e.form === 'goat') dmg = Math.round(dmg * 1.3);
@@ -1464,6 +1465,7 @@ export class Game {
       if (!heroes.some((u) => hexDistance(e, u) === 1)) {
         const target = heroes.reduce((best, u) => (u.hp < best.hp ? u : best), heroes[0]);
         if (shotHasCover(e, target)) {
+          this.markAttack(bs, e);
           let dmg = Math.max(1, Math.round(e.atk * 0.75 * (0.85 + Math.random() * 0.3)));
           if (target.defending) dmg = Math.max(1, Math.round(dmg * 0.7));
           target.hp = Math.max(0, target.hp - dmg);
@@ -1559,6 +1561,11 @@ export class Game {
     bs.lyraRage = l ? l.rage : 0;
   }
 
+  // The renderer flashes the unit's attack pose until this wall-clock mark.
+  markAttack(bs, unit) {
+    bs.attackFx = { kind: unit.kind, id: unit.id, idx: unit.idx, until: Date.now() + 650 };
+  }
+
   battleLog(bs, text) {
     bs.log.push(text);
     if (bs.log.length > 6) bs.log.shift();
@@ -1634,6 +1641,7 @@ export class Game {
     dmg = Math.max(1, dmg);
     enemy.hp = Math.max(0, enemy.hp - dmg);
     enemy.alive = enemy.hp > 0;
+    this.markAttack(bs, hero);
     hero.acted = true;
     hero.rage = Math.min(100, hero.rage + 25);
     bs.selectedUnit = null;
@@ -1793,6 +1801,7 @@ export class Game {
     }
     hero.rage = 0;
     hero.acted = true;
+    this.markAttack(bs, hero);
     bs.queue.shift();
     bs.selectedUnit = null;
     if (heroId === 'lyra') {

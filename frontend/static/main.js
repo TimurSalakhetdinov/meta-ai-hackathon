@@ -9,7 +9,7 @@ import {
 } from './game.js?v=76';
 import { Sfx, defaultMuted } from './audio.js?v=23';
 import { IsoRenderer } from './iso_renderer.js?v=68';
-import { loadSprites, spriteUrl } from './sprites.js?v=67';
+import { loadSprites, spriteUrl } from './sprites.js?v=68';
 import { TechTreeView } from './tech_tree.js?v=52';
 import { initOverlay } from './overlay.js';
 

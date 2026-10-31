@@ -1376,7 +1376,15 @@ export class IsoRenderer {
         ctx.ellipse(p.x, p.y + 8, 40, 14, 0, 0, Math.PI * 2);
         ctx.stroke();
       }
-      const spr = this.sprites[spriteKey];
+      // Striking units flash their attack pose for a moment.
+      let drawKey = spriteKey;
+      const fx = bs.attackFx;
+      if (fx && Date.now() < fx.until && fx.kind === u.kind
+          && (u.kind === 'hero' ? fx.id === u.id : fx.idx === u.idx)) {
+        const ak = `attack_${spriteKey}`;
+        if (this.sprites[ak]?.img) drawKey = ak;
+      }
+      const spr = this.sprites[drawKey];
       if (spr?.img) {
         // Cap the drawn height so tall sprites never leave the screen.
         const drawH = Math.min(spr.height, 100);
