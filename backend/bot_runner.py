@@ -163,8 +163,19 @@ class BotRunner:
                         sec_in_step=state["sim_elapsed_sec"] - step_entered_at,
                         scratchpad=memory.scratchpad)
                     corr = f"{spec.run_id}_b{i:03d}"
+                    # A chosen mark that SAM tied to a rendered target clicks
+                    # that target's exact DOM centre, not SAM's box centre:
+                    # box drift was landing clicks on neighbours (top bar).
+                    clicked_target = None
+                    mark = som.mark(decision.mark_id) if decision.action == "click_mark" else None
+                    if mark is not None and mark.target_id:
+                        clicked_target = next((t for t in targets
+                                               if t.get("target_id") == mark.target_id), None)
                     if decision.xy:
                         x, y = decision.xy
+                        if clicked_target:
+                            x = clicked_target["x"] + clicked_target["w"] / 2
+                            y = clicked_target["y"] + clicked_target["h"] / 2
                         await page.evaluate(
                             "([i, c, x, y]) => { window.__BOT_CTX__ = {bot_step_index: i, correlation_id: c};"
                             " window.__BOT_HOOKS__.ring(x, y, 'hit'); }", [i, corr, x, y])
@@ -172,10 +183,14 @@ class BotRunner:
                         await page.evaluate("() => { window.__BOT_CTX__ = {bot_step_index: null, correlation_id: null}; }")
                     else:
                         await page.wait_for_timeout(int(WAIT_SIM_SEC / spec.speed * 1000))
+                    rec = decision_record(decision, som)
+                    if clicked_target:
+                        rec["target_id"] = clicked_target["target_id"]
+                        rec["target_xy"] = [round(x, 1), round(y, 1)]
                     record = BotStepRecord(
                         run_id=spec.run_id, bot_step_index=i, correlation_id=corr,
                         sim_elapsed_sec=state["sim_elapsed_sec"], provider_mode=self.client.provider_mode,
-                        persona_id=spec.persona_id, **decision_record(decision, som))
+                        persona_id=spec.persona_id, **rec)
                     await http.post(f"/api/runs/{spec.run_id}/bot_steps", json=record.model_dump(mode="json"))
                     await page.evaluate("(r) => window.__BOT_HOOKS__.thought(r)", {
                         "index": i, "thought": decision.thought, "target_id": decision.target_id,

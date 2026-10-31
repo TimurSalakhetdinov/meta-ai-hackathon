@@ -231,6 +231,12 @@ class TelemetryClient {
 
 // ------------------------------------------------------------------ boot
 async function boot() {
+  // Watch mode: no local game at all, only the bot's saved stream and frames.
+  if (params.watch) {
+    document.body.classList.add('watch-mode');
+    initOverlay({ dock: $('right-dock'), game: null, params, runId: params.runId, telemetry: null, provider: 'human' });
+    return;
+  }
   const provider = params.bot ? 'stub' : (PROVIDERS.includes(params.provider) ? params.provider : 'human');
   const runId = params.runId || `run_${Date.now().toString(36)}_${params.variant}_s${params.seed}`;
   const qs = new URLSearchParams({ variant: params.variant });

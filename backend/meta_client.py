@@ -38,7 +38,7 @@ from .schemas import BudgetConfig, Persona
 
 ROOT = Path(__file__).resolve().parents[1]
 FRAME_W, FRAME_H = 960, 540
-K_MARKS = 8
+K_MARKS = 16
 MIN_MARK_GAP_PX = 16
 MIN_MARK_SIDE_PX = 10
 # Masks covering more than this share of the frame are background (sea, island).
@@ -313,7 +313,8 @@ class MetaClient:
             # Stub boxes follow the live game state, so they are never cached by frame hash.
             boxes, vision_mode = self._boxes_from_targets(rendered_targets or []), "stub_targets"
         else:
-            cache = self.sam_cache_dir / f"{phash}.json"
+            # v2: boxes carry the rendered target_id each SAM object maps to.
+            cache = self.sam_cache_dir / f"{phash}_v2.json"
             if cache.exists():
                 boxes, vision_mode, cache_hit = json.loads(cache.read_text()), "sam_3_1", True
                 self.ledger.log({"run_id": run_id, "bot_step_index": step_index, "provider_mode": mode,
@@ -358,14 +359,21 @@ class MetaClient:
         return out
 
     @staticmethod
-    def _boxes_from_sam_text(text: str) -> list[dict[str, Any]]:
+    def _boxes_from_sam_text(text: str, target_ids: Optional[list[str]] = None) -> list[dict[str, Any]]:
         """Boxes out of SAM 3 output grammar: id<|box;x1=..;y1=..;x2=..;y2=..;w=..;h=..|>.
-        Source x2/y2 are inclusive, so width/height gain the final pixel."""
+
+        The protocol reports each object under the id the request gave it, so
+        record N maps back to prompt N (our rendered target N). Source x2/y2
+        are inclusive, so width/height gain the final pixel."""
         out = []
-        for m in re.finditer(r"<\|box;x1=(-?\d+);y1=(-?\d+);x2=(-?\d+);y2=(-?\d+);w=(\d+);h=(\d+)(?:;c=([\d.eE+-]+))?\|>", text or ""):
-            x1, y1, x2, y2 = (int(m.group(i)) for i in range(1, 5))
-            out.append({"bbox": [x1, y1, x2 - x1 + 1, y2 - y1 + 1],
-                        "score": float(m.group(7)) if m.group(7) else 1.0})
+        for m in re.finditer(r"(\d+)\s*<\|box;x1=(-?\d+);y1=(-?\d+);x2=(-?\d+);y2=(-?\d+);w=(\d+);h=(\d+)(?:;c=([\d.eE+-]+))?\|>", text or ""):
+            oid = int(m.group(1))
+            x1, y1, x2, y2 = (int(m.group(i)) for i in range(2, 6))
+            box: dict[str, Any] = {"bbox": [x1, y1, x2 - x1 + 1, y2 - y1 + 1],
+                                   "score": float(m.group(8)) if m.group(8) else 1.0}
+            if target_ids and 1 <= oid <= len(target_ids):
+                box["target_id"] = target_ids[oid - 1]
+            out.append(box)
         return out
 
     def _call_sam_api(self, image_bytes: bytes, targets: Optional[list[dict[str, Any]]] = None) -> list[dict[str, Any]]:
@@ -379,9 +387,13 @@ class MetaClient:
         with Image.open(io.BytesIO(image_bytes)) as im:
             w, h = im.size
         visible = [t for t in (targets or []) if t.get("visible", True) and t.get("w") and t.get("h")]
-        # SAM accepts a limited set of object prompts: keep the 16 largest
-        # targets, clamped inside the frame.
-        visible.sort(key=lambda t: t["w"] * t["h"], reverse=True)
+        # SAM accepts a limited set of object prompts. Interactive targets
+        # (buttons, cards, techs) come first: a largest-first cut drowned
+        # them under 171 building pads, so the model never saw the buttons.
+        interactive = {"button", "build_card", "tech", "hud", "upgrade", "free_finish",
+                       "worker", "placement", "battle_enemy", "battle_hero", "battle_hex"}
+        visible.sort(key=lambda t: (0 if t.get("kind") in interactive else 1,
+                                    -(t["w"] * t["h"])))
         visible = visible[:16]
         if visible:
             def box(t):
@@ -389,7 +401,9 @@ class MetaClient:
                 y1 = max(0, min(h - 1, int(t['y'])))
                 x2 = max(x1, min(w - 1, int(t['x'] + t['w'] - 1)))
                 y2 = max(y1, min(h - 1, int(t['y'] + t['h'] - 1)))
-                return f"<|box;x1={x1};y1={y1};x2={x2};y2={y2};w={w};h={h}|>"
+                cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+                return (f"<|box;x1={x1};y1={y1};x2={x2};y2={y2};w={w};h={h}|>"
+                        f"<|point;x={cx};y={cy};w={w};h={h}|>")
             prompt = "<0f>" + ",".join(f"{i + 1}{box(t)}" for i, t in enumerate(visible))
         else:
             prompt = "game interface element"
@@ -421,7 +435,8 @@ class MetaClient:
                     text_parts.append(ev["delta"])
                 elif ev.get("type") == "response.output_text.done" and ev.get("text"):
                     text_parts.append(ev["text"])
-        return self._boxes_from_sam_text("".join(text_parts))
+        return self._boxes_from_sam_text("".join(text_parts),
+                                         [t.get("target_id") for t in visible])
 
     # ------------------------------------------------------- Muse Spark
     def cache_key(self, persona_id: str, phash: str, last_actions: list[Any]) -> str:
@@ -470,7 +485,7 @@ class MetaClient:
                                 "estimated_cost_usd": est, "entry_type": "reservation"},
                                use_reserve=self.use_reserve)
             text, usage = self._call_muse_api(self._messages(som, persona, last_actions, sec_in_step,
-                                                              scratchpad))
+                                                              scratchpad), structured=True)
             raw = parse_decision_json(text)
             raw["usage"] = usage
             cost = self.muse_cost(usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0))
@@ -523,8 +538,29 @@ class MetaClient:
                                          {"type": "image_url", "image_url": {"url": img}}]},
         ]
 
-    def _call_muse_api(self, messages: list[dict[str, Any]]) -> tuple[str, dict[str, int]]:
-        """OpenAI-compatible chat completion. Returns (content, usage)."""
+    # Structured Outputs schema for one playtester decision (the API docs
+    # prefer json_schema over the older json_object mode).
+    DECISION_FORMAT = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "playtester_decision", "strict": True,
+            "schema": {
+                "type": "object", "additionalProperties": False,
+                "properties": {
+                    "observation_summary": {"type": "string"},
+                    "thought": {"type": "string"},
+                    "player_mood": {"type": "string",
+                                    "enum": ["engaged", "curious", "confused", "frustrated", "bored"]},
+                    "action": {"type": "string", "enum": ["click_mark", "wait"]},
+                    "mark_id": {"type": ["integer", "null"]},
+                },
+                "required": ["observation_summary", "thought", "player_mood", "action", "mark_id"],
+            },
+        },
+    }
+
+    def _call_muse_api(self, messages: list[dict[str, Any]], *, structured: bool = False) -> tuple[str, dict[str, int]]:
+        """Chat completion per the Meta API reference. Returns (content, usage)."""
         if self.provider_mode == "open_weights":
             base, model = os.environ.get("OPEN_WEIGHTS_BASE_URL"), os.environ.get("OPEN_WEIGHTS_MODEL")
         else:
@@ -533,8 +569,10 @@ class MetaClient:
             raise RuntimeError("API base URL is not set; use --mode stub or configure the endpoint in .env")
         resp = self._client().post(base.rstrip("/") + "/chat/completions",
                                    headers=self._auth(meta=self.provider_mode == "meta"), json={
-            "model": model, "messages": messages, "max_tokens": self.budget.muse_max_output_tokens,
-            "response_format": {"type": "json_object"},
+            "model": model, "messages": messages,
+            # max_completion_tokens counts reasoning too (max_tokens is deprecated).
+            "max_completion_tokens": self.budget.muse_max_output_tokens,
+            "response_format": self.DECISION_FORMAT if structured else {"type": "json_object"},
             # Without this the reasoning model can spend the whole output
             # budget thinking and return empty content (observed in hunts).
             "reasoning_effort": "low",
@@ -686,6 +724,9 @@ def select_marks(boxes: list[dict[str, Any]], k: int = K_MARKS) -> list[Mark]:
             continue
         cx, cy = x + w / 2, y + h / 2
         if any(math.dist((cx, cy), m.center) < MIN_MARK_GAP_PX for m in kept):
+            continue
+        # SAM can report one object twice; the first (best score) wins.
+        if b.get("target_id") and any(m.target_id == b["target_id"] for m in kept):
             continue
         kept.append(Mark(len(kept) + 1, round(x, 1), round(y, 1), round(w, 1), round(h, 1),
                          float(b.get("score", 1.0)), b.get("target_id")))

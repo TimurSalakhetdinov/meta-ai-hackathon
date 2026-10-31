@@ -69,6 +69,7 @@ export function urlParams() {
     externalBot: p.get('bot') === 'external',
     playMin: Number(p.get('playmin')) || null,
     flow: p.get('flow') || null,
+    watch: p.get('watch') === '1',
     safety: Number(p.get('safety')) || 1,
     stuckSec: Number(p.get('stucksec')) || null,
     noTelemetry: p.get('telemetry') === '0',

@@ -120,7 +120,7 @@ class Overlay {
     this.renderLive();
     this.renderForge();
     if (ctx.telemetry) ctx.telemetry.listeners.push((ev) => this.onEvent(ev));
-    if (this.game) setInterval(() => this.poll(), POLL_MS);
+    if (this.game || ctx.params.watch) setInterval(() => this.poll(), POLL_MS);
     const start = { analyst: 'report', report: 'report', live: 'live' }[ctx.params.dock];
     if (start) this.showTab(start);
     else if (ctx.params.bot || ctx.params.externalBot || ctx.params.flow === 'bug') this.showTab('live');
@@ -756,7 +756,7 @@ class Overlay {
           </div>
           <details class="mgr-adv"><summary>Advanced settings</summary>
             <div class="mgr-fields">
-              <label class="mgr-field">Runner <select id="bug-runner"><option value="stub" selected>Scripted bot: no model cost</option><option value="meta">Meta bot (paid, via Playwright runner)</option></select></label>
+              <label class="mgr-field">Runner <select id="bug-runner"><option value="meta" selected>Meta bot (paid, via Playwright runner)</option><option value="stub">Scripted bot: no model cost</option></select></label>
               <label class="mgr-field">Safety limit <select id="bug-safety"><option value="1" selected>Play time, elapsed</option><option value="1.5">Play time + 50%</option><option value="2">Play time ×2</option></select></label>
               <label class="mgr-field">No-progress limit <select id="bug-stuck"><option value="30">30 sim seconds without progress</option><option value="60" selected>60 sim seconds without progress</option><option value="120">120 sim seconds without progress</option></select></label>
               <label class="mgr-field">Run video <span class="mgr-static"><input type="checkbox" id="bug-video"> Record video.webm</span></label>
@@ -949,7 +949,7 @@ class Overlay {
     }
     note.textContent = `Meta bot is hunting (run ${job.run_id}). Opening the watch screen…`;
     // Watch it play: the Studio live view streams its screenshots and thoughts.
-    setTimeout(() => { location.href = `/?run_id=${encodeURIComponent(job.run_id)}&flow=bug&dock=live&telemetry=0`; }, 1200);
+    setTimeout(() => { location.href = `/?run_id=${encodeURIComponent(job.run_id)}&flow=bug&dock=live&watch=1`; }, 1200);
     const tick = async () => {
       try { job = await (await fetch(`/api/bot_hunt/${job.job_id}`)).json(); } catch { /* retry */ }
       if (job.status === 'running') {
