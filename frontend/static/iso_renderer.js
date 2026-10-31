@@ -1256,18 +1256,21 @@ export class IsoRenderer {
     (bs.enemies || []).forEach((e) => {
       if (!e.alive) return;
       const p = this.battleUnitPos(e);
-      out.push({ target_id: `unit_enemy_${e.idx}`, kind: 'battle_enemy', x: p.x - 48, y: p.y - 120, w: 96, h: 132, affordable: true });
+      out.push({ target_id: `unit_enemy_${e.idx}`, kind: 'battle_enemy', x: p.x - 48, y: p.y - 120, w: 96, h: 132, affordable: true,
+                 label: `Enemy ${e.name || 'figure'}: tap to attack` });
     });
     (bs.units || []).forEach((u) => {
       if (!u.alive) return;
       const p = this.battleUnitPos(u);
-      out.push({ target_id: `unit_hero_${u.id}`, kind: 'battle_hero', x: p.x - 48, y: p.y - 120, w: 96, h: 132, affordable: !!u.activeTurn });
+      out.push({ target_id: `unit_hero_${u.id}`, kind: 'battle_hero', x: p.x - 48, y: p.y - 120, w: 96, h: 132, affordable: !!u.activeTurn,
+                 label: `Your hero ${u.name || ''}${u.activeTurn ? ' (your turn: tap a glowing hex to move, or an enemy to attack)' : ''}`.trim() });
     });
     // Glowing hexes the active hero can still reach this turn.
     if (game.battleReachableTiles) {
       for (const t of game.battleReachableTiles()) {
         const c = this.battleHexCenter(t.gx, t.gy);
-        out.push({ target_id: `battle_hex_${t.gx}_${t.gy}`, kind: 'battle_hex', x: c.x - 25, y: c.y - 18, w: 50, h: 36, affordable: true });
+        out.push({ target_id: `battle_hex_${t.gx}_${t.gy}`, kind: 'battle_hex', x: c.x - 25, y: c.y - 18, w: 50, h: 36, affordable: true,
+                   label: 'Glowing hex: tap to move here' });
       }
     }
     return out;
@@ -1391,9 +1394,29 @@ export class IsoRenderer {
       }
       const spr = this.sprites[drawKey];
       if (spr?.img) {
-        // Cap the drawn height so tall sprites never leave the screen.
-        const drawH = Math.min(spr.height, 100);
-        const drawW = spr.width * (drawH / spr.height);
+        // Draw from the image's real aspect at a readable height: the
+        // manifest width made twiggy guardians a few dozen pixels wide,
+        // invisible against the trees behind the field.
+        const drawH = 118;
+        const drawW = Math.min(120, drawH * (spr.img.naturalWidth / spr.img.naturalHeight));
+        // Dark silhouette behind the figure so it reads on any ground.
+        if (!spr._sil) {
+          const c = document.createElement('canvas');
+          c.width = spr.img.naturalWidth; c.height = spr.img.naturalHeight;
+          const g = c.getContext('2d');
+          g.drawImage(spr.img, 0, 0);
+          g.globalCompositeOperation = 'source-in';
+          g.fillStyle = 'rgba(20,10,4,0.85)';
+          g.fillRect(0, 0, c.width, c.height);
+          spr._sil = c;
+        }
+        if (u.alive) {
+          ctx.globalAlpha *= 0.55;
+          for (const [ox, oy] of [[-1.6, 0], [1.6, 0], [0, -1.6], [0, 1.6]]) {
+            ctx.drawImage(spr._sil, p.x - spr.anchor[0] * drawW + ox, p.y - spr.anchor[1] * drawH + oy, drawW, drawH);
+          }
+          ctx.globalAlpha /= 0.55;
+        }
         if (!u.alive) {
           // The fallen stay on the field, tipped over, instead of vanishing.
           ctx.save();

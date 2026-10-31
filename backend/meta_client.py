@@ -94,6 +94,12 @@ class Mark:
     score: float = 1.0
     # Only set for marks derived from rendered targets (stub or assist); never sent to the model.
     target_id: Optional[str] = None
+    # Player-visible label and tutorial-guide state from the rendered target.
+    label: str = ""
+    highlighted: bool = False
+    locked: bool = False
+    affordable: bool = True
+    selected: bool = False
 
     @property
     def center(self) -> tuple[float, float]:
@@ -110,6 +116,7 @@ class SomResult:
     estimated_cost_usd: float = 0.0
     annotated_png: bytes = b""
     annotated_path: Optional[Path] = None
+    clean_png: bytes = b""
 
     def mark(self, mark_id: Optional[int]) -> Optional[Mark]:
         return next((m for m in self.marks if m.mark_id == mark_id), None)
@@ -228,15 +235,49 @@ class CostLedger:
 
 # ------------------------------------------------------------------- client
 SYSTEM_PROMPT = """You are a playtester in a think-aloud usability study of a casual browser city-builder.
-Stay in character as the persona below. You see one 960x540 screenshot. Interactive regions are
-outlined and numbered #1..#{k}. Pick one numbered region to click, or wait if you would wait.
-Think aloud in the first person, one or two short sentences, in the persona's voice.
+Stay in character as the persona below. You see the same 960x540 screen twice: first with
+numbered regions, then clean. Interactive regions are numbered #1..#{k}.
+Pick one numbered region to click, or wait if you would wait.
+Think aloud in the first person: one sentence, maximum 10 words, in the persona's voice.
 
 Persona: {persona}
 
+Game literacy (what any kid picking up a game like this already knows; it is
+not a walkthrough and never tells you the order to do quests in):
+- A yellow pointing hand or finger, a glowing outline, or a pulsing highlight
+  means "tap here": the game is teaching you. Following it is normal play.
+  A mark tagged [tutorial guide] is that pointing-hand target. During
+  onboarding, follow it first, before your own ideas.
+- The advisor speech and the quest card name what you are trying to do right
+  now; a ticked line is finished. Read the game's written instructions on
+  screen before wandering, and do what they say.
+- When a line tells you what the Elder just said, that is his spoken
+  instruction: it matches the advisor text, so follow it the same way.
+- Numbers along the top are your food, wood, stone and other supplies.
+  Building cards show their price with the same icons; if you cannot afford
+  one, you need more of that supply first.
+- A building or tree with a floating icon above it is ready: tap it to collect.
+- A greyed or locked card tells you what is missing under it: a named study
+  means research that first, a supply means collect more of it.
+- To build: tap a building card first. Only then can you place: tap a mark
+  labelled "Empty ground: tap to place ... here". A see-through ghost of
+  the building appears with a green tick and a red cross beside it: tap
+  the green tick to confirm and really build it, the red cross cancels.
+  Tapping empty ground before picking a card does nothing. A bar or
+  countdown means work is in progress
+  and takes a little time; a speed button makes time pass faster.
+- When a Claim Reward button appears, the chapter is done and tapping it is
+  the expected next move.
+- Buttons along the bottom open Buildings, Heroes, Research and Campaign; an
+  X in a corner closes a menu again.
+- In a battle it is your turn when your fighter is lit up: tap a lit tile to
+  move, tap an enemy next to you (or in range) to hit it, End Turn passes.
+- If a tap seems to do nothing, something is usually unaffordable, locked, or
+  a popup is waiting to be closed first. Look around before repeating it.
+
 Answer with JSON only:
 {{"observation_summary": "what stands out on screen",
-  "thought": "first-person think-aloud: why you click this, or why you feel lost",
+  "thought": "first-person action note, maximum 10 words",
   "player_mood": "engaged|curious|confused|frustrated|bored",
   "action": "click_mark|wait",
   "mark_id": 3,
@@ -272,7 +313,17 @@ class MetaClient:
 
     @property
     def muse_model_id(self) -> str:
-        return self.budget.muse_model_id
+        return getattr(self, "_muse_model_override", None) or self.budget.muse_model_id
+
+    @property
+    def designer_model_id(self) -> str:
+        return self.budget.designer_model_id
+
+    def use_model(self, model_id: str) -> "MetaClient":
+        """Run this client's bot decisions on another Muse model (menu choice:
+        Muse Wonder instead of the default playtester model)."""
+        self._muse_model_override = model_id
+        return self
 
     @property
     def model_mode(self) -> str:
@@ -284,9 +335,10 @@ class MetaClient:
             return 0.0  # stub and open-weights calls do not touch the Meta credits
         return (self.budget.pricing_usd.get(model_id) or {}).get(key)
 
-    def muse_cost(self, prompt_tokens: int, completion_tokens: int) -> float:
-        pin = self._price(self.muse_model_id, "input_per_1m") or 0.0
-        pout = self._price(self.muse_model_id, "output_per_1m") or 0.0
+    def muse_cost(self, prompt_tokens: int, completion_tokens: int, model_id: Optional[str] = None) -> float:
+        model_id = model_id or self.muse_model_id
+        pin = self._price(model_id, "input_per_1m") or 0.0
+        pout = self._price(model_id, "output_per_1m") or 0.0
         return prompt_tokens * pin / 1e6 + completion_tokens * pout / 1e6
 
     def sam_cost(self) -> float:
@@ -314,7 +366,7 @@ class MetaClient:
             boxes, vision_mode = self._boxes_from_targets(rendered_targets or []), "stub_targets"
         else:
             # v2: boxes carry the rendered target_id each SAM object maps to.
-            cache = self.sam_cache_dir / f"{phash}_v2.json"
+            cache = self.sam_cache_dir / f"{phash}_v4.json"
             if cache.exists():
                 boxes, vision_mode, cache_hit = json.loads(cache.read_text()), "sam_3_1", True
                 self.ledger.log({"run_id": run_id, "bot_step_index": step_index, "provider_mode": mode,
@@ -336,6 +388,18 @@ class MetaClient:
                     if not (self.assist and rendered_targets is not None):
                         raise
                     boxes, vision_mode = self._boxes_from_targets(rendered_targets), "debug_fallback"
+        # Attach only player-visible semantics to SAM boxes. The model still
+        # chooses from the screenshot; it is not given a quest solution.
+        by_target = {t.get("target_id"): t for t in (rendered_targets or []) if t.get("target_id")}
+        for b in boxes:
+            target = by_target.get(b.get("target_id")) or {}
+            b["label"] = str(target.get("label") or "")
+            b["highlighted"] = bool(target.get("highlighted"))
+            b["locked"] = bool(target.get("locked"))
+            b["affordable"] = bool(target.get("affordable", True))
+            b["selected"] = bool(target.get("selected"))
+            if b["highlighted"]:
+                b["score"] = max(float(b.get("score", 1.0)), 10.0)
         marks = select_marks(boxes)
         annotated = draw_marks(image_bytes, marks)
         path = None
@@ -344,7 +408,7 @@ class MetaClient:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(annotated)
         return SomResult(phash, marks, vision_mode, cache_hit, round((time.perf_counter() - t0) * 1000, 1),
-                         cost, annotated, path)
+                         cost, annotated, path, clean_png=image_bytes)
 
     @staticmethod
     def _boxes_from_targets(targets: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -355,7 +419,9 @@ class MetaClient:
             score = SALIENCE_RANK.get(t.get("computed_salience"), 1) + (3 if t.get("highlighted") else 0) \
                 + (1 if t.get("affordable", True) and not t.get("locked") else 0)
             out.append({"bbox": [t["x"], t["y"], t["w"], t["h"]], "score": float(score),
-                        "target_id": t.get("target_id")})
+                        "target_id": t.get("target_id"), "label": str(t.get("label") or ""),
+                        "highlighted": bool(t.get("highlighted")), "locked": bool(t.get("locked")),
+                        "affordable": bool(t.get("affordable", True)), "selected": bool(t.get("selected"))})
         return out
 
     @staticmethod
@@ -376,6 +442,27 @@ class MetaClient:
             out.append(box)
         return out
 
+    @staticmethod
+    def _sam_prompt_targets(targets: list[dict[str, Any]], limit: int = 16) -> list[dict[str, Any]]:
+        """Targets SAM gets object prompts for, best first.
+
+        SAM accepts a limited set of prompts. Interactive targets come
+        first: a largest-first cut drowned them under 171 building pads,
+        so the model never saw the buttons. The Buildings toggle always
+        makes the cut, guided or not: it is the only way into the build
+        menu, and a bot that cannot see it cannot build at all.
+        """
+        interactive = {"button", "build_card", "tech", "hud", "upgrade", "free_finish",
+                       "worker", "placement", "battle_enemy", "battle_hero", "battle_hex"}
+        visible = [t for t in targets if t.get("visible", True) and t.get("w") and t.get("h")]
+        visible.sort(key=lambda t: (0 if t.get("highlighted") else 1,
+                                    0 if t.get("target_id") == "btn_buildings_toggle" else 1,
+                                    0 if t.get("kind") in interactive
+                                    or (t.get("kind") == "pad" and t.get("affordable")) else 1,
+                                    -SALIENCE_RANK.get(t.get("computed_salience"), 1),
+                                    -(t["w"] * t["h"])))
+        return visible[:limit]
+
     def _call_sam_api(self, image_bytes: bytes, targets: Optional[list[dict[str, Any]]] = None) -> list[dict[str, Any]]:
         """SAM 3.1 over the Responses API (streamed output_text grammar).
 
@@ -386,15 +473,7 @@ class MetaClient:
         url = os.environ.get("META_SAM_URL") or (base.rstrip("/") + "/responses")
         with Image.open(io.BytesIO(image_bytes)) as im:
             w, h = im.size
-        visible = [t for t in (targets or []) if t.get("visible", True) and t.get("w") and t.get("h")]
-        # SAM accepts a limited set of object prompts. Interactive targets
-        # (buttons, cards, techs) come first: a largest-first cut drowned
-        # them under 171 building pads, so the model never saw the buttons.
-        interactive = {"button", "build_card", "tech", "hud", "upgrade", "free_finish",
-                       "worker", "placement", "battle_enemy", "battle_hero", "battle_hex"}
-        visible.sort(key=lambda t: (0 if t.get("kind") in interactive else 1,
-                                    -(t["w"] * t["h"])))
-        visible = visible[:16]
+        visible = self._sam_prompt_targets(targets or [])
         if visible:
             def box(t):
                 x1 = max(0, min(w - 1, int(t['x'])))
@@ -457,9 +536,16 @@ class MetaClient:
         bucket: str = "playtester",
         sec_in_step: float = 0.0,
         scratchpad: Optional[dict[str, Any]] = None,
+        heard: Optional[str] = None,
+        visible_text: Optional[dict[str, str]] = None,
     ) -> MuseDecision:
         model_id, mode = self.muse_model_id, self.model_mode
         key = self.cache_key(persona.persona_id, som.frame_phash, last_actions)
+        if heard:
+            key = f"{key}_h{hashlib.sha256(heard.encode()).hexdigest()[:8]}"
+        if visible_text:
+            blob = json.dumps(visible_text, sort_keys=True)
+            key = f"{key}_t{hashlib.sha256(blob.encode()).hexdigest()[:8]}"
         cache = self.muse_cache_dir / f"{key}.json"
         base = {"run_id": run_id, "bot_step_index": step_index, "provider_mode": self.provider_mode,
                 "model_id": model_id, "model_mode": mode, "bucket": bucket}
@@ -485,7 +571,7 @@ class MetaClient:
                                 "estimated_cost_usd": est, "entry_type": "reservation"},
                                use_reserve=self.use_reserve)
             text, usage = self._call_muse_api(self._messages(som, persona, last_actions, sec_in_step,
-                                                              scratchpad), structured=True)
+                                                              scratchpad, heard, visible_text), structured=True)
             raw = parse_decision_json(text)
             raw["usage"] = usage
             cost = self.muse_cost(usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0))
@@ -510,7 +596,7 @@ class MetaClient:
         mood = raw.get("player_mood") if raw.get("player_mood") in MOODS else "engaged"
         return MuseDecision(
             observation_summary=str(raw.get("observation_summary", ""))[:400],
-            thought=str(raw.get("thought", ""))[:400],
+            thought=short_thought(raw.get("thought", "")),
             action=action, mark_id=mark.mark_id if mark else None, xy=xy,
             target_id=(mark.target_id if mark else raw.get("target_id")),
             player_mood=mood, cache_hit=cache_hit, latency_ms=latency,
@@ -521,22 +607,95 @@ class MetaClient:
         )
 
     def _messages(self, som: SomResult, persona: Persona, last_actions: list[dict[str, Any]],
-                  sec_in_step: float, scratchpad: Optional[dict[str, Any]] = None) -> list[dict[str, Any]]:
-        marks = "; ".join(f"#{m.mark_id} at ({m.center[0]:.0f},{m.center[1]:.0f}) size {m.w:.0f}x{m.h:.0f}"
-                          for m in som.marks)
+                  sec_in_step: float, scratchpad: Optional[dict[str, Any]] = None,
+                  heard: Optional[str] = None,
+                  visible_text: Optional[dict[str, str]] = None) -> list[dict[str, Any]]:
+        def tags(m: Mark) -> str:
+            out = ""
+            if m.highlighted:
+                out += " [tutorial guide]"
+            if m.locked:
+                out += " [locked]"
+            elif not m.affordable:
+                out += " [not affordable yet]"
+            if m.selected:
+                out += " [selected]"
+            return out
+        marks = "; ".join(
+            f"#{m.mark_id} {m.label or 'unlabeled'} at ({m.center[0]:.0f},{m.center[1]:.0f}) "
+            f"size {m.w:.0f}x{m.h:.0f}" + tags(m)
+            for m in som.marks)
         recent = "; ".join(a.get("summary", "") for a in last_actions[-3:]) or "none yet"
         text = (f"Marks: {marks or 'none'}.\nYour last actions: {recent}.\n"
                 f"Seconds since the tutorial step changed: {sec_in_step:.0f}.")
+        if visible_text:
+            words = [f"{k}: {v}" for k, v in visible_text.items() if v]
+            if words:
+                text += "\nWords written on screen (read them like a player): " + " | ".join(words)
+        if heard:
+            text += f'\nYou just heard the Elder say: "{heard}"'
         if scratchpad:
             text += (f"\nWorking memory: step={scratchpad.get('current_step')}, "
                      f"steps_here={scratchpad.get('steps_in_current_stage', 0)}, "
                      f"last_mood={scratchpad.get('last_mood', 'engaged')}.")
         img = "data:image/png;base64," + base64.b64encode(som.annotated_png).decode()
+        content: list[dict[str, Any]] = [{"type": "text", "text": text},
+                                         {"type": "image_url", "image_url": {"url": img}}]
+        if som.clean_png:
+            clean = "data:image/png;base64," + base64.b64encode(som.clean_png).decode()
+            content.append({"type": "image_url", "image_url": {"url": clean}})
         return [
             {"role": "system", "content": SYSTEM_PROMPT.format(k=K_MARKS, persona=persona.prompt)},
-            {"role": "user", "content": [{"type": "text", "text": text},
-                                         {"type": "image_url", "image_url": {"url": img}}]},
+            {"role": "user", "content": content},
         ]
+
+    # ------------------------------------------------------- voice (ASR)
+    def transcribe_audio(self, audio_path: Path, *, run_id: str = "voice") -> str:
+        """Muse Voice Transcribe on one Elder line; cached by file content.
+
+        The endpoint wants WAV, so mp3 lines are converted once with the
+        macOS `afconvert` (the dev machine has no ffmpeg). Returns the
+        transcript text; stub mode and failures return "" so the bot simply
+        hears nothing instead of the run crashing.
+        """
+        if self.provider_mode != "meta":
+            return ""
+        import subprocess
+        data = Path(audio_path).read_bytes()
+        key = hashlib.sha256(data).hexdigest()
+        cache_dir = self.muse_cache_dir / "transcripts"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache = cache_dir / f"{key}.json"
+        if cache.exists():
+            return json.loads(cache.read_text()).get("transcript", "")
+        wav = cache_dir / f"{key}.wav"
+        if not wav.exists():
+            conv = subprocess.run(
+                ["afconvert", "-f", "WAVE", "-d", "LEI16@24000", "-c", "1",
+                 str(audio_path), str(wav)], capture_output=True, text=True)
+            if conv.returncode != 0:
+                raise RuntimeError(f"afconvert failed for {audio_path.name}: {conv.stderr[:200]}")
+        base = os.environ.get("META_API_BASE_URL", "https://api.meta.ai/v1").rstrip("/")
+        with wav.open("rb") as fh:
+            resp = self._client().post(
+                base + "/asr/transcribe", headers=self._auth(meta=True),
+                files={"request": (None, json.dumps(
+                    {"mode": "PUSH_TO_TALK", "model": "muse-voice-transcribe-1.0",
+                     "audioEncoding": "WAV"}), "application/json"),
+                    "audio": (wav.name, fh, "audio/wav")}, timeout=120)
+        resp.raise_for_status()
+        body = resp.json()
+        text = (body.get("transcript") or "").strip()
+        if not text and body.get("turns"):
+            text = " ".join((t.get("transcript") or "").strip() for t in body["turns"]).strip()
+        dur_ms = body.get("audioDurationMs") or 0
+        self.ledger.log({"run_id": run_id, "provider_mode": "meta",
+                         "model_id": "muse-voice-transcribe-1.0", "model_mode": "standard",
+                         "bucket": "analysis", "entry_type": "call",
+                         "estimated_cost_usd": round(dur_ms / 3600000 * 0.18, 8)})
+        cache.write_text(json.dumps({"transcript": text, "audio": Path(audio_path).name,
+                                     "duration_ms": dur_ms}))
+        return text
 
     # Structured Outputs schema for one playtester decision (the API docs
     # prefer json_schema over the older json_object mode).
@@ -559,12 +718,13 @@ class MetaClient:
         },
     }
 
-    def _call_muse_api(self, messages: list[dict[str, Any]], *, structured: bool = False) -> tuple[str, dict[str, int]]:
+    def _call_muse_api(self, messages: list[dict[str, Any]], *, structured: bool = False,
+                       model_id: Optional[str] = None) -> tuple[str, dict[str, int]]:
         """Chat completion per the Meta API reference. Returns (content, usage)."""
         if self.provider_mode == "open_weights":
             base, model = os.environ.get("OPEN_WEIGHTS_BASE_URL"), os.environ.get("OPEN_WEIGHTS_MODEL")
         else:
-            base, model = os.environ.get("META_API_BASE_URL"), self.muse_model_id
+            base, model = os.environ.get("META_API_BASE_URL"), model_id or self.muse_model_id
         if not base:
             raise RuntimeError("API base URL is not set; use --mode stub or configure the endpoint in .env")
         resp = self._client().post(base.rstrip("/") + "/chat/completions",
@@ -591,31 +751,35 @@ class MetaClient:
         }
 
     def reason_json(self, system: str, user: str, *, stub_result: dict[str, Any], run_id: str = "agents",
-                    bucket: str = "analysis") -> dict[str, Any]:
-        """Text-only Muse Spark JSON reasoning for the analyst, designer and feature studio.
+                    bucket: str = "analysis", model_id: Optional[str] = None) -> dict[str, Any]:
+        """Text-only Muse JSON reasoning for the analyst, designer and feature studio.
 
         Stub mode returns `stub_result` unchanged. Live results are cached by prompt.
+        The designer passes `model_id=client.designer_model_id` (Muse Wonder);
+        analyst and playtester reasoning stay on the playtester model.
         """
+        model_id = model_id or self.muse_model_id
+        mode = model_mode(model_id)
         if self.provider_mode == "stub":
-            self.ledger.log({"run_id": run_id, "provider_mode": "stub", "model_id": self.muse_model_id,
-                             "model_mode": self.model_mode, "bucket": bucket})
+            self.ledger.log({"run_id": run_id, "provider_mode": "stub", "model_id": model_id,
+                             "model_mode": mode, "bucket": bucket})
             return stub_result
-        key = hashlib.sha256(json.dumps([self.muse_model_id, system, user]).encode()).hexdigest()
+        key = hashlib.sha256(json.dumps([model_id, system, user]).encode()).hexdigest()
         cache = self.muse_cache_dir / f"reason_{key}.json"
-        base = {"run_id": run_id, "provider_mode": self.provider_mode, "model_id": self.muse_model_id,
-                "model_mode": self.model_mode, "bucket": bucket}
+        base = {"run_id": run_id, "provider_mode": self.provider_mode, "model_id": model_id,
+                "model_mode": mode, "bucket": bucket}
         if cache.exists():
             self.ledger.log({**base, "cache_hit": True})
             return json.loads(cache.read_text())
         if self.cache_only:
             raise CacheMissError(f"Muse reasoning {key[:12]} not cached (META_CACHE_ONLY=1)")
-        est = self.muse_cost(self.budget.muse_est_input_tokens, self.budget.muse_max_output_tokens)
+        est = self.muse_cost(self.budget.muse_est_input_tokens, self.budget.muse_max_output_tokens, model_id)
         self.ledger.charge({**base, "estimated_cost_usd": est, "entry_type": "reservation"},
                            use_reserve=self.use_reserve)
         text, usage = self._call_muse_api([{"role": "system", "content": system},
-                                           {"role": "user", "content": user}])
+                                           {"role": "user", "content": user}], model_id=model_id)
         self.ledger.log({**base, **usage, "estimated_cost_usd": self.muse_cost(
-            usage["prompt_tokens"], usage["completion_tokens"]) - est, "entry_type": "settlement"})
+            usage["prompt_tokens"], usage["completion_tokens"], model_id) - est, "entry_type": "settlement"})
         result = parse_decision_json(text)
         cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_text(json.dumps(result))
@@ -703,6 +867,14 @@ class MetaClient:
 
 
 # ------------------------------------------------------------ helpers
+def short_thought(text: Any, max_words: int = 10) -> str:
+    """Keep spoken/displayed think-aloud to one short action note."""
+    words = str(text or "").split()
+    if len(words) <= max_words:
+        return " ".join(words)[:200]
+    return " ".join(words[:max_words]).rstrip(".,;:") + "…"
+
+
 def _ms(t0: float) -> float:
     return round((time.perf_counter() - t0) * 1000, 1)
 
@@ -729,7 +901,10 @@ def select_marks(boxes: list[dict[str, Any]], k: int = K_MARKS) -> list[Mark]:
         if b.get("target_id") and any(m.target_id == b["target_id"] for m in kept):
             continue
         kept.append(Mark(len(kept) + 1, round(x, 1), round(y, 1), round(w, 1), round(h, 1),
-                         float(b.get("score", 1.0)), b.get("target_id")))
+                         float(b.get("score", 1.0)), b.get("target_id"),
+                         str(b.get("label") or ""), bool(b.get("highlighted")),
+                         bool(b.get("locked")), bool(b.get("affordable", True)),
+                         bool(b.get("selected"))))
         if len(kept) == k:
             break
     return kept

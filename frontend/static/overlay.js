@@ -29,20 +29,17 @@ export function initOverlay(ctx) {
   const slide = document.body.classList.contains('slide-dock');
   dock.innerHTML = `
     <div class="council-head">
-      <div class="council-title"><span class="crest-gem">✦</span> AI Playtest Studio
-        <small>Test a feature idea on AI playtesters before real players see it</small></div>
+      <div class="council-title"><span class="crest-gem">✦</span> AI Playtest Studio</div>
       <button class="mgr-justplay" id="mgr-back" title="Back to the Main Menu">← Main Menu</button>
-      ${slide ? '<button class="council-close" id="council-close" aria-label="Close the studio">✕</button>' : ''}
     </div>
     <div class="pill" id="pill">
       <div class="pill-row"><span class="step" id="pill-step">-</span>
-        <span class="badge variant-${ctx.params.variant}" id="pill-variant" title="Game variant">${ctx.params.variant}${ctx.params.patchId ? ` · ${esc(ctx.params.patchId)}` : ''}</span>
         <span class="muted" title="Stuck events the server detected in this session">Stuck <span class="stuck-count" id="pill-stuck">0</span></span></div>
-      <div class="pill-row"><span class="checklist" id="pill-check"></span><span class="muted">First click <b id="pill-ttfa">-</b></span></div>
+      <div class="pill-row"><span class="checklist" id="pill-check"></span><span class="muted">First click <b id="pill-ttfa">-</b> · Left <b id="pill-left">-</b></span></div>
     </div>
     <nav class="stepper" id="stepper" aria-label="Studio steps">
       ${(ctx.params.flow === 'bug' || ctx.params.bot || ctx.params.externalBot)
-        ? '<button class="step-btn" data-bugstep="live"><b>1</b>Bug hunting</button><button class="step-btn" data-bugstep="report"><b>2</b>Report</button>'
+        ? '<button class="step-btn" data-bugstep="live"><b>1</b>Bug hunting</button><button class="step-btn" data-bugstep="report"><b>2</b>Report</button><button class="step-btn hunt-stop" id="hunt-stop"><b>■</b>Stop bot</button>'
         : STEPS.map(([n, label]) => `<button class="step-btn" data-step="${n}"><b>${n}</b>${label}</button>`).join('')}
     </nav>
     <div class="director" id="director">
@@ -65,12 +62,43 @@ export function initOverlay(ctx) {
       toggle.hidden = open;
     };
     toggle.addEventListener('click', () => setOpen(true));
-    document.getElementById('council-close').addEventListener('click', () => setOpen(false));
+    // Slim arrow on the Studio's left edge: closes it to the right.
+    const collapse = document.createElement('button');
+    collapse.className = 'dock-collapse';
+    collapse.textContent = '›';
+    collapse.title = 'Close the AI Playtest Studio';
+    collapse.setAttribute('aria-label', 'Close the AI Playtest Studio');
+    collapse.addEventListener('click', () => setOpen(false));
+    dock.appendChild(collapse);
     ui.setOpen = setOpen;
     if (ctx.params.dock || ctx.blocked) setOpen(true);
     // A plain visit opens on the Game Manager menu; links with a variant, patch or dock go straight in.
     const q = new URLSearchParams(location.search);
     if (!['variant', 'patch_id', 'dock', 'play'].some((k) => q.has(k))) ui.openManager();
+  } else if (ctx.params.watch || ctx.params.bot || ctx.params.externalBot) {
+    // Bot screens keep the fixed dock, but it closes the same way: the
+    // arrow hides it and the yellow AI Studio tab brings it back.
+    const toggle = document.createElement('button');
+    toggle.id = 'council-toggle';
+    toggle.innerHTML = '<span>✦</span> AI Studio';
+    toggle.title = 'Open the AI Playtest Studio';
+    toggle.hidden = true;
+    document.getElementById('app').appendChild(toggle);
+    const setBotOpen = (open) => {
+      document.body.classList.toggle('dock-closed', !open);
+      dock.style.display = open ? '' : 'none';
+      toggle.hidden = open;
+      const ws = document.getElementById('watch-screen');
+      if (ws) ws.style.width = open ? '' : '1280px';
+    };
+    toggle.addEventListener('click', () => setBotOpen(true));
+    const collapse = document.createElement('button');
+    collapse.className = 'dock-collapse';
+    collapse.textContent = '›';
+    collapse.title = 'Close the AI Playtest Studio';
+    collapse.setAttribute('aria-label', 'Close the AI Playtest Studio');
+    collapse.addEventListener('click', () => setBotOpen(false));
+    dock.appendChild(collapse);
   }
   return { update: () => ui.update() };
 }
@@ -102,12 +130,17 @@ class Overlay {
     document.getElementById('mgr-back')?.addEventListener('click', () => { location.href = '/'; });
     // Bug-hunt sessions get a two-step Studio: watch the hunt, then the Report.
     this.bugMode = !!(ctx.params.flow === 'bug' || ctx.params.bot || ctx.params.externalBot);
+    // A fresh bug hunt starts on step 1; Report unlocks only when it ends.
+    this.huntDone = false;
+    // Meta hunts run for the chosen play time (minutes x speed, in sim
+    // seconds); without a choice the runner's sim window applies.
+    if (ctx.params.watch) this.botBudgetSec = ctx.params.playMin
+      ? ctx.params.playMin * 60 * (ctx.params.speed || 1) : 1200;
     if (this.bugMode) {
-      const title = document.querySelector('.council-title small');
-      if (title) title.textContent = 'Bug hunting: watch the tester, then read the report';
       document.getElementById('live-link').hidden = true;
       document.querySelectorAll('#stepper [data-bugstep]').forEach((b) =>
         b.addEventListener('click', () => this.showTab(b.dataset.bugstep)));
+      document.getElementById('hunt-stop')?.addEventListener('click', () => this.stopHunt());
     }
 
     this.personasReady = fetch('/api/personas').then((r) => r.json()).catch(() => []).then((rows) => {
@@ -122,6 +155,8 @@ class Overlay {
     if (ctx.telemetry) ctx.telemetry.listeners.push((ev) => this.onEvent(ev));
     if (this.game || ctx.params.watch) setInterval(() => this.poll(), POLL_MS);
     const start = { analyst: 'report', report: 'report', live: 'live' }[ctx.params.dock];
+    // An explicit Report link means the hunt already finished elsewhere.
+    if (start === 'report') this.huntDone = true;
     if (start) this.showTab(start);
     else if (ctx.params.bot || ctx.params.externalBot || ctx.params.flow === 'bug') this.showTab('live');
   }
@@ -134,6 +169,8 @@ class Overlay {
   }
 
   showTab(name) {
+    // Bug hunting: no Report until the hunt has finished.
+    if (this.bugMode && name === 'report' && !this.huntDone) name = 'live';
     this.tab = name;
     for (const t of TABS) document.getElementById(`tab-${t}`).hidden = t !== name;
     document.querySelectorAll('#tab-forge [data-steps]').forEach((s) => {
@@ -150,11 +187,17 @@ class Overlay {
     const done = { 1: !!f, 2: ['approved', 'rejected'].includes(f?.status), 3: !!this.reportPatch, 4: false };
     const current = this.tab === 'report' ? 4 : this.tab === 'forge' ? this.step : 0;
     document.querySelectorAll('#stepper .step-btn').forEach((b) => {
+      if (b.id === 'hunt-stop') {
+        // Stop ends the hunt; the Report then generates and opens.
+        b.hidden = !!this.huntDone;
+        b.disabled = !!this.huntDone;
+        return;
+      }
       if (b.dataset.bugstep) {
         b.classList.toggle('current', this.tab === b.dataset.bugstep);
-        b.classList.toggle('done', b.dataset.bugstep === 'live' && this.tab === 'report');
-        b.classList.remove('locked');
-        b.disabled = false;
+        b.classList.toggle('done', b.dataset.bugstep === 'live' && this.huntDone);
+        b.classList.toggle('locked', b.dataset.bugstep === 'report' && !this.huntDone);
+        b.disabled = b.dataset.bugstep === 'report' && !this.huntDone;
         return;
       }
       const n = Number(b.dataset.step);
@@ -183,6 +226,38 @@ class Overlay {
     const stuck = document.getElementById('pill-stuck');
     stuck.textContent = this.stuckEvents;
     stuck.classList.toggle('hot', this.stuckEvents > 0);
+    this.setPillLeft(g.clock?.t);
+  }
+
+  // Bot voice (menu choice, off by default): speak the bot's think-aloud in
+  // its persona voice. Only the first sentence, so speech stays concise and
+  // lands near the click it describes (best at 1x).
+  async speakThought(text, personaId, force = false) {
+    if ((!force && !this.ctx.params.voice) || !text) return;
+    const line = String(text).split(/(?<=[.!?])\s/)[0].slice(0, 140).trim();
+    if (!line || line === this.lastSpoken) return;
+    this.lastSpoken = line;
+    try {
+      const r = await fetch('/api/speak', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: line, persona_id: personaId || this.ctx.params.persona || null }),
+      });
+      if (!r.ok) return;
+      const { url } = await r.json();
+      if (this.voiceAudio) { this.voiceAudio.pause(); this.voiceAudio.currentTime = 0; }
+      this.voiceAudio = new Audio(url);
+      this.voiceAudio.play().catch(() => {});
+    } catch { /* voice is decoration; never break the hunt */ }
+  }
+
+  // "Left m:ss" in the pill: how much bot play time remains (sim seconds).
+  setPillLeft(elapsedSec) {
+    const el = document.getElementById('pill-left');
+    if (!el) return;
+    if (this.huntDone) { el.textContent = 'done'; return; }
+    if (!this.botBudgetSec || elapsedSec == null) { el.textContent = '-'; return; }
+    const left = Math.max(0, Math.round(this.botBudgetSec - elapsedSec));
+    el.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
   }
 
   async poll() {
@@ -196,22 +271,33 @@ class Overlay {
       this.botNext = data.bot_next;
       for (const ev of data.events) if (ev.event_type === 'stuck') this.addStream(streamLine(ev), 'stuck-row');
       // When the hunt ends, the Report (diagnosis and proposed fixes) opens
-      // on its own: no hunting for the right tab.
-      if (this.ctx.params.watch && !this.reportOpened
-          && (data.summary || data.events.some((e) => e.event_type === 'session_end'))) {
+      // on its own: no hunting for the right tab. Note: /live returns a
+      // summary dict from the first event on, so "summary exists" must
+      // never count as "ended" - only session_end / session_ended does.
+      const ended = data.events.some((e) => e.event_type === 'session_end')
+        || data.summary?.session_ended === true;
+      if (this.ctx.params.watch && !this.reportOpened && ended) {
         this.reportOpened = true;
+        this.huntDone = true;
         this.showTab('report');
       }
       for (const s of data.bot_steps || []) {
         this.addStream(`<span class="t">#${s.bot_step_index}</span> <span class="thought">💭 ${esc(s.thought || s.observation_summary || '')}</span>${s.target_id ? ` <span class="t">→ ${esc(s.target_id)}</span>` : ''}`);
+        this.speakThought(s.thought || s.observation_summary, s.persona_id);
       }
       // Show the bot's latest screenshot so the hunt is visible, not just text.
       if (data.bot_next > 0) {
         const n = String(data.bot_next - 1).padStart(3, '0');
         const src = `/api/runs/${encodeURIComponent(runId)}/artifacts/frames/step_${n}.png`;
         for (const img of document.querySelectorAll('#live-frame, #watch-img')) {
+          img.onload = () => {
+            img.hidden = false;
+            const loading = document.getElementById('watch-loading');
+            if (loading) loading.hidden = true;
+          };
+          img.onerror = () => { img.hidden = true; };
           if (!img.src.endsWith(src)) img.src = src;
-          img.hidden = false;
+          else if (img.complete && img.naturalWidth) img.onload();
         }
         const last = (data.bot_steps || []).slice(-1)[0];
         const status = document.getElementById('watch-status');
@@ -227,6 +313,7 @@ class Overlay {
         stuck.classList.toggle('hot', (s.stuck_events ?? 0) > 0);
         document.getElementById('pill-ttfa').textContent = s.time_to_first_action_sec != null
           ? `${Number(s.time_to_first_action_sec).toFixed(1)}s` : '-';
+        this.setPillLeft(s.sim_elapsed_sec);
       }
     } catch { /* server restarting; retry next tick */ }
   }
@@ -282,9 +369,12 @@ class Overlay {
                    xy: t ? [t.x + t.w / 2, t.y + t.h / 2] : null };
         },
         ring: ringAt,
-        thought: ({ index, thought, target_id, mood }) => this.addStream(
-          `<span class="t">#${index}</span>${mood ? ` <span class="mood mood-${esc(mood)}">${esc(mood)}</span>` : ''}`
-          + ` <span class="thought">\u{1F4AD} ${esc(thought)}</span>${target_id ? ` <span class="t">→ ${esc(target_id)}</span>` : ''}`),
+        thought: ({ index, thought, target_id, mood }) => {
+          this.addStream(
+            `<span class="t">#${index}</span>${mood ? ` <span class="mood mood-${esc(mood)}">${esc(mood)}</span>` : ''}`
+            + ` <span class="thought">\u{1F4AD} ${esc(thought)}</span>${target_id ? ` <span class="t">→ ${esc(target_id)}</span>` : ''}`);
+          this.speakThought(thought);
+        },
       };
     }
 
@@ -293,11 +383,14 @@ class Overlay {
       const persona = this.personas.find((x) => x.persona_id === select.value) || null;
       this.bot = new StubBot({
         runId: this.ctx.runId, persona, seed: p.seed,
-        maxSimSec: p.playMin ? p.playMin * 60 * (p.speed || 1) * (p.safety || 1) : null,
+        maxSimSec: (this.botBudgetSec = p.playMin ? p.playMin * 60 * (p.speed || 1) * (p.safety || 1) : 420),
         stuckSec: p.stuckSec,
         clickAt: this.ctx.clickAt, ringAt: ringAt,
-        onThought: ({ index, thought, target_id }) => this.addStream(
-          `<span class="t">#${index}</span> <span class="thought">\u{1F4AD} ${esc(thought)}</span>${target_id ? ` <span class="t">→ ${esc(target_id)}</span>` : ''}`),
+        onThought: ({ index, thought, target_id }) => {
+          this.addStream(
+            `<span class="t">#${index}</span> <span class="thought">\u{1F4AD} ${esc(thought)}</span>${target_id ? ` <span class="t">→ ${esc(target_id)}</span>` : ''}`);
+          this.speakThought(thought);
+        },
         onDone: async (reason) => {
           this.game.end(reason);
           await this.ctx.telemetry.drain();
@@ -306,6 +399,7 @@ class Overlay {
           const stopBtn = document.getElementById('bot-stop');
           if (stopBtn) stopBtn.hidden = true;
           window.__BOT_DONE__ = reason;
+          this.huntDone = true;
           this.addStream(`<span class="thought">🏁 Bot finished: ${esc(reason)}. Opening the Report step…</span>`);
           this.showTab('report');
         },
@@ -342,13 +436,30 @@ class Overlay {
     } catch { /* recording is optional; the run continues without it */ }
   }
 
+  // Stop bot (stepper, right side): ends the hunt now. The run is saved,
+  // its Report is generated and opens (in-tab bot via onDone, Meta bot via
+  // the watch poll seeing the ended session).
+  async stopHunt() {
+    const btn = document.getElementById('hunt-stop');
+    if (btn) btn.disabled = true;
+    if (this.bot && !this.bot.done) { this.bot.finish('stopped_by_tester'); return; }
+    try {
+      const r = await fetch(`/api/runs/${encodeURIComponent(this.ctx.runId)}/stop_hunt`, { method: 'POST' });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      this.addStream('<span class="thought">■ Stop requested: the bot is ending the hunt; the Report opens when the run is saved.</span>');
+    } catch (err) {
+      if (btn) btn.disabled = false;
+      this.addStream(`<span class="thought">Could not stop the bot (${esc(err.message)}).</span>`);
+    }
+  }
+
   toggleBot() {
     if (!this.bot) {
       const url = new URL(location.href);
       url.searchParams.set('bot', '1');
       url.searchParams.set('persona', document.getElementById('persona-select').value);
       url.searchParams.delete('run_id');
-      if (!url.searchParams.has('speed')) url.searchParams.set('speed', '4');
+      if (!url.searchParams.has('speed')) url.searchParams.set('speed', '1');
       location.href = url.toString();
       return;
     }
@@ -407,7 +518,8 @@ class Overlay {
         return;
       }
     }
-    const analysisRun = this.ctx.params.analysisRun || (this.ctx.params.variant === 'A' ? this.ctx.runId : null);
+    const analysisRun = this.bugMode ? this.ctx.runId
+      : (this.ctx.params.analysisRun || (this.ctx.params.variant === 'A' ? this.ctx.runId : null));
     const fetchAnalysis = async (runId) => {
       try {
         const r = await fetch(`/api/runs/${encodeURIComponent(runId)}/analysis`);
@@ -416,11 +528,34 @@ class Overlay {
       return null;
     };
     if (analysisRun) analysis = await fetchAnalysis(analysisRun);
-    if (!analysis && analysisRun !== 'demo_play_A') analysis = await fetchAnalysis('demo_play_A');
+    // Bug hunting reports on the current run only: never fall back to a
+    // recorded demo run (its frames show an old build of the game).
+    if (!analysis && !this.bugMode && analysisRun !== 'demo_play_A') analysis = await fetchAnalysis('demo_play_A');
+    if (this.bugMode && !analysis && this.huntDone && !this.analyzeRequested) {
+      // The hunt ended but nobody wrote the diagnosis yet (in-tab bot):
+      // ask the analyst (Meta model) once, then redraw with its report.
+      this.analyzeRequested = true;
+      el.innerHTML = '<div class="note">Muse Spark is writing the diagnosis for this run…</div>';
+      try {
+        const r = await fetch(`/api/runs/${encodeURIComponent(this.ctx.runId)}/analyze`, { method: 'POST' });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        this.analyzeRequested = false;
+        await this.renderAnalyst();
+        return;
+      } catch (err) {
+        el.innerHTML = `<div class="note">The analyst could not write the report (${esc(err.message)}). Reload to try again.</div>`;
+        return;
+      }
+    }
     const frame = analysis?.stuck_frame_url
       ? `<img src="${esc(analysis.stuck_frame_url)}" alt="Stuck frame">`
-      : 'No stuck frame yet.<br>The analyst agent (SAM 3.1 + Muse Spark) writes one per stalled run.';
+      : (analysis ? 'Screenshot unavailable for this run/step.'
+        : 'Diagnosis pending: the hunt is still running or the analyst has not written this run\'s report yet.');
     const vs = analysis?.visual_salience;
+    const samMissing = this.bugMode && analysis && !vs
+      ? '<div class="note">Visual analysis unavailable for this frame.</div>' : '';
+    const noStuck = this.bugMode && analysis && !analysis.where_stuck
+      ? '<div class="note"><b>No stuck event detected in observed coverage.</b> The frame below is the last available frame of this run, not a stuck frame.</div>' : '';
     const vsNote = vs?.distractor_to_goal_area_ratio
       ? `<div class="note">SAM 3.1 visual salience: <code>${esc(vs.distractor_target)}</code> (${Math.round(vs.distractor_area_px)} px², ${esc(vs.distractor_salience || 'n/a')}) is <b>${esc(vs.distractor_to_goal_area_ratio)}x</b> larger than <code>${esc(vs.goal_target)}</code> (${Math.round(vs.goal_area_px)} px², ${esc(vs.goal_salience || 'n/a')}).</div>`
       : '';
@@ -431,9 +566,10 @@ class Overlay {
     const quotes = (analysis?.playtester_quotes || []).map((q) => `<div class="quote"><span class="mood mood-${esc(q.player_mood || 'engaged')}">${esc(q.player_mood || 'engaged')}</span> “${esc(q.thought)}” <span class="note">step ${esc(q.bot_step_index)} · ${esc(q.trigger)}</span></div>`).join('');
     if (this.bugMode) {
       el.innerHTML = `
+        ${noStuck}
         <div class="section-h">Stuck frame</div>
         <div class="frame-box">${frame}</div>
-        ${vsNote}
+        ${vsNote}${samMissing}
         <div class="section-h">Diagnosis</div>
         ${diagnosis}
         ${hyps ? `<div class="section-h">Proposed fixes</div>${hyps}` : ''}
@@ -682,6 +818,8 @@ class Overlay {
     const note = document.getElementById('summon-note');
     const personas = this.personas.map((x) => x.persona_id).filter((id) => this.chosen.has(id));
     const ab = this.abSettings || JSON.parse(localStorage.getItem('doe_ab_settings') || 'null') || {};
+    this.abSpeakVoice = !!ab.speakVoice;
+    this.spokenAgentThoughts = new Set();
     const base = ab.seedSet === 'varied' ? 100 : 42;
     const seeds = ab.seedSet === 'single' ? [42]
       : Array.from({ length: ab.runs || 5 }, (_, i) => base + i);
@@ -689,7 +827,9 @@ class Overlay {
       const r = await fetch('/api/feature_studio/playtest', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ patch_id: this.feature.patch_id, personas, mode: ab.runner || 'stub',
-          seeds, run_type: ab.runType || 'full_window', speed: ab.speed || 4 }),
+          bot_model: ab.botModel || 'wonder', hear_voice: !!ab.hearVoice,
+          record_video: !!ab.recordVideo,
+          seeds, run_type: ab.runType || 'full_window', speed: ab.speed || 1 }),
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
@@ -712,6 +852,7 @@ class Overlay {
         return;
       }
       const failed = this.job.status === 'failed' ? this.job.error : null;
+      this.renderAgents(personas, this.job.sessions || []);
       this.job = null;
       this.updateSummon();
       if (failed) { note.textContent = `Playtest failed: ${failed}`; return; }
@@ -731,6 +872,13 @@ class Overlay {
       const x = byId[pid] || {};
       const runs = ['A', 'B'].map((a) => [a, arm(pid, a)]);
       const said = runs.map(([, r]) => r).reverse().find((r) => r?.thought);
+      if (this.abSpeakVoice && said?.thought) {
+        const key = `${said.run_id}:${said.thought}`;
+        if (!this.spokenAgentThoughts.has(key)) {
+          this.spokenAgentThoughts.add(key);
+          this.speakThought(said.thought, pid, true);
+        }
+      }
       const chip = ([a, r]) => {
         const st = r ? r.state : 'waiting';
         const mark = { done: '✓', playing: '…', waiting: '·' }[st];
@@ -748,6 +896,23 @@ class Overlay {
   // ------------------------------------------------------ Game Manager
   // First screen (Astra design): two jobs only, Find bugs and Compare a
   // feature, plus a quiet Just play. Each job opens a prefilled setup.
+  wireBugReports(el, list) {
+    list.querySelectorAll('[data-bug]').forEach((btn) => btn.addEventListener('click', async () => {
+      const rep = await (await fetch(`/api/runs/${encodeURIComponent(btn.dataset.bug)}/bug-report`)).json();
+      list.innerHTML = `<div class="mgr-summary"><b>Bug hunt report</b><br>
+        Run: <code>${esc(rep.run_id)}</code> · ${esc(rep.status || '')}<br>
+        Stuck at: <code>${esc(rep.where_stuck || 'none')}</code> · stuck events: ${esc(rep.stuck_events ?? 0)}<br>
+        Diagnosis: ${esc(rep.diagnosis || 'pending')}</div>
+        <div class="mgr-actions"><button class="game-btn amber" id="mgr-bug-open">Open full report</button>
+        <button class="mgr-justplay" id="mgr-exp-back">Back to list</button></div>`;
+      document.getElementById('mgr-bug-open').addEventListener('click', () => {
+        location.href = `/?run_id=${encodeURIComponent(rep.run_id)}&flow=bug&dock=analyst`;
+      });
+      document.getElementById('mgr-exp-back').addEventListener('click',
+        () => el.querySelector('#mgr-to-history').click());
+    }));
+  }
+
   async openManager() {
     const app = document.getElementById('app');
     const el = document.createElement('div');
@@ -756,7 +921,7 @@ class Overlay {
     el.innerHTML = `
       <div class="mgr-panel">
         <div class="mgr-screen" id="mgr-home">
-          <div class="mgr-head"><div class="mgr-game">DAWN OF EMPIRES</div><h1>Game Manager</h1>
+          <div class="mgr-head"><div class="mgr-game">DAWN OF EMPIRES</div><h1>Playtest Menu</h1>
             <p>What would you like to test?</p></div>
           <div class="mgr-two">
             <div class="mgr-choice">
@@ -770,8 +935,16 @@ class Overlay {
               <button class="game-btn amber" id="mgr-to-compare">Set up A/B test</button>
             </div>
           </div>
+          <button class="game-btn amber mgr-history-btn" id="mgr-to-history">Past experiments &amp; reports</button>
           <button class="game-btn amber mgr-play-btn" id="mgr-skip">Just play</button>
           <div class="mgr-foot">Testing never changes the live game automatically.</div>
+        </div>
+
+        <div class="mgr-screen" id="mgr-history" hidden>
+          <button class="mgr-back-top" data-back>Back</button>
+          <div class="mgr-head"><h1>Past experiments &amp; reports</h1>
+            <p>Saved A/B experiments with their frozen plans and verdicts.</p></div>
+          <div id="mgr-exp-list"><div class="note">Loading…</div></div>
         </div>
 
         <div class="mgr-screen" id="mgr-bug" hidden>
@@ -779,22 +952,22 @@ class Overlay {
           <div class="mgr-fields">
             <label class="mgr-field">Persona <select id="bug-persona"></select></label>
             <label class="mgr-field">Game version <select id="bug-version"><option value="A" selected>Current game: A</option><option value="B">Variant B (approved feature, if any)</option></select></label>
-            <label class="mgr-field">Speed <select id="bug-speed"><option value="4" selected>×4</option><option value="2">×2</option><option value="1">×1</option></select></label>
+            <label class="mgr-field">Speed <select id="bug-speed"><option value="4">×4</option><option value="2">×2</option><option value="1" selected>×1</option></select></label>
             <label class="mgr-field">Play time <select id="bug-playtime"><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="20" selected>20 minutes</option><option value="30">30 minutes</option></select></label>
             <label class="mgr-field">Seed <select id="bug-seed"><option value="" selected>Automatic (42)</option><option value="42">42</option><option value="43">43</option><option value="44">44</option><option value="7">7</option><option value="123">123</option></select></label>
           </div>
-          <details class="mgr-adv"><summary>Advanced settings</summary>
-            <div class="mgr-fields">
-              <label class="mgr-field">Runner <select id="bug-runner"><option value="meta" selected>Meta bot (paid, via Playwright runner)</option><option value="stub">Scripted bot: no model cost</option></select></label>
-              <label class="mgr-field">Safety limit <select id="bug-safety"><option value="1" selected>Play time, elapsed</option><option value="1.5">Play time + 50%</option><option value="2">Play time ×2</option></select></label>
-              <label class="mgr-field">No-progress limit <select id="bug-stuck"><option value="30">30 sim seconds without progress</option><option value="60" selected>60 sim seconds without progress</option><option value="120">120 sim seconds without progress</option></select></label>
-              <label class="mgr-field">Run video <span class="mgr-static"><input type="checkbox" id="bug-video"> Record video.webm</span></label>
-            </div>
-          </details>
+          <div class="mgr-fields">
+            <label class="mgr-field">Runner <select id="bug-runner"><option value="meta">Meta bot · Muse Spark (paid)</option><option value="meta_wonder" selected>Meta bot · Muse Wonder (paid, stronger)</option><option value="stub">Scripted bot: no model cost</option></select></label>
+            <label class="mgr-field">Safety limit <select id="bug-safety"><option value="1" selected>Play time, elapsed</option><option value="1.5">Play time + 50%</option><option value="2">Play time ×2</option></select></label>
+            <label class="mgr-field">No-progress limit <select id="bug-stuck"><option value="30">30 sim seconds without progress</option><option value="60" selected>60 sim seconds without progress</option><option value="120">120 sim seconds without progress</option></select></label>
+            <label class="mgr-field">Run video <span class="mgr-static"><input type="checkbox" id="bug-video"> Record video.webm</span></label>
+            <label class="mgr-field">Bot ears <span class="mgr-static"><input type="checkbox" id="bug-hear"> Bot hears the Elder (Muse Voice Transcribe)</span></label>
+            <label class="mgr-field">Bot voice <span class="mgr-static"><input type="checkbox" id="bug-voice"> Bot speaks its thoughts (ElevenLabs)</span></label>
+          </div>
           <div class="mgr-note">The scripted bot drives this tab with real clicks. The Meta bot runs on the server and saves its whole run (screenshots, thoughts, telemetry) for the report.</div>
           <div class="mgr-actions">
-            <button class="game-btn amber" id="bug-start">Start bug hunt</button>
             <button class="mgr-justplay" data-back>Back</button>
+            <button class="game-btn amber" id="bug-start">Start bug hunt</button>
           </div>
         </div>
 
@@ -805,7 +978,7 @@ class Overlay {
           <div class="mgr-section">Or describe your own idea</div>
           <div class="mgr-own">
             <textarea id="mgr-prompt" rows="2" maxlength="600" placeholder="A bonfire after the tutorial that costs 15 wood and gives 30 food."></textarea>
-            <button class="game-btn emerald" id="mgr-forge">✦ Ask Muse Spark</button>
+            <button class="game-btn emerald" id="mgr-forge">✦ Ask Muse Wonder</button>
           </div>
           <div class="mgr-note" id="mgr-note"></div>
           <div id="mgr-draft"></div>
@@ -813,15 +986,18 @@ class Overlay {
             <label class="mgr-field">Persona <select id="cmp-persona"></select></label>
             <label class="mgr-field">Seed set <select id="cmp-seeds"><option value="baseline" selected>Saved baseline, paired (42…)</option><option value="varied">Varied seeds, paired (100…)</option><option value="single">Single seed 42, paired</option></select></label>
             <label class="mgr-field">Runs per variant <select id="cmp-runs"><option value="1">1</option><option value="3">3</option><option value="5" selected>5</option><option value="10">10</option></select></label>
-            <label class="mgr-field">Runner <select id="cmp-runner"><option value="stub" selected>Scripted bot: no model cost</option><option value="meta">Meta bot (paid, Muse Spark)</option></select></label>
-            <label class="mgr-field">Speed <select id="cmp-speed"><option value="1">×1</option><option value="2">×2</option><option value="4" selected>×4</option></select></label>
+            <label class="mgr-field">Runner <select id="cmp-runner"><option value="stub">Scripted bot: no model cost</option><option value="meta">Meta bot · Muse Spark (paid)</option><option value="meta_wonder" selected>Meta bot · Muse Wonder (paid, stronger)</option></select></label>
+            <label class="mgr-field">Speed <select id="cmp-speed"><option value="1" selected>×1</option><option value="2">×2</option><option value="4">×4</option></select></label>
             <label class="mgr-field">Run length <select id="cmp-runlength"><option value="full_window" selected>Full journey: Chapters I–VI</option><option value="onboarding">Onboarding only: Chapter I</option></select></label>
             <label class="mgr-field">Play time per run <select id="cmp-playtime"><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="20" selected>20 minutes</option><option value="30">30 minutes</option></select></label>
+            <label class="mgr-field">Bot ears <span class="mgr-static"><input type="checkbox" id="cmp-hear"> Bot hears the Elder (Muse Voice Transcribe)</span></label>
+            <label class="mgr-field">Bot voice <span class="mgr-static"><input type="checkbox" id="cmp-voice"> Bot speaks its thoughts (ElevenLabs)</span></label>
+            <label class="mgr-field">Run video <span class="mgr-static"><input type="checkbox" id="cmp-video"> Record video.webm</span></label>
           </div>
           <div class="mgr-summary" id="cmp-summary">A · Current game<br>B · Current game + (pick a feature above)<br><br>Success target: More runs complete onboarding<br>Guardrails: No new blockers or worse chapter completion</div>
           <div class="mgr-actions">
-            <button class="game-btn amber" id="cmp-start">Run comparison</button>
             <button class="mgr-justplay" data-back>Back</button>
+            <button class="game-btn amber" id="cmp-start">Run comparison</button>
           </div>
         </div>
       </div>`;
@@ -832,11 +1008,54 @@ class Overlay {
     el.querySelector('#mgr-skip').addEventListener('click', () => this.closeManager(false));
     el.querySelector('#mgr-to-bug').addEventListener('click', () => show('mgr-bug'));
     el.querySelector('#mgr-to-compare').addEventListener('click', () => show('mgr-compare'));
+    el.querySelector('#mgr-to-history').addEventListener('click', async () => {
+      show('mgr-history');
+      const list = document.getElementById('mgr-exp-list');
+      try {
+        const [bugReports, rows] = await Promise.all([
+          fetch('/api/bug_reports').then((r) => r.json()).catch(() => []),
+          fetch('/api/experiments').then((r) => r.json()).catch(() => []),
+        ]);
+        const fmtDate = (iso) => {
+          const d = new Date(iso);
+          return Number.isNaN(d.getTime()) ? '' : d.toLocaleString([], { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        };
+        const bugs = (bugReports || []).map((b) => `<button class="mgr-exp" data-bug="${esc(b.run_id)}">
+          <b>Bug hunt: ${esc(b.persona || 'tester')}</b><span>${esc(b.status || '')} · stuck at ${esc(b.where_stuck || 'none')} · ${esc(fmtDate(b.saved_at || b.generated_at))}</span></button>`).join('');
+        if (bugs) {
+          const bugsHtml = `<div class="mgr-section">Bug hunt reports</div>${bugs}`;
+          list.innerHTML = bugsHtml + '<div class="mgr-section">A/B experiments</div>'
+            + (rows.length ? '' : '<div class="note">No saved experiments yet.</div>');
+          if (!rows.length) { this.wireBugReports(el, list); return; }
+        } else if (!rows.length) {
+          list.innerHTML = '<div class="note">No saved reports yet. Bug hunts and A/B tests you run are saved here.</div>';
+          return;
+        }
+        list.innerHTML += rows.map((x) => `<button class="mgr-exp" data-exp="${esc(x.experiment_id)}">
+          <b>${esc(x.title || x.experiment_id)}</b><span>${esc(x.status)} · patch ${esc(x.patch_id)} rev ${esc(x.patch_revision)} · ${esc(fmtDate(x.created_at))}</span></button>`).join('');
+        list.querySelectorAll('[data-exp]').forEach((b) => b.addEventListener('click', async () => {
+          const rep = await (await fetch(`/api/experiments/${encodeURIComponent(b.dataset.exp)}/report`)).json();
+          const v = rep.verdict || {};
+          list.innerHTML = `<div class="mgr-summary"><b>${esc(rep.title || rep.experiment_id)}</b><br>
+            Status: ${esc(rep.status || '')} · Patch: <code>${esc(rep.patch_id || '')}</code><br>
+            Primary metric: <code>${esc(rep.primary_metric || '')}</code><br>
+            Verdict: <b>${esc(v.verdict || 'incomplete')}</b> (${esc(v.reason || '')})<br>
+            Pairs: ${esc(v.n ?? 0)}/${esc(v.planned_pairs ?? 0)} · A ${esc(v.a_rate ?? '-')} · B ${esc(v.b_rate ?? '-')}</div>
+            <div class="mgr-actions"><button class="mgr-justplay" id="mgr-exp-back">Back to list</button></div>`;
+          document.getElementById('mgr-exp-back').addEventListener('click',
+            () => el.querySelector('#mgr-to-history').click());
+        }));
+        this.wireBugReports(el, list);
+      } catch (err) {
+        list.innerHTML = `<div class="note">Could not load reports (${esc(err.message)}).</div>`;
+      }
+    });
     el.querySelectorAll('[data-back]').forEach((b) => b.addEventListener('click', () => show('mgr-home')));
     el.querySelector('#mgr-forge').addEventListener('click', () => this.managerForge());
     el.querySelector('#bug-start').addEventListener('click', () => {
       const persona = document.getElementById('bug-persona').value;
-      if (document.getElementById('bug-runner').value === 'meta') {
+      const bugRunner = document.getElementById('bug-runner').value;
+      if (bugRunner.startsWith('meta')) {
         this.startMetaBotHunt({
           persona, variant: document.getElementById('bug-version').value,
           seed: Number(document.getElementById('bug-seed').value || 42),
@@ -844,6 +1063,9 @@ class Overlay {
           play_minutes: Number(document.getElementById('bug-playtime').value),
           record_video: !!document.getElementById('bug-video')?.checked,
           mode: 'meta',
+          bot_model: bugRunner === 'meta_wonder' ? 'wonder' : 'spark',
+          hear_voice: !!document.getElementById('bug-hear')?.checked,
+          speak_voice: !!document.getElementById('bug-voice')?.checked,
         });
         return;
       }
@@ -859,6 +1081,8 @@ class Overlay {
       url.searchParams.set('stucksec', document.getElementById('bug-stuck').value);
       if (document.getElementById('bug-video')?.checked) url.searchParams.set('video', '1');
       else url.searchParams.delete('video');
+      if (document.getElementById('bug-voice')?.checked) url.searchParams.set('voice', '1');
+      else url.searchParams.delete('voice');
       url.searchParams.set('playmin', document.getElementById('bug-playtime').value);
       url.searchParams.delete('run_id');
       location.href = url.toString();
@@ -874,9 +1098,14 @@ class Overlay {
         persona: document.getElementById('cmp-persona').value,
         seedSet: document.getElementById('cmp-seeds').value,
         runs: Number(document.getElementById('cmp-runs').value),
-        runner: document.getElementById('cmp-runner').value,
+        runner: document.getElementById('cmp-runner').value === 'meta_wonder' ? 'meta'
+          : document.getElementById('cmp-runner').value,
+        botModel: document.getElementById('cmp-runner').value === 'meta_wonder' ? 'wonder' : 'spark',
         speed: Number(document.getElementById('cmp-speed').value),
         runType: document.getElementById('cmp-runlength').value,
+        hearVoice: !!document.getElementById('cmp-hear')?.checked,
+        speakVoice: !!document.getElementById('cmp-voice')?.checked,
+        recordVideo: !!document.getElementById('cmp-video')?.checked,
       };
       localStorage.setItem('doe_ab_settings', JSON.stringify(this.abSettings));
       this.managerPick(this.comparePreset);
@@ -886,7 +1115,7 @@ class Overlay {
     try { status = await (await fetch('/api/feature_studio/status')).json(); } catch { /* stub */ }
     this.museMode = status.meta_ready ? 'meta' : 'stub';
     document.getElementById('mgr-note').textContent = status.meta_ready
-      ? `Your idea goes live to the designer agent (${status.muse_model_id}). It takes about half a minute.`
+      ? `Your idea goes live to the designer agent (${status.designer_model_id || 'Muse Wonder'}). It takes about half a minute.`
       : 'No META_API_KEY in .env, so the offline stub designer drafts your idea.';
 
     await this.personasReady;
@@ -978,7 +1207,7 @@ class Overlay {
     }
     note.textContent = `Meta bot is hunting (run ${job.run_id}). Opening the watch screen…`;
     // Watch it play: the Studio live view streams its screenshots and thoughts.
-    setTimeout(() => { location.href = `/?run_id=${encodeURIComponent(job.run_id)}&flow=bug&dock=live&watch=1`; }, 1200);
+    setTimeout(() => { location.href = `/?run_id=${encodeURIComponent(job.run_id)}&flow=bug&dock=live&watch=1&playmin=${settings.play_minutes || 20}&speed=${settings.speed || 1}${settings.speak_voice ? '&voice=1' : ''}`; }, 1200);
     const tick = async () => {
       try { job = await (await fetch(`/api/bot_hunt/${job.job_id}`)).json(); } catch { /* retry */ }
       if (job.status === 'running') {
@@ -1038,6 +1267,26 @@ class Overlay {
     this.showTab(this.tab === 'report' ? 'forge' : this.tab);
   }
 
+  // Saved experiment (frozen plan) verdict, above the legacy patch report.
+  async renderExperiment() {
+    const el = document.getElementById('report-exp');
+    if (!el) return;
+    try {
+      const rows = await (await fetch('/api/experiments')).json();
+      if (!rows.length) { el.innerHTML = ''; return; }
+      const rep = await (await fetch(`/api/experiments/${encodeURIComponent(rows[0].experiment_id)}/report`)).json();
+      const v = rep.verdict || {};
+      const inv = (rep.run_inventory || []).map((r) =>
+        `<div class="note"><code>${esc(r.variant)}</code> ${esc(r.persona_id)} seed ${esc(r.game_seed)} · run <code>${esc(r.run_id)}</code>${r.selected ? '' : ' · excluded'}</div>`).join('');
+      el.innerHTML = `<div class="section-h">Experiment: ${esc(rep.title || rep.experiment_id)}</div>
+        <div class="note">Status: <b>${esc(rep.status || '')}</b> · Patch <code>${esc(rep.patch_id || '')}</code> rev ${esc(rep.patch_revision ?? '')} · Primary metric: <code>${esc(rep.primary_metric || '')}</code></div>
+        <div class="verdict ${v.verdict === 'better' ? 'positive' : v.verdict === 'worse' ? 'hurts' : 'mixed'}">${esc((v.verdict || 'incomplete').toUpperCase())}</div>
+        <div class="takeaway">${esc(v.reason || '')}</div>
+        <div class="note">Pairs ${esc(v.n ?? 0)}/${esc(v.planned_pairs ?? 0)} · both succeed ${esc(v.both_succeed ?? 0)} · both fail ${esc(v.both_fail ?? 0)} · B-only ${esc(v.n01_b_only ?? 0)} · A-only ${esc(v.n10_a_only ?? 0)} · McNemar p ${esc(v.mcnemar_exact_p ?? '-')}</div>
+        ${inv ? `<div class="section-h">Run inventory</div>${inv}` : ''}`;
+    } catch { el.innerHTML = ''; }
+  }
+
   // ------------------------------------------------------ Council Report
   async fetchStudioReport(pid) {
     try {
@@ -1052,8 +1301,8 @@ class Overlay {
     if (this.bugMode) {
       // Bug hunting report: the run's diagnosis only. No feature patches,
       // no approval gate, no A/B tables.
-      el.innerHTML = `<button class="back-menu-btn" id="report-back">← Back to Main Menu</button>
-        <div id="report-loop"></div>`;
+      el.innerHTML = `<div id="report-loop"></div>
+        <button class="back-menu-btn" id="report-back">← Back to Main Menu</button>`;
       el.querySelector('#report-back').addEventListener('click', () => { location.href = '/'; });
       await this.renderAnalyst();
       return;
@@ -1068,7 +1317,9 @@ class Overlay {
       // No playtest has run yet: no report to show, and no recorded demo
       // report as a placeholder. The Report step unlocks after step 3.
       el.innerHTML = `<div class="note">No playtest has run yet. Run a playtest at step 3 first; its report opens here. Below: the analyst's diagnosis of the onboarding.</div>
+        <div id="report-exp"></div>
         <div id="report-loop"></div><div class="section-h">Onboarding fix A/B</div><div id="report-ab"></div>`;
+      await this.renderExperiment();
       await this.renderAnalyst();
       await this.renderAb();
       return;
@@ -1112,9 +1363,10 @@ class Overlay {
       <div class="demo-pills"><span class="demo-pills-label">Reports:</span>${demos.map((d) => `
         <button class="demo-pill${d.patch_id === report.patch_id ? ' active' : ''}${d.source === 'live' ? ' live' : ''}" data-pid="${esc(d.patch_id)}"
           title="${esc(d.verdict_label)} · ${esc(d.title)} (${esc(d.patch_id)}${d.source === 'live' ? ', this session' : ', recorded demo'})">${esc(d.short)} ${pillIcon[d.verdict_key] || ''}${d.source === 'live' ? ' ●' : ''}</button>`).join('')}</div>
-      ${demoIds.has(report.patch_id) ? '<div class="note">Recorded demo report. Pick a feature in the Game Manager or step 1 to playtest it live.</div>' : ''}` : '';
+      ${demoIds.has(report.patch_id) ? '<div class="note">Recorded demo report. Pick a feature in the Playtest Menu or step 1 to playtest it live.</div>' : ''}` : '';
     el.innerHTML = `
       ${pills}
+      <div id="report-exp"></div>
       <div class="verdict ${esc(report.key)}">${esc(report.label)}</div>
       <div class="takeaway">${esc(report.takeaway)}</div>
       <div class="plaques">${plaque('Tutorial finished', p.onboarding)}${plaque('Stuck events', p.stuck, false)}${plaque('Reached Stone Age', p.stone_age)}${plaque('Mean score', p.score)}</div>
@@ -1137,6 +1389,7 @@ class Overlay {
       this.reportPatch = b.dataset.pid;
       this.renderReport();
     }));
+    await this.renderExperiment();
     el.querySelector('#replay-btn').addEventListener('click', () => {
       // Stub runs need dev=1, and the replay then labels them STUB / DEV MODE.
       const dev = report.provider_mode === 'meta' ? '' : '&dev=1';

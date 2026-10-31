@@ -269,6 +269,9 @@ class BudgetConfig(BaseModel):
     per_session_cap_usd: float = 2.0
     buckets_usd: dict[str, float]
     muse_model_id: str = "muse-spark-1.3-contributor"
+    # The designer agent (feature ideas and reworks) uses the stronger model;
+    # playtesters and the analyst stay on muse_model_id.
+    designer_model_id: str = "muse-wonder-1.0"
     sam_model_id: str = "sam-3.1"
     worker_pool_size: int = Field(5, ge=1, le=8)
     muse_cache_in_experiments: bool = False
@@ -304,3 +307,6 @@ class Persona(BaseModel):
     description: str
     prompt: str
     stub_policy: dict[str, Any] = Field(default_factory=dict)
+    # ElevenLabs voice used when the bot speaks its think-aloud in the Studio.
+    voice_id: str = ""
+    voice_name: str = ""

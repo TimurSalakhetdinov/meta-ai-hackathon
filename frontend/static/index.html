@@ -4,12 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=1280">
   <title>Dawn of Empires</title>
-  <link rel="stylesheet" href="/static/styles.css?v=16">
+  <link rel="stylesheet" href="/static/styles.css?v=28">
 </head>
 <body>
   <div id="app">
     <div id="watch-screen" hidden>
-      <img id="watch-img" alt="The bot playing, latest screenshot">
+      <img id="watch-img" alt="The bot playing, latest screenshot" hidden>
+      <div id="watch-loading">Starting the bot…<small>The first screenshot appears in a few seconds.</small></div>
       <div id="watch-status">Meta bot is playing…</div>
     </div>
     <main id="game-root" aria-label="Settlement">
@@ -59,11 +60,11 @@
         </div>
         <ul id="quest-objectives" class="q-objectives"></ul>
         <div class="q-bar"><div id="quest-fill" class="q-fill"></div></div>
-        <button id="btn_claim_quest" class="gold-btn claim" data-target="btn_claim_quest" title="Claim Reward" hidden>Claim Reward</button>
+        <button id="btn_claim_quest" class="game-btn amber claim" data-target="btn_claim_quest" title="Claim Reward" hidden>Claim Reward</button>
       </section>
 
       <footer id="build-bar">
-        <button id="btn_buildings_toggle" class="buildings-toggle" title="Show or hide the buildings menu"><img class="d-ico-img" src="/static/assets/sprites/icon_hammer.png" alt=""><span class="d-label">Buildings</span><span class="d-chev" aria-hidden="true">&#x25B8;</span></button>
+        <button id="btn_buildings_toggle" class="buildings-toggle" data-target="btn_buildings_toggle" title="Show or hide the buildings menu"><img class="d-ico-img" src="/static/assets/sprites/icon_hammer.png" alt=""><span class="d-label">Buildings</span><span class="d-chev" aria-hidden="true">&#x25B8;</span></button>
         <div class="build-menu">
           <div class="build-filter-bar">
             <button class="build-cat-btn active" data-build-cat="all">All</button>
@@ -294,6 +295,6 @@
 
   <div id="replay-root" hidden></div>
 
-  <script type="module" src="/static/main.js?v=88"></script>
+  <script type="module" src="/static/main.js?v=107"></script>
 </body>
 </html>

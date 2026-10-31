@@ -32,13 +32,17 @@ flowchart LR
 
 ## Meta models used
 
-| Model | Role |
-|---|---|
-| Muse Spark | Persona playtesters (computer use + working-memory scratchpads), session reasoning, fix & feature rework proposals |
-| SAM 3.1 | Segmenting UI elements in gameplay screenshots & computing the `6.76x` distractor-to-goal visual salience ratio |
-| Muse Image | Live in-game Variant B UI emblem generation in the Feature Forge & 2.5D sprite/portrait assets |
-| Meta AudioCraft / MusicGen | Soundtrack in `scripts/generate_music_eleven.py` (ElevenLabs Music, prompts from the HoH audio spec in the Downloads brief). The committed `valley_theme.mp3` (60 s) and `battle_theme.mp3` (45 s) are ElevenLabs output. The older MusicGen/synth WAV loops were replaced |
-| Muse Code | Agentic coding tool used to build and iterate on the multi-agent backend, telemetry, and Feature Studio |
+Every agent in the loop runs on a Meta model. The game itself was also built with one.
+
+| Model | ID in code | Where it works | What it does |
+|---|---|---|---|
+| Muse Wonder | `muse-wonder-1.0` | Development; Designer agent; optional bot brain | Wrote the game and backend as the coding agent. In the game, it drafts feature ideas, reworks, and patch proposals behind `Ask Muse Wonder`. The Bug hunting and A/B menus can also pick it as the bot's brain. |
+| Muse Spark | `muse-spark-1.3-contributor` | Playtester bots; Analyst agent | Default brain of the vision playtesters: it sees the marked screenshot and picks each click. It also writes the diagnosis and proposed fixes in every bug hunt report. |
+| SAM 3.1 | `sam-3.1` | Playtester bots; Analyst agent | Segments each screenshot and marks the real UI targets, so bot clicks land on rendered elements. The analyst reuses the masks for its visual salience note in the report. |
+| Muse Image | Muse Image | Game art; Feature Forge | Painted the valley backdrop, building and villager sprites, Viking heroes, the ten Celtic Otherworld guardians, attack poses, and the eight arena backgrounds. It also generates each new feature's emblem. |
+| Muse Voice Transcribe | `muse-voice-transcribe-1.0` | Playtester bots (optional) | Bot ears, off by default in the menus. It transcribes each Elder voice line once, caches the transcript, and the bot hears the line as speech, never as the written script. |
+
+Model choice is part of the test design, so runs record which model played. A cheaper Spark run and a stronger Wonder run never share a verdict. All paid calls pass through one budget ledger with a hard cap, in `configs/budget_config.json` and `runs/cost_ledger.jsonl`.
 
 ## Status
 

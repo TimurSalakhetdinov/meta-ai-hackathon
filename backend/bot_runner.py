@@ -29,6 +29,7 @@ MAX_BOT_STEPS = {"onboarding": 25, "full_window": 100}
 SIM_WINDOW_SEC = 1200.0
 FRAME_CLIP = {"x": 0, "y": 0, "width": 960, "height": 540}
 VIEWPORT = {"width": 1280, "height": 540}
+VOICE_DIR = Path(__file__).resolve().parents[1] / "frontend" / "static" / "assets" / "audio" / "voice"
 IDLE_TIMEOUT_MS = 2500
 # Sim seconds a "wait" decision lets pass before the next look.
 WAIT_SIM_SEC = 4.0
@@ -57,6 +58,12 @@ class SessionSpec:
     speed: int = 4
     experiment_mode: bool = False
     record_video: bool = True
+    # Menu play time converted to sim seconds (play_minutes x 60 x speed);
+    # None keeps the default sim window.
+    time_limit_sim_sec: Optional[float] = None
+    # Bot ears: the bot receives a Muse Voice Transcribe transcript of each
+    # Elder line as it plays. Off by default (menu choice).
+    hear_voice: bool = False
 
 
 @dataclass
@@ -136,6 +143,7 @@ class BotRunner:
         errors: list[str] = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         steps, cost, stop, error = 0, 0.0, "max_steps", None
+        heard_file, heard_text = None, None
         frames = self.runs_dir / spec.run_id / "frames"
         frames.mkdir(parents=True, exist_ok=True)
         try:
@@ -145,6 +153,11 @@ class BotRunner:
             step_entered_at, last_step_id = 0.0, None
             async with httpx.AsyncClient(base_url=self.base_url, timeout=10) as http:
                 for i in range(max_bot_steps(spec.run_type)):
+                    # Stop flag checked before the expensive SAM/model calls,
+                    # not only after a whole step completes.
+                    if (self.runs_dir / spec.run_id / "stop_requested").exists():
+                        stop = "stopped_by_tester"
+                        break
                     await wait_idle(page)
                     state = await page.evaluate("window.__GAME_STATE__")
                     if state["step_id"] != last_step_id:
@@ -157,11 +170,28 @@ class BotRunner:
                     som = self.client.segment_and_mark(png, targets, run_id=spec.run_id, step_index=i)
                     stub = await page.evaluate("window.__BOT_HOOKS__.plan()") \
                         if self.client.provider_mode == "stub" else None
+                    # Bot ears (menu choice, off by default): when a new Elder
+                    # line played, the bot gets its Muse Voice Transcribe
+                    # transcript, never the written script.
+                    if spec.hear_voice:
+                        log = await page.evaluate("window.__VOICE_LOG__ || (window.__LAST_VOICE__ ? [window.__LAST_VOICE__] : [])")
+                        for voice in (log or []):
+                            if voice and voice.get("file") and voice["file"] != heard_file:
+                                heard_file = voice["file"]
+                                with contextlib.suppress(Exception):
+                                    heard_text = self.client.transcribe_audio(
+                                        VOICE_DIR / heard_file, run_id=spec.run_id) or heard_text
+                    visible_text = await page.evaluate("""() => {
+                      const text = (id) => (document.getElementById(id)?.innerText || '').replace(/\s+/g, ' ').trim();
+                      const res = [...document.querySelectorAll('#hud .res')].map(
+                        (e) => `${e.title}: ${e.querySelector('b')?.textContent || ''}`).join(', ');
+                      return { Advisor: text('advisor-text'), Quest: text('quest-card'), 'Top bar': res };
+                    }""")
                     decision = self.client.decide_action(
                         som=som, persona=persona, last_actions=memory.last_actions, run_id=spec.run_id,
                         step_index=i, experiment_mode=spec.experiment_mode, stub_decision=stub,
                         sec_in_step=state["sim_elapsed_sec"] - step_entered_at,
-                        scratchpad=memory.scratchpad)
+                        scratchpad=memory.scratchpad, heard=heard_text, visible_text=visible_text)
                     corr = f"{spec.run_id}_b{i:03d}"
                     # A chosen mark that SAM tied to a rendered target clicks
                     # that target's exact DOM centre, not SAM's box centre:
@@ -227,17 +257,22 @@ class BotRunner:
         return SessionResult(spec, stop, steps, summary, round(cost, 6), memory, error)
 
     async def _stop_reason(self, page: Any, http: httpx.AsyncClient, spec: SessionSpec) -> Optional[str]:
+        # Tester pressed "Stop bot" in the Studio (flag file next to the run).
+        if (self.runs_dir / spec.run_id / "stop_requested").exists():
+            return "stopped_by_tester"
         state = await page.evaluate("window.__GAME_STATE__")
         await page.evaluate("window.__GAME_DEBUG__.flush()")
         summary = (await http.get(f"/api/runs/{spec.run_id}/live")).json().get("summary") or {}
-        if summary.get("stuck_abort"):
+        # Bug hunts (full_window) exist to watch the bot struggle: a stuck
+        # patch is evidence, not the end. Only onboarding runs stop there.
+        if summary.get("stuck_abort") and spec.run_type == "onboarding":
             return "stuck_abort"
         if spec.run_type == "onboarding":
             return "first_achievement" if state["achieved"] else None
         if state.get("bronze_achieved"):
             return "bronze_age_mastery"
-        if state["sim_elapsed_sec"] >= SIM_WINDOW_SEC:
-            return "sim_window_end"
+        if state["sim_elapsed_sec"] >= (spec.time_limit_sim_sec or SIM_WINDOW_SEC):
+            return "time_limit"
         return None
 
     async def _end(self, page: Any, spec: SessionSpec, reason: str) -> dict[str, Any]:

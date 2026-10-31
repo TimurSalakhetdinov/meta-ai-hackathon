@@ -421,6 +421,12 @@ export class Sfx {
   }
 
   startMusic() {
+    // No background music on the main (manager) screen: it starts when
+    // the player leaves the menu and the game actually begins.
+    if (typeof document !== 'undefined' && document.getElementById('manager')) {
+      this.musicWanted = true;
+      return;
+    }
     // No music behind the Game Manager: it starts when the game does.
     if (typeof document !== 'undefined' && document.getElementById('manager')) return;
     if (this.musicRunning) return;

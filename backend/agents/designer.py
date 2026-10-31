@@ -48,7 +48,7 @@ def propose_patch(analysis: dict[str, Any], *, configs_dir: Path,
     stub = stub_proposal(analysis)
     user = json.dumps({k: analysis.get(k) for k in ("where_stuck", "diagnosis", "hypotheses", "suggested_levers")})
     out = client.reason_json(DESIGNER_SYSTEM, user, stub_result=stub, run_id=analysis.get("run_id", "designer"),
-                             bucket="analysis")
+                             bucket="analysis", model_id=client.designer_model_id)
     body = {k: v for k, v in (out.get("body") or {}).items() if k in LEVER_DEFAULTS} or stub["body"]
     return ConfigService(configs_dir).propose(
         body, title=out.get("title") or stub["title"], rationale=out.get("rationale") or stub["rationale"],

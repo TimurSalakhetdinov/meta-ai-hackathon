@@ -54,25 +54,58 @@ class BotHuntRequest(BaseModel):
     persona: str = "impatient_newcomer"
     variant: Literal["A", "B"] = "A"
     seed: int = 42
-    speed: int = 4
+    speed: int = 1
     play_minutes: int = 20
     record_video: bool = False
     mode: Literal["meta"] = "meta"
+    bot_model: Literal["spark", "wonder"] = "wonder"
+    hear_voice: bool = False
     run_type: Literal["onboarding", "full_window"] = "full_window"
 
 
 class PlaytestRequest(BaseModel):
     patch_id: str
     mode: Literal["stub", "meta"] = "stub"
+    bot_model: Literal["spark", "wonder"] = "wonder"
+    hear_voice: bool = False
+    record_video: bool = False
     personas: Optional[list[str]] = None
     seeds: Optional[list[int]] = None
     run_type: Literal["onboarding", "full_window"] = "full_window"
-    speed: int = 4
+    speed: int = 1
+
+
+class SpeakRequest(BaseModel):
+    text: str
+    persona_id: Optional[str] = None
 
 
 class ReworkRequest(BaseModel):
     patch_id: str
     mode: Literal["stub", "meta"] = "stub"
+
+
+class ExperimentRequest(BaseModel):
+    patch_id: str
+    patch_revision: int = 1
+    title: str = ""
+    plan: dict[str, Any] = {}
+    parent_id: Optional[str] = None
+    budget_cap_usd: Optional[float] = None
+
+
+class PhaseRequest(BaseModel):
+    kind: Literal["smoke", "discovery", "confirmation"] = "discovery"
+    plan: dict[str, Any] = {}
+    planned_pairs: int = 0
+    pairs: list[dict[str, Any]] = []
+
+
+class ExperimentDecisionRequest(BaseModel):
+    kind: Literal["approve_test", "reject", "approve_shipping"]
+    actor: str = "human"
+    phase_id: Optional[str] = None
+    reason: str = ""
 
 
 def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = None) -> FastAPI:
@@ -213,6 +246,81 @@ def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = No
                 "resolved_config": json.loads(resolved.read_text()) if resolved.exists() else None,
                 "events": src.read_events(run_id), "bot_steps": src.read_bot_steps(run_id)}
 
+    # Bot voice: ElevenLabs speaks a bot's think-aloud in its persona voice.
+    # Generated once per (voice, line) and cached under runs/.cache/tts.
+    tts_dir = runs_dir / ".cache" / "tts"
+
+    @app.post("/api/speak")
+    def speak(req: SpeakRequest):
+        import hashlib
+        import httpx as _httpx
+        from dotenv import load_dotenv
+        load_dotenv(ROOT / ".env", override=False)
+        key = os.environ.get("ELEVENLABS_API_KEY")
+        if not key:
+            raise HTTPException(503, "No ELEVENLABS_API_KEY in .env")
+        personas = {r["persona_id"]: r for r in json.loads((configs_dir / "personas.json").read_text())}
+        voice_id = (personas.get(req.persona_id or "") or {}).get("voice_id") or "B52raBK48m23qWYbwchQ"
+        text = req.text.strip()[:200]
+        if not text:
+            raise HTTPException(400, "Nothing to speak")
+        name = hashlib.sha256(f"{voice_id}:{text}".encode()).hexdigest()[:24] + ".mp3"
+        tts_dir.mkdir(parents=True, exist_ok=True)
+        out = tts_dir / name
+        if not out.exists():
+            r = _httpx.post(f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
+                            headers={"xi-api-key": key, "Content-Type": "application/json"},
+                            json={"text": text, "model_id": "eleven_v4",
+                                  "voice_settings": {"stability": 0.5, "similarity_boost": 0.75}},
+                            timeout=60)
+            if r.status_code != 200:
+                raise HTTPException(502, f"ElevenLabs failed: HTTP {r.status_code}")
+            out.write_bytes(r.content)
+        return {"url": f"/api/tts/{name}"}
+
+    @app.get("/api/tts/{name}")
+    def tts_file(name: str):
+        if not name.endswith(".mp3") or "/" in name or ".." in name:
+            raise HTTPException(404, "No such audio")
+        f = tts_dir / name
+        if not f.exists():
+            raise HTTPException(404, "No such audio")
+        return FileResponse(f, media_type="audio/mpeg")
+
+    @app.get("/api/runs/{run_id}/bug-report")
+    def run_bug_report(run_id: str):
+        """Report A for this run only: the saved snapshot if present, else
+        built from this run's artifacts and saved. Never another run's data."""
+        d = run_or_404(run_id)
+        from .bug_report import build_bug_report, save_bug_report
+        saved = d / "bug_report.json"
+        if saved.exists():
+            return json.loads(saved.read_text())
+        report = save_bug_report(runs_dir, run_id) or build_bug_report(demo_dir, run_id)
+        if report is None:
+            raise HTTPException(404, "No bug report for this run yet")
+        return report
+
+    app.state.analyze_fn = None
+
+    @app.post("/api/runs/{run_id}/analyze")
+    def run_analyze(run_id: str):
+        """Write this run's diagnosis with the analyst (Meta model when the
+        key is present), then save the bug report next to the run."""
+        run_or_404(run_id)
+        try:
+            if app.state.analyze_fn is not None:
+                analysis = app.state.analyze_fn(run_id)
+            else:
+                from .agents.analyst import analyze_run
+                analysis = analyze_run(run_id, runs_dir=runs_dir, configs_dir=configs_dir,
+                                       client=analyst_client())
+        except Exception as exc:
+            raise HTTPException(502, f"Analyst failed: {type(exc).__name__}: {exc}")
+        from .bug_report import save_bug_report
+        save_bug_report(runs_dir, run_id)
+        return analysis
+
     @app.get("/api/runs/{run_id}/analysis")
     def run_analysis(run_id: str):
         p = run_or_404(run_id) / "analysis.json"
@@ -222,6 +330,17 @@ def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = No
         if out.get("stuck_frame"):
             out["stuck_frame_url"] = f"/api/runs/{run_id}/artifacts/{out['stuck_frame']}"
         return out
+
+    @app.post("/api/runs/{run_id}/stop_hunt")
+    def stop_hunt(run_id: str):
+        """Stop bot button: the runner polls this flag file each step, ends
+        the session, and the saved run still gets its analyst Report."""
+        d = run_or_404(run_id)
+        (d / "stop_requested").write_text("stopped_by_tester")
+        for job in bot_hunt_jobs.values():
+            if job.get("run_id") == run_id:
+                job["stop_requested"] = True
+        return {"run_id": run_id, "stop_requested": True}
 
     @app.get("/api/runs/{run_id}/artifacts/{name:path}")
     def run_artifact(run_id: str, name: str):
@@ -244,6 +363,14 @@ def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = No
         rows = json.loads((configs_dir / "personas.json").read_text())
         return [Persona.model_validate(r).model_dump() for r in rows]
 
+    def analyst_client() -> MetaClient:
+        """The Report is written by the Meta model when the key is present;
+        offline stub reasoning only when there is no key."""
+        from dotenv import load_dotenv
+        load_dotenv(ROOT / ".env", override=False)
+        mode = "meta" if os.environ.get("META_API_KEY") else "stub"
+        return MetaClient(runs_dir=runs_dir, configs_dir=configs_dir, provider_mode=mode)
+
     # Bug hunting (Meta bot from the browser menu) ----------------------
     bot_hunt_jobs: dict[str, dict[str, Any]] = {}
     app.state.bot_hunt_jobs = bot_hunt_jobs
@@ -258,12 +385,15 @@ def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = No
         run_id = job["run_id"]
         spec = {"variant": req.variant, "persona_id": req.persona, "seed": req.seed,
                 "run_id": run_id, "run_type": req.run_type, "speed": req.speed,
-                "record_video": req.record_video}
+                "record_video": req.record_video, "hear_voice": req.hear_voice,
+                "time_limit_sim_sec": req.play_minutes * 60 * req.speed}
         try:
             if app.state.bot_hunt_fn is not None:
                 result = app.state.bot_hunt_fn(spec)
             else:
                 client = MetaClient(runs_dir=runs_dir, configs_dir=configs_dir, provider_mode="meta")
+                if req.bot_model == "wonder":
+                    client.use_model(client.designer_model_id)
                 r = run_session_sync(SessionSpec(**spec), client=client,
                                      configs_dir=configs_dir, runs_dir=runs_dir)
                 result = {"stop_reason": r.stop_reason, "steps": r.steps, "cost_usd": r.cost_usd,
@@ -292,11 +422,17 @@ def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = No
                 else:
                     from .agents.analyst import analyze_run
                     analyze_run(run_id, runs_dir=runs_dir, configs_dir=configs_dir,
-                                client=MetaClient(runs_dir=runs_dir, configs_dir=configs_dir,
-                                                  provider_mode="stub"))
+                                client=analyst_client())
                 job["analysis"] = True
             except Exception as exc:  # the run itself is still saved and usable
                 job["analysis_error"] = str(exc)
+            # The bug report is saved too, next to the run, like the analysis.
+            try:
+                from .bug_report import save_bug_report
+                if save_bug_report(runs_dir, run_id):
+                    job["bug_report"] = True
+            except Exception as exc:
+                job["bug_report_error"] = str(exc)
         except Exception as exc:  # surfaced in the menu, never silent
             job.update(status="failed", error=f"{type(exc).__name__}: {exc}")
 
@@ -345,7 +481,8 @@ def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = No
     def studio_status():
         """Whether a custom idea goes to live Muse Spark or the offline stub designer."""
         client = studio_client("stub")
-        return {"meta_ready": bool(os.environ.get("META_API_KEY")), "muse_model_id": client.muse_model_id}
+        return {"meta_ready": bool(os.environ.get("META_API_KEY")), "muse_model_id": client.muse_model_id,
+                "designer_model_id": client.designer_model_id}
 
     @app.post("/api/feature_studio/playtest", status_code=202)
     def studio_playtest(req: PlaytestRequest):
@@ -362,10 +499,15 @@ def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = No
 
         def work() -> None:
             try:
+                client = studio_client(req.mode)
+                if req.bot_model == "wonder":
+                    client.use_model(client.designer_model_id)
                 feature_studio.run_playtest(req.patch_id, configs_dir=configs_dir, runs_dir=runs_dir,
-                                            client=studio_client(req.mode), personas=req.personas,
+                                            client=client, personas=req.personas,
                                             seeds=req.seeds, run_type=req.run_type, speed=req.speed,
-                                            session_fn=app.state.studio_session_fn, on_log=log)
+                                            session_fn=app.state.studio_session_fn, on_log=log,
+                                            hear_voice=req.hear_voice,
+                                            record_video=req.record_video)
                 job["status"] = "done"
             except Exception as exc:  # surfaced to the studio UI
                 job.update(status="failed", error=str(exc))
@@ -390,6 +532,129 @@ def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = No
     def studio_bot_steps(run_id: str) -> list[dict[str, Any]]:
         """Think-aloud lines, live first, then the committed demo bundle."""
         return store.read_bot_steps(run_id) or demo_store.read_bot_steps(run_id)
+
+    # Experiments: saved, frozen A/B plans (Astra studio design, section 3).
+    from .studio_store import StudioStore
+    studio = StudioStore(runs_dir / "studio.sqlite")
+    app.state.studio_store = studio
+
+    def experiment_or_404(experiment_id: str) -> dict[str, Any]:
+        exp = studio.get_experiment(experiment_id)
+        if exp is None:
+            raise HTTPException(404, f"Unknown experiment {experiment_id}")
+        return exp
+
+    @app.post("/api/experiments", status_code=201)
+    def create_experiment(req: ExperimentRequest):
+        return studio.create_experiment(patch_id=req.patch_id, patch_revision=req.patch_revision,
+                                        title=req.title, plan=req.plan, parent_id=req.parent_id,
+                                        budget_cap_usd=req.budget_cap_usd)
+
+    @app.get("/api/experiments")
+    def list_experiments():
+        return studio.list_experiments()
+
+    @app.get("/api/bug_reports")
+    def list_bug_reports():
+        """Past bug hunts with a saved report, newest first."""
+        from .bug_report import build_bug_report
+        from datetime import datetime, timezone
+        out = []
+        if runs_dir.exists():
+            for d in (x for x in runs_dir.iterdir() if x.is_dir()):
+                saved = d / "bug_report.json"
+                analysis = d / "analysis.json"
+                stamp = saved if saved.exists() else analysis if analysis.exists() else None
+                if stamp is None:
+                    continue
+                saved_at = datetime.fromtimestamp(stamp.stat().st_mtime, timezone.utc).isoformat(timespec="seconds")
+                if saved.exists():
+                    try:
+                        report = json.loads(saved.read_text())
+                    except Exception:
+                        continue
+                else:
+                    report = build_bug_report(runs_dir, d.name)
+                    if not report:
+                        continue
+                # The listing time is when the report was saved, not when
+                # this list was rendered.
+                report = {**report, "generated_at": saved_at, "saved_at": saved_at}
+                out.append(report)
+            out.sort(key=lambda r: r["saved_at"], reverse=True)
+        return out[:20]
+
+    @app.get("/api/experiments/{experiment_id}")
+    def get_experiment(experiment_id: str):
+        return experiment_or_404(experiment_id)
+
+    @app.post("/api/experiments/{experiment_id}/decisions", status_code=201)
+    def experiment_decision(experiment_id: str, req: ExperimentDecisionRequest):
+        exp = experiment_or_404(experiment_id)
+        return studio.add_decision(experiment_id, kind=req.kind, actor=req.actor,
+                                   phase_id=req.phase_id, plan_hash=exp["plan_hash"],
+                                   reason=req.reason)
+
+    @app.post("/api/experiments/{experiment_id}/phases", status_code=201)
+    def create_phase(experiment_id: str, req: PhaseRequest):
+        experiment_or_404(experiment_id)
+        phase = studio.create_phase(experiment_id, kind=req.kind, plan=req.plan,
+                                    planned_pairs=req.planned_pairs or len(req.pairs))
+        for spec in req.pairs:
+            studio.add_pair(phase["phase_id"], persona_id=spec["persona_id"],
+                            game_seed=int(spec["game_seed"]),
+                            repetition=int(spec.get("repetition", 1)),
+                            run_order=spec.get("run_order", "AB"))
+        return {**phase, "pairs": studio.phase_runs(phase["phase_id"])}
+
+    @app.post("/api/experiments/{experiment_id}/phases/{phase_id}/link", status_code=201)
+    def link_phase_run(experiment_id: str, phase_id: str, body: dict[str, Any] = Body(...)):
+        experiment_or_404(experiment_id)
+        studio.link_run(body["pair_id"], body["run_id"], body["variant"],
+                        attempt=int(body.get("attempt", 1)),
+                        selected=bool(body.get("selected", True)),
+                        exclusion_reason=body.get("exclusion_reason"))
+        return {"linked": body["run_id"], "pair_id": body["pair_id"]}
+
+    @app.get("/api/experiments/{experiment_id}/runs")
+    def experiment_runs(experiment_id: str):
+        exp = experiment_or_404(experiment_id)
+        phase_id = exp.get("active_phase")
+        return studio.phase_runs(phase_id) if phase_id else []
+
+    @app.get("/api/experiments/{experiment_id}/report")
+    def experiment_report(experiment_id: str):
+        from .agents.experiment import phase_verdict, session_metrics
+        exp = experiment_or_404(experiment_id)
+        phase_id = exp.get("active_phase")
+        if not phase_id:
+            return {**exp, "verdict": {"verdict": "incomplete", "reason": "No phase planned yet",
+                                       "planned_pairs": 0, "n": 0}}
+        phase = next(p for p in exp["phases"] if p["phase_id"] == phase_id)
+        by_pair: dict[str, dict[str, Any]] = {}
+        inventory = []
+        for link in studio.phase_runs(phase_id):
+            if not link.get("run_id"):
+                continue
+            summary = store.summary(link["run_id"]) or {}
+            metrics = session_metrics(summary)
+            inventory.append({**link, "metrics": metrics})
+            if link["selected"]:
+                by_pair.setdefault(link["pair_id"], {})[link["variant"]] = metrics
+        complete = [p for p in by_pair.values() if "A" in p and "B" in p]
+        a = [bool(p["A"]["onboarding_completed"]) for p in complete]
+        b = [bool(p["B"]["onboarding_completed"]) for p in complete]
+        verdict = phase_verdict(a, b, int(phase["planned_pairs"]),
+                                threshold=float(exp["plan"].get("improvement_threshold", 0.10)))
+        result = {"experiment_id": experiment_id, "title": exp["title"], "status": exp["status"],
+                  "patch_id": exp["patch_id"], "patch_revision": exp["patch_revision"],
+                  "phase": {"phase_id": phase_id, "kind": phase["kind"],
+                            "planned_pairs": phase["planned_pairs"]},
+                  "primary_metric": exp["plan"].get("primary_metric", "onboarding_completed"),
+                  "verdict": verdict, "run_inventory": inventory,
+                  "decisions": exp["decisions"]}
+        studio.save_report(experiment_id, phase_id, result)
+        return result
 
     @app.get("/api/feature_studio/report/{patch_id}")
     def studio_report(patch_id: str):

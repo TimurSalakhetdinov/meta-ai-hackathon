@@ -147,6 +147,44 @@ def _mean(vals: list[Optional[float]]) -> Optional[float]:
     return round(sum(vals) / len(vals), 2) if vals else None
 
 
+def phase_verdict(a: list[bool], b: list[bool], planned_pairs: int, *,
+                  threshold: float = 0.10, alpha: float = 0.05,
+                  critical_b_regression: bool = False) -> dict[str, Any]:
+    """Fixed-sample verdict for one phase (Astra studio design, section 2).
+
+    Better/worse need: the full planned sample, a paired difference of at
+    least `threshold`, and the exact McNemar check below `alpha`. Anything
+    else with a complete sample is inconclusive; a short sample is
+    incomplete and never produces a winner.
+    """
+    stats = binary_stats(a, b)
+    n = stats["n"]
+    out = {**stats, "planned_pairs": planned_pairs, "threshold": threshold,
+           "both_succeed": sum(1 for x, y in zip(a, b) if x and y),
+           "both_fail": sum(1 for x, y in zip(a, b) if not x and not y),
+           "critical_b_regression": critical_b_regression}
+    if planned_pairs == 0 or n < planned_pairs:
+        out["verdict"] = "incomplete"
+        out["reason"] = f"{n}/{planned_pairs} planned pairs available"
+        return out
+    diff = stats["diff_b_minus_a"] or 0.0
+    p = stats["mcnemar_exact_p"]
+    if critical_b_regression:
+        out["verdict"] = "worse"
+        out["reason"] = "Confirmed critical progression blocker or game crash only in B"
+    elif diff >= threshold and p < alpha:
+        out["verdict"] = "better"
+        out["reason"] = f"B improves the primary metric by {diff:.0%}, at least the {threshold:.0%} threshold (McNemar p={p:.3f})"
+    elif diff <= -threshold and p < alpha:
+        out["verdict"] = "worse"
+        out["reason"] = f"B lowers the primary metric by {abs(diff):.0%}, past the {threshold:.0%} threshold (McNemar p={p:.3f})"
+    else:
+        out["verdict"] = "inconclusive"
+        out["reason"] = ("The completed sample does not establish B as better or worse; "
+                          "inconclusive does not mean the variants are equal")
+    return out
+
+
 # ------------------------------------------------------------------ voiceover
 def voiceover_sheet(ab: dict[str, Any], demo: Optional[dict[str, Any]] = None) -> str:
     demo = demo or (ab["pairs"][0] if ab["pairs"] else None)
@@ -194,7 +232,10 @@ class Experiment:
     def __init__(self, *, configs_dir: Path, runs_dir: Path, clients: dict[str, MetaClient],
                  run_type: str = "full_window", worker_pool_size: Optional[int] = None,
                  session_fn: Optional[SessionFn] = None, experiment_id: Optional[str] = None,
-                 speed: int = 4, summary_name: str = "ab_summary.json") -> None:
+                 speed: int = 4, summary_name: str = "ab_summary.json",
+                 hear_voice: bool = False, record_video: bool = False) -> None:
+        self.hear_voice = hear_voice
+        self.record_video = record_video
         check_homogeneous(clients)
         self.configs_dir, self.runs_dir = Path(configs_dir), Path(runs_dir)
         self.clients = clients
@@ -216,7 +257,8 @@ class Experiment:
     def spec(self, pair: Pair, arm: str, variant: str, patch_id: Optional[str]) -> SessionSpec:
         run_id = f"{self.experiment_id}_{arm}_{pair.persona_id}_s{pair.seed}"
         return SessionSpec(variant, pair.persona_id, pair.seed, run_id, patch_id, self.run_type, self.speed,
-                           experiment_mode=True)
+                           experiment_mode=True, hear_voice=self.hear_voice,
+                           record_video=self.record_video)
 
     async def run(self, pairs: list[Pair], *, patch_id: str, baseline_patch_id: Optional[str] = None,
                   baseline_from: Optional[Path] = None) -> dict[str, Any]:

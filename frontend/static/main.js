@@ -8,7 +8,7 @@ import {
   QUESTS, RESOURCES, ALL_RESOURCES, RESOURCE_LABEL, TECHS, UPGRADABLE_TYPES,
 } from './game.js?v=76';
 import { Sfx, defaultMuted } from './audio.js?v=23';
-import { IsoRenderer } from './iso_renderer.js?v=69';
+import { IsoRenderer } from './iso_renderer.js?v=70';
 import { loadSprites, spriteUrl } from './sprites.js?v=69';
 import { TechTreeView } from './tech_tree.js?v=52';
 import { initOverlay } from './overlay.js';
@@ -22,6 +22,50 @@ const params = urlParams();
 // Elder Kaelen's voice: an old Viking narrator (browser speech synthesis,
 // deepest male voice available, slow and low) pronounces each new advisor
 // message. Silent in bot runs and replays, and under the mute button.
+function elderVoiceFile(text) {
+  const FILES = [
+    ['There you are, Chief. Raise a Small Home before supper', 'kaelen_welcome.mp3'],
+    ['A roof overhead, but nothing in the pot.', 'kaelen_onb_02_forager.mp3'],
+    ['We have shelter and supper, Chief.', 'kaelen_onb_03_handoff.mp3'],
+    ['Time to look beyond our hearths, Chief.', 'kaelen_free_play.mp3'],
+    ['The Stone Age is here, Chief.', 'kaelen_achieved.mp3'],
+    ['The Bronze Age is ours, Chief.', 'kaelen_bronze.mp3'],
+    ['Open Research, Chief.', 'kaelen_hint_research.mp3'],
+    ['Choose Basic Toolmaking and learn it, Chief.', 'kaelen_hint_toolmaking.mp3'],
+    ['Now raise a Woodcutter, Chief.', 'kaelen_build_woodcutter.mp3'],
+    ['Well worked, Chief.', 'kaelen_claim_reward.mp3'],
+    ['Our foundations hold, Chief.', 'kaelen_ch2_open.mp3'],
+    ['Open Research and learn Masonry, Chief.', 'kaelen_ch2_masonry.mp3'],
+    ['Raise a Stone Quarry, Chief.', 'kaelen_ch2_quarry.mp3'],
+    ['Open Research and awaken the Stone Age, Chief.', 'kaelen_ch2_stone_age.mp3'],
+    ['Bring fire, craft, and trained heroes', 'kaelen_ch3_open.mp3'],
+    ['Build a Copper Smelter, Chief.', 'kaelen_ch3_smelter.mp3'],
+    ['Improve a building to its next level, Chief.', 'kaelen_ch3_upgrade.mp3'],
+    ['Finish the Bronze Age research, Chief.', 'kaelen_ch3_bronze.mp3'],
+    ['Fill our stores, strengthen our buildings', 'kaelen_ch4_open.mp3'],
+    ['Build a Granary, Chief.', 'kaelen_ch4_granary.mp3'],
+    ['Improve more of our buildings', 'kaelen_ch4_upgrade2.mp3'],
+    ['Open Research and learn Irrigation, Chief.', 'kaelen_ch4_irrigation.mp3'],
+    ['Prepare Tor for the fight', 'kaelen_ch5_open.mp3'],
+    ["Raise Tor's level through training, Chief.", 'kaelen_ch5_tor.mp3'],
+    ['Conquer Sabertooth Canyon in the Campaign, Chief.', 'kaelen_ch5_stage6.mp3'],
+    ['Build a Barracks or a Copper Smelter, Chief.', 'kaelen_ch5_barracks.mp3'],
+    ['Gather your best heroes for the White Bean Sí, Chief.', 'kaelen_ch6_open.mp3'],
+    ['Face the White Bean Sí in the Campaign, Chief.', 'kaelen_ch6_boss.mp3'],
+    ['Raise your Empire Score by building', 'kaelen_ch6_score.mp3'],
+  ];
+  const GENERIC = [
+    [/wood/i, 'kaelen_need_wood.mp3'], [/stone/i, 'kaelen_need_stone.mp3'],
+    [/food/i, 'kaelen_need_food.mp3'], [/coin/i, 'kaelen_need_coins.mp3'],
+    [/flask|research point/i, 'kaelen_need_rp.mp3'], [/scroll/i, 'kaelen_need_scrolls.mp3'],
+    [/token/i, 'kaelen_need_tokens.mp3'], [/worker/i, 'kaelen_need_worker.mp3'],
+    [/locked|learn .* first|research/i, 'kaelen_locked.mp3'],
+  ];
+  const generic = /need|not enough|no free|spent/i.test(text) ? GENERIC.find(([re]) => re.test(text)) : null;
+  const hit = FILES.find(([prefix]) => text.startsWith(prefix)) || (generic ? [null, generic[1]] : null) || [null, 'kaelen_not_ready.mp3'];
+  return hit ? hit[1] : null;
+}
+
 const kaelenVoice = {
   last: '',
   unlocked: false,
@@ -36,6 +80,11 @@ const kaelenVoice = {
       if ('speechSynthesis' in window && speechSynthesis.speaking) speechSynthesis.cancel();
       return;
     }
+    // Bot ears marker: set for every Elder line presented on screen, even
+    // if playback is still locked or muted in this tab. The runner only
+    // transcribes the named audio file; it never receives script text.
+    window.__LAST_VOICE__ = { file: elderVoiceFile(text), at: performance.now() };
+    window.__VOICE_LOG__ = [...(window.__VOICE_LOG__ || []), window.__LAST_VOICE__].slice(-20);
     // Silent behind the Game Manager: the Elder starts when the game does.
     // Remember the line so the first-click replay can still say it.
     if (document.getElementById('manager')) { this.last = text; return; }
@@ -72,65 +121,19 @@ const kaelenVoice = {
     // spoken: the unlock replay must still be able to say it.
     if (!this.unlocked) return;
     this.spokenAt.set(text, nowMs);
-    if (window.__SFX_MUTED__ || params.bot || params.replayA || params.replayB) return;
+    // Sound stays on for bot sessions too: the bots hear the Elder, and the
+    // watch screen carries their voices. Only replays stay silent.
+    if (window.__SFX_MUTED__ || params.replayA || params.replayB) return;
     // Mark a hint as spoken only when it is actually about to play, never
     // while audio was still locked or muted.
     if (isHint) this.spokenHints.add(text);
     // Pre-rendered ElevenLabs lines (scripts/generate_kaelen_voice.py).
-    // Until the full set is approved, only the welcome line has a file;
-    // any other text falls back to the browser voice below.
-    const FILES = [
-      ['There you are, Chief. Raise a Small Home before supper', 'kaelen_welcome.mp3'],
-      ['A roof overhead, but nothing in the pot.', 'kaelen_onb_02_forager.mp3'],
-      ['We have shelter and supper, Chief.', 'kaelen_onb_03_handoff.mp3'],
-      ['Time to look beyond our hearths, Chief.', 'kaelen_free_play.mp3'],
-      ['The Stone Age is here, Chief.', 'kaelen_achieved.mp3'],
-      ['The Bronze Age is ours, Chief.', 'kaelen_bronze.mp3'],
-      ['Open Research, Chief.', 'kaelen_hint_research.mp3'],
-      ['Choose Basic Toolmaking and learn it, Chief.', 'kaelen_hint_toolmaking.mp3'],
-      ['Now raise a Woodcutter, Chief.', 'kaelen_build_woodcutter.mp3'],
-      ['Well worked, Chief.', 'kaelen_claim_reward.mp3'],
-      ['Our foundations hold, Chief.', 'kaelen_ch2_open.mp3'],
-      ['Open Research and learn Masonry, Chief.', 'kaelen_ch2_masonry.mp3'],
-      ['Raise a Stone Quarry, Chief.', 'kaelen_ch2_quarry.mp3'],
-      ['Open Research and awaken the Stone Age, Chief.', 'kaelen_ch2_stone_age.mp3'],
-      ['Bring fire, craft, and trained heroes', 'kaelen_ch3_open.mp3'],
-      ['Build a Copper Smelter, Chief.', 'kaelen_ch3_smelter.mp3'],
-      ['Improve a building to its next level, Chief.', 'kaelen_ch3_upgrade.mp3'],
-      ['Finish the Bronze Age research, Chief.', 'kaelen_ch3_bronze.mp3'],
-      ['Fill our stores, strengthen our buildings', 'kaelen_ch4_open.mp3'],
-      ['Build a Granary, Chief.', 'kaelen_ch4_granary.mp3'],
-      ['Improve more of our buildings', 'kaelen_ch4_upgrade2.mp3'],
-      ['Open Research and learn Irrigation, Chief.', 'kaelen_ch4_irrigation.mp3'],
-      ['Prepare Tor for the fight', 'kaelen_ch5_open.mp3'],
-      ['Raise Tor\'s level through training, Chief.', 'kaelen_ch5_tor.mp3'],
-      ['Conquer Sabertooth Canyon in the Campaign, Chief.', 'kaelen_ch5_stage6.mp3'],
-      ['Build a Barracks or a Copper Smelter, Chief.', 'kaelen_ch5_barracks.mp3'],
-      ['Gather your best heroes for the White Bean Sí, Chief.', 'kaelen_ch6_open.mp3'],
-      ['Face the White Bean Sí in the Campaign, Chief.', 'kaelen_ch6_boss.mp3'],
-      ['Raise your Empire Score by building', 'kaelen_ch6_score.mp3'],
-    ];
-    // Dynamic warnings carry numbers that cannot be pre-rendered; the
-    // bubble shows them as text and the voice speaks a generic elder line.
-    const GENERIC = [
-      [/wood/i, 'kaelen_need_wood.mp3'],
-      [/stone/i, 'kaelen_need_stone.mp3'],
-      [/food/i, 'kaelen_need_food.mp3'],
-      [/coin/i, 'kaelen_need_coins.mp3'],
-      [/flask|research point/i, 'kaelen_need_rp.mp3'],
-      [/scroll/i, 'kaelen_need_scrolls.mp3'],
-      [/token/i, 'kaelen_need_tokens.mp3'],
-      [/worker/i, 'kaelen_need_worker.mp3'],
-      [/locked|learn .* first|research/i, 'kaelen_locked.mp3'],
-    ];
-    const generic = /need|not enough|no free|spent/i.test(text)
-      ? GENERIC.find(([re]) => re.test(text)) : null;
-    // Any other Elder text (dynamic task fallbacks, feature lines) still
-    // gets a voice: the generic not-ready line, never silence.
-    const hit = FILES.find(([prefix]) => text.startsWith(prefix))
-      || (generic ? [null, generic[1]] : null)
-      || [null, 'kaelen_not_ready.mp3'];
+    const file = elderVoiceFile(text);
+    const hit = file ? [null, file] : null;
     if (hit) {
+      // Bot ears: the runner reads which Elder line just played and gives
+      // the bot its transcript (never the script text above).
+      window.__LAST_VOICE__ = { file: hit[1], at: performance.now() };
       if ('speechSynthesis' in window) speechSynthesis.cancel();
       // Never overlap lines: stop the previous line before starting a new one.
       if (this.current) { this.current.pause(); this.current.currentTime = 0; }
@@ -158,6 +161,13 @@ function unlockVoice() {
   }
 }
 window.addEventListener('pointerdown', unlockVoice);
+// Music gate: once the Game Manager leaves the screen, start the music
+// that startMusic held back while the menu was up.
+new MutationObserver(() => {
+  if (!document.getElementById('manager') && window.__SFX__?.musicWanted && !window.__SFX__.musicRunning) {
+    window.__SFX__.startMusic();
+  }
+}).observe(document.body, { childList: true });
 
 // The layout is a fixed 1280x540 stage (bots and screenshots rely on it).
 // Scale it to fit the window; all game coordinates stay in stage pixels.
@@ -168,7 +178,14 @@ if (slideDock) document.body.classList.add('slide-dock');
 const STAGE_W = slideDock ? 960 : 1280;
 let uiScale = 1;
 function fitToWindow() {
+  // Fit inside the window at the stage's native size: never crop, never
+  // stretch. The window edge around it is a plain dark frame.
   uiScale = Math.min(window.innerWidth / STAGE_W, window.innerHeight / 540) || 1;
+  for (const id of ['app', 'game-root', 'world']) {
+    const el = document.getElementById(id);
+    if (el) el.style.width = '';
+  }
+  document.body.style.width = '';
   const left = (window.innerWidth - STAGE_W * uiScale) / 2;
   const top = (window.innerHeight - 540 * uiScale) / 2;
   document.body.style.transform = uiScale === 1 ? '' : `translate(${left}px, ${top}px) scale(${uiScale})`;
@@ -266,12 +283,13 @@ async function boot() {
   });
   renderer = new IsoRenderer($('world'), sprites, { seed: params.seed });
   const sfx = new Sfx({ muted: defaultMuted(params) });
+  window.__SFX__ = sfx;
   fxHandlers.push((fx) => { if (fx.type === 'sfx') sfx.play(fx.sound); });
 
   // Volume menu (sound button): Music / Sounds / Voice sliders, persisted.
   const volumes = (() => {
-    try { return { music: 60, sfx: 90, voice: 90, ...JSON.parse(localStorage.getItem('doe_volumes') || '{}') }; }
-    catch { return { music: 60, sfx: 90, voice: 90 }; }
+    try { return { music: 0, sfx: 90, voice: 90, ...JSON.parse(localStorage.getItem('doe_volumes') || '{}') }; }
+    catch { return { music: 0, sfx: 90, voice: 90 }; }
   })();
   // Optional calls: a stale cached audio module must never crash the start.
   sfx.setMusicVolume?.(volumes.music / 100);
@@ -353,8 +371,10 @@ async function boot() {
     // The Buildings toggle has its own listener; never a game click.
     if (e.target.closest('#btn_buildings_toggle')) return;
     const rect = root.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / uiScale;
-    const y = (e.clientY - rect.top) / uiScale;
+    // Rect-based factors: correct at any uiScale and when the play screen
+    // is widened past 960 CSS px in human mode.
+    const x = (e.clientX - rect.left) / rect.width * 960;
+    const y = (e.clientY - rect.top) / rect.height * 540;
 
     // Handle Build Bar category filter tabs
     const catBtn = e.target.closest('[data-build-cat]');
@@ -498,8 +518,8 @@ function targetBelow(backdrop, cx, cy, game, renderer, x, y) {
 
 function clickAt(root, x, y) {
   const rect = root.getBoundingClientRect();
-  const cx = rect.left + x * uiScale;
-  const cy = rect.top + y * uiScale;
+  const cx = rect.left + x / 960 * rect.width;
+  const cy = rect.top + y / 540 * rect.height;
   const el = document.elementFromPoint(cx, cy) || root;
   el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: cx, clientY: cy, view: window }));
 }
@@ -567,9 +587,27 @@ function renderedTargets(game, renderer, config) {
     } else {
       t.computed_salience = 'low';
     }
+    if (id === 'btn_buildings_toggle') {
+      // The tutorial arrow points here when the guided building card is
+      // hidden in the collapsed menu. Expose that guide signal to the bot;
+      // otherwise it has no clickable Buildings target at all.
+      const guidedCardHidden = !!guide?.startsWith('card_') && $('build-bar')?.classList.contains('collapsed');
+      t.highlighted = guide === id || guidedCardHidden;
+      t.computed_salience = t.highlighted ? 'high' : 'medium';
+      t.label = 'Buildings';
+    }
     out.push(t);
   }
+  let padsShown = 0;
   for (const w of renderer.worldTargets(game)) {
+    if (w.kind === 'pad') {
+      // No card selected: the plots are not drawn and tapping grass does
+      // nothing, so a player cannot act on them either. Card selected:
+      // show the guided plot plus a few free ones, not all 171 tiles.
+      if (!game.selectedCard || game.pendingPlacement) continue;
+      if (w.target_id !== guide && padsShown >= 6) continue;
+      padsShown += 1;
+    }
     const cx = rect.left + (w.x + w.w / 2) * uiScale;
     const cy = rect.top + (w.y + w.h / 2) * uiScale;
     const visible = onScreen(w.x, w.y, w.w, w.h) && document.elementFromPoint(cx, cy) === canvas
@@ -580,7 +618,7 @@ function renderedTargets(game, renderer, config) {
       computed_salience: w.kind === 'pad' ? (game.selectedCard ? 'high' : 'low')
         : (w.ready || (w.kind === 'worker' && !w.staffed) || w.kind === 'free' ? 'high' : 'low'),
       highlighted: guide === w.target_id,
-      label: worldLabel(w),
+      label: w.label || worldLabel(w, game),
     });
   }
   return out;
@@ -591,13 +629,23 @@ function isNewContent(game, type) {
     && !game.buildings.some((b) => b.type === type);
 }
 
-function worldLabel(w) {
-  if (w.kind === 'pad') return `Building plot ${w.target_id.slice(4)}`;
+function worldLabel(w, game) {
+  if (w.target_id === 'btn_confirm_placement') return 'Green tick: confirm placement';
+  if (w.target_id === 'btn_cancel_placement') return 'Red cross: cancel placement';
+  if (w.kind === 'pad') {
+    const name = game?.selectedCard ? (BUILDINGS[game.selectedCard]?.label || 'building') : null;
+    return name ? `Empty ground: tap to place ${name} here` : `Building plot ${w.target_id.slice(4)}`;
+  }
   if (w.kind === 'free') return `Instant Finish ${w.target_id.slice(5)}`;
   if (w.kind === 'expansion') return `Expand territory (${w.target_id})`;
-  if (w.kind === 'upgrade') return `Upgrade ${w.building_type} to Lv.${w.level + 1}`;
-  if (w.kind === 'worker') return `${w.staffed ? 'Unassign' : 'Assign'} worker (${w.building_type})`;
-  return w.level > 1 ? `${w.building_type} Lv.${w.level}` : w.building_type;
+  const bname = BUILDINGS[w.building_type]?.label || w.building_type;
+  if (w.kind === 'upgrade') return `Upgrade ${bname} to Lv.${w.level + 1}`;
+  if (w.kind === 'worker') return `${w.staffed ? 'Unassign' : 'Assign'} worker: ${bname}`;
+  if (w.kind === 'building') {
+    const base = w.level > 1 ? `${bname} Lv.${w.level}` : bname;
+    return w.ready ? `${base}: ready, tap to collect` : base;
+  }
+  return bname;
 }
 
 function kindOf(id) {
@@ -1351,10 +1399,10 @@ class Hud {
       arrow.hidden = true; return;
     }
     arrow.hidden = false;
-    // On a building the hand points at the collect bubble from its upper
-    // left, so the finger never covers the resource icon inside it.
+    // The hand hovers directly above the target: on a building that is the
+    // collect bubble over the roof, fingertip down at its centre.
     const onBuilding = t.kind === 'building';
-    arrow.style.left = `${t.x + t.w / 2 - (onBuilding ? 30 : 8)}px`;
+    arrow.style.left = `${t.x + t.w / 2 - 8}px`;
     arrow.style.top = `${Math.max(46, t.y - (onBuilding ? 52 : 30))}px`;
   }
 

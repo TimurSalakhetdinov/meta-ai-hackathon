@@ -255,7 +255,8 @@ def propose_feature(prompt: str, *, configs_dir: Path, client: MetaClient,
     if preset:
         raw = preset["plugin"]
     else:
-        raw = client.reason_json(ARCHITECT_SYSTEM, prompt, stub_result=stub, run_id="feature_studio", bucket="analysis")
+        raw = client.reason_json(ARCHITECT_SYSTEM, prompt, stub_result=stub, run_id="feature_studio",
+                                 bucket="analysis", model_id=client.designer_model_id)
     plugin = _clean_plugin(raw if isinstance(raw, dict) else {}, stub)
     emblem = client.generate_ui_emblem(plugin.visual_prompt or stub["visual_prompt"],
                                        out_path=Path(generated_dir) / f"{plugin.feature_id}.png",
@@ -458,7 +459,8 @@ def propose_rework(plugin: dict[str, Any], report: dict[str, Any], *, configs_di
     stub = stub_rework(plugin, report)
     user = json.dumps({"plugin": plugin, "verdict": report.get("key"), "takeaway": report.get("takeaway"),
                        "plaques": report.get("plaques"), "persona_breakdown": report.get("persona_breakdown")})
-    out = client.reason_json(REWORK_SYSTEM, user, stub_result=stub, run_id="feature_studio", bucket="analysis")
+    out = client.reason_json(REWORK_SYSTEM, user, stub_result=stub, run_id="feature_studio",
+                             bucket="analysis", model_id=client.designer_model_id)
     raw = out.get("plugin") if isinstance(out, dict) and isinstance(out.get("plugin"), dict) else {}
     reworked = _clean_plugin({**raw, "feature_id": plugin["feature_id"]}, stub["plugin"])
     # Same feature, same emblem: the rework changes rules, not art.
@@ -477,7 +479,8 @@ def summary_name(patch_id: str) -> str:
 def run_playtest(patch_id: str, *, configs_dir: Path, runs_dir: Path, client: MetaClient,
                  personas: Optional[list[str]] = None, seeds: Optional[list[int]] = None,
                  run_type: str = "full_window", speed: int = 4, session_fn: Any = None,
-                 on_log: Any = None) -> dict[str, Any]:
+                 on_log: Any = None, hear_voice: bool = False,
+                 record_video: bool = False) -> dict[str, Any]:
     """Paired A/B playtest of an approved feature patch against its baseline patch."""
     import asyncio
 
@@ -494,7 +497,8 @@ def run_playtest(patch_id: str, *, configs_dir: Path, runs_dir: Path, client: Me
     personas = personas or list(load_personas(configs_dir))
     exp = Experiment(configs_dir=configs_dir, runs_dir=runs_dir, clients={"A": client, "B": client},
                      run_type=run_type, speed=speed, session_fn=session_fn, experiment_id=f"studio_{patch_id}",
-                     summary_name=summary_name(patch_id))
+                     summary_name=summary_name(patch_id), hear_voice=hear_voice,
+                     record_video=record_video)
     if on_log is not None:
         exp.log = on_log
     return asyncio.run(exp.run([Pair(p, s) for p in personas for s in (seeds or [42])],

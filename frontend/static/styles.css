@@ -23,6 +23,8 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; background: #14110e; color: var(--ink); }
+/* Plain dark frame around the fitted stage: no picture blocks. */
+html { background: #1a140e; }
 html { height: 100%; overflow: hidden; }
 body { width: 1280px; height: 540px; overflow: hidden; font-family: var(--serif); transform-origin: 0 0; }
 button { font: inherit; cursor: pointer; }
@@ -617,6 +619,11 @@ body.slide-dock #right-dock { left: auto; right: 0; width: 352px; z-index: 60; b
   transform: translateX(100%); visibility: hidden; }
 /* .anim is set on the first toggle, so the panel does not slide away on page load. */
 body.slide-dock #right-dock.anim { transition: transform .28s ease, visibility 0s .28s; }
+.dock-collapse { position: absolute; left: 0; top: 50%; transform: translateY(-50%); z-index: 5;
+  width: 16px; height: 64px; padding: 0; cursor: pointer; font: 700 18px/1 var(--ui); color: #ffeec2;
+  background: linear-gradient(#7a4a22, #54300f); border: 2px solid #3a2208; border-left: 0;
+  border-radius: 0 8px 8px 0; box-shadow: 2px 2px 5px rgba(0,0,0,.4); }
+.dock-collapse:hover { color: #fff6da; background: linear-gradient(#8f5a2c, #63390f); }
 body.slide-dock #right-dock.open { transform: none; visibility: visible; }
 body.slide-dock #right-dock.anim.open { transition: transform .28s ease; }
 #council-toggle { position: absolute; right: 0; top: 150px; z-index: 55; writing-mode: vertical-rl; padding: 14px 7px;
@@ -624,6 +631,13 @@ body.slide-dock #right-dock.anim.open { transition: transform .28s ease; }
   background: linear-gradient(90deg, #fff1b0, var(--gold) 55%, var(--gold-lo)); border: 2px solid #fff3c4; border-right: 0;
   border-radius: 12px 0 0 12px; box-shadow: -3px 3px 10px rgba(0,0,0,.45); }
 #council-toggle span { color: #8a1f12; }
+/* Bot session page: the stage is game (960) + dock (320), so the tab's
+   right edge belongs on the game's right edge, not the stage edge. */
+body:not(.slide-dock):not(.watch-mode) #council-toggle { right: 320px; }
+/* Dock closed on a bot page: centre the game in the stage instead of
+   leaving the whole empty dock strip as black on the right. */
+body:not(.slide-dock):not(.watch-mode) #app { transition: transform .28s ease; }
+body:not(.slide-dock):not(.watch-mode).dock-closed #app { transform: translateX(-160px); }
 #council-toggle:hover { padding-right: 10px; }
 
 .council-head { position: relative; display: flex; align-items: center; gap: 6px; margin: 7px 8px 0; padding: 6px 8px;
@@ -642,11 +656,21 @@ body.slide-dock #right-dock.anim.open { transition: transform .28s ease; }
 body.watch-mode #game-root, body.watch-mode #hud, body.watch-mode #build-bar,
 body.watch-mode #action-dock, body.watch-mode #advisor, body.watch-mode #quest-card { display: none !important; }
 body.watch-mode #right-dock { left: auto; right: 0; width: 352px; }
-#watch-screen { position: absolute; left: 0; top: 0; width: 928px; height: 540px; background: #17110b; }
+#watch-screen { position: absolute; left: 0; top: 0; width: 960px; height: 540px; background: #17110b; }
 #watch-screen img { width: 100%; height: 100%; object-fit: contain; display: block; }
+#watch-loading { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 8px;
+  align-items: center; justify-content: center; color: #f4ead2; font: 700 20px var(--serif);
+  background: #17110b; }
+#watch-loading small { font: 400 13px var(--serif); color: #c9b894; }
+#watch-loading::before { content: ''; width: 34px; height: 34px; border-radius: 50%;
+  border: 4px solid #a8844a; border-top-color: #ffeec2; animation: watch-spin 0.9s linear infinite; }
+@keyframes watch-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { #watch-loading::before { animation: none; } }
 #watch-status { position: absolute; left: 10px; bottom: 10px; max-width: 90%; padding: 5px 12px; border-radius: 999px;
   background: rgba(20,12,8,.78); color: #f3e2b8; font: 12px var(--ui); }
 .stepper { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; margin: 0 8px 5px; }
+.hunt-stop { grid-column: 4; color: #ffd9d0; background: linear-gradient(#8a3a2c, #5f2318); }
+.hunt-stop b { background: #3a0f08; border-color: #c47a68; }
 .step-btn { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 4px 0 3px; cursor: pointer;
   font: 700 10px var(--serif); color: #e8d3a8; border-radius: 6px; background: linear-gradient(#7a5a3a, #5a3e22); border: 1px solid #2a1a0c; }
 .step-btn b { width: 18px; height: 18px; line-height: 16px; border-radius: 50%; font: 800 11px var(--ui); text-align: center;
@@ -845,14 +869,7 @@ select.persona { flex: 1; padding: 4px; background: #fffaf0; color: var(--ink); 
 .q-objectives li.ok::before { content: "\2714  "; }
 .q-bar { height: 6px; border-radius: 3px; background: #5a4a38; overflow: hidden; }
 .q-fill { height: 100%; width: 0; background: linear-gradient(90deg, #9be36a, #f0c24b); transition: width .3s; }
-.quest-card .claim {
-  margin-top: 18px; width: 100%; height: 46px; padding: 4px 0 4px 18%;
-  font: 800 15px var(--serif); color: #4a2a08; letter-spacing: .3px;
-  background: url('/static/assets/sprites/btn_claim.png') center / 100% 100% no-repeat;
-  border: none; border-radius: 10px; box-shadow: 0 3px 0 #6b4f17, 0 5px 10px rgba(0,0,0,.30);
-  text-shadow: 0 1px 0 rgba(255,246,200,.75); cursor: pointer;
-}
-.quest-card .claim:active { transform: translateY(2px); box-shadow: 0 1px 0 #6b4f17; }
+.quest-card .claim { margin-top: 18px; height: 46px; font-size: 15px; letter-spacing: .3px; }
 
 /* ------------------------------------------------- Feature plugin card */
 .feature-card {
@@ -886,7 +903,7 @@ select.persona { flex: 1; padding: 4px; background: #fffaf0; color: var(--ink); 
 /* Game Manager: the opening menu where a human picks and approves a feature. */
 .manager { position: absolute; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center;
   background: radial-gradient(ellipse at center, rgba(40,26,10,.82), rgba(10,7,3,.94)); }
-.mgr-panel { width: 880px; max-height: 520px; overflow-y: auto; box-sizing: border-box; padding: 14px 22px 12px;
+.mgr-panel { width: 880px; max-height: 560px; overflow-y: auto; box-sizing: border-box; padding: 20px 22px 18px;
   background: linear-gradient(var(--parch), var(--parch-2)); border: 3px solid var(--gold); border-radius: 14px;
   box-shadow: 0 0 0 3px #3a2a12, 0 18px 40px rgba(0,0,0,.6); }
 .mgr-game { font: 700 11px var(--ui); letter-spacing: 3px; color: var(--gold-lo); text-align: center; }
@@ -898,7 +915,27 @@ select.persona { flex: 1; padding: 4px; background: #fffaf0; color: var(--ink); 
 .mgr-choice .mc-text { flex: 1; }
 .mgr-justplay { display: block; margin: 14px auto 0; padding: 4px 10px; cursor: pointer;
   background: none; border: none; font: 700 13px var(--serif); color: #6a4a28; text-decoration: underline; }
-.mgr-play-btn { display: block; margin: 56px auto 0; width: 340px; max-width: 70%; padding: 10px 4px; font-size: 14px; }
+/* Manager Back buttons are real buttons, not text links, and match the
+   height of the Start button beside them. */
+.mgr-actions { align-items: center; }
+.mgr-actions .game-btn, .mgr-actions [data-back] { height: 40px; box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center; }
+.mgr-actions .game-btn.amber { margin-top: 0; }
+.mgr-actions [data-back] { margin: 0; padding: 8px 26px; border-radius: 8px; text-decoration: none;
+  font: 700 13px var(--serif); color: #ffeec2; background: linear-gradient(#7a4a22, #54300f);
+  border: 2px solid #3a2208; box-shadow: 0 2px 0 #2a1806, 0 3px 6px rgba(0,0,0,.4); cursor: pointer; }
+.mgr-actions [data-back]:hover { background: linear-gradient(#8f5a2c, #63390f); color: #fff6da; }
+.mgr-play-btn { display: block; margin: 14px auto 0; width: 340px; max-width: 70%; padding: 10px 4px; font-size: 14px; }
+.mgr-history-btn { display: block; margin: 24px auto 0; width: 340px; max-width: 70%; padding: 10px 4px; font-size: 14px; }
+.mgr-exp { display: flex; flex-direction: column; gap: 2px; width: 100%; margin-top: 8px; padding: 9px 12px; text-align: left; cursor: pointer;
+  border-radius: 8px; background: #fff8e6; border: 2px solid #d9bf85; color: var(--ink); font: 12px var(--ui); }
+.mgr-exp b { font: 700 13px var(--serif); color: #5a2e0c; }
+.mgr-exp:hover { border-color: var(--gold); }
+#mgr-history { position: relative; }
+.mgr-back-top { position: absolute; top: 0; right: 0; padding: 8px 26px; border-radius: 8px;
+  font: 700 13px var(--serif); color: #ffeec2; background: linear-gradient(#7a4a22, #54300f);
+  border: 2px solid #3a2208; box-shadow: 0 2px 0 #2a1806, 0 3px 6px rgba(0,0,0,.4); cursor: pointer; }
+.mgr-back-top:hover { background: linear-gradient(#8f5a2c, #63390f); color: #fff6da; }
 .mgr-foot { margin-top: 14px; text-align: center; font: 11px var(--ui); color: #6a5236; }
 .mgr-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin-top: 10px; }
 .mgr-field { display: flex; flex-direction: column; gap: 3px; font: 700 11px var(--ui); color: #5a4028; }

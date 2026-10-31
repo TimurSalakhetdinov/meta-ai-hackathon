@@ -9,15 +9,20 @@
     "reserve": 23.0
   },
   "muse_model_id": "muse-spark-1.3-contributor",
+  "designer_model_id": "muse-wonder-1.0",
   "sam_model_id": "sam-3.1",
   "worker_pool_size": 5,
   "muse_cache_in_experiments": false,
-  "prompt_version": "playtester_v3",
+  "prompt_version": "playtester_v8",
   "muse_est_input_tokens": 2600,
   "muse_max_output_tokens": 2000,
   "pricing_usd": {
     "_source": "docs/plan.md price table (dev.meta.ai/docs/pricing-rate-limits, checked 2026-10-27)",
     "muse-spark-1.3": {
+      "input_per_1m": 1.25,
+      "output_per_1m": 4.25
+    },
+    "muse-wonder-1.0": {
       "input_per_1m": 1.25,
       "output_per_1m": 4.25
     },
