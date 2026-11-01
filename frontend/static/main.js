@@ -7,11 +7,11 @@ import {
   BUILDINGS, BUILD_ORDER, ALL_BUILD_ORDER, CAMPAIGN_STAGES, ENCOUNTERS, ERA_LABEL, Game,
   QUESTS, RESOURCES, ALL_RESOURCES, RESOURCE_LABEL, TECHS, UPGRADABLE_TYPES,
 } from './game.js?v=76';
-import { Sfx, defaultMuted } from './audio.js?v=25';
-import { IsoRenderer } from './iso_renderer.js?v=70';
+import { Sfx, defaultMuted } from './audio.js?v=27';
+import { IsoRenderer } from './iso_renderer.js?v=71';
 import { loadSprites, spriteUrl } from './sprites.js?v=69';
-import { TechTreeView } from './tech_tree.js?v=52';
-import { initOverlay } from './overlay.js?v=1';
+import { TechTreeView } from './tech_tree.js?v=53';
+import { initOverlay } from './overlay.js?v=66';
 
 const PROVIDERS = ['human', 'stub', 'open_weights', 'meta'];
 const SPEEDS = [1, 2, 4];
@@ -134,6 +134,8 @@ const kaelenVoice = {
       // Bot ears: the runner reads which Elder line just played and gives
       // the bot its transcript (never the script text above).
       window.__LAST_VOICE__ = { file: hit[1], at: performance.now() };
+      // Watching tabs replay this line so the Elder is heard there too.
+      window.__ON_ELDER_VOICE__?.(hit[1]);
       if ('speechSynthesis' in window) speechSynthesis.cancel();
       // Never overlap lines: stop the previous line before starting a new one.
       if (this.current) { this.current.pause(); this.current.currentTime = 0; }
@@ -242,11 +244,149 @@ class TelemetryClient {
 }
 
 // ------------------------------------------------------------------ boot
+// Side-by-side A/B compare: bot A on the left, bot B on the right,
+// frame-synced by step. Its own screen: no game, no AI Studio dock.
+function startCompare() {
+  document.body.classList.add('compare-mode');
+  document.getElementById('game-root').hidden = true;
+  const dock = document.getElementById('right-dock');
+  if (dock) dock.hidden = true;
+  const app = document.getElementById('app');
+  const el = document.createElement('div');
+  el.className = 'compare-screen';
+  const side = (arm, runId) => `
+    <section class="cmp-side">
+      <header><b>Variant ${arm}</b><span id="cmp-meta-${arm}"></span><span class="cmp-badge" id="cmp-badge-${arm}">Queued</span></header>
+      <div class="cmp-frame"><img id="cmp-img-${arm}" alt="Bot ${arm} playing" hidden>
+        <div class="cmp-wait" id="cmp-wait-${arm}">Waiting for the first frame…</div></div>
+      <div class="cmp-thought" id="cmp-thought-${arm}">…</div>
+      <footer id="cmp-step-${arm}"></footer>
+    </section>`;
+  el.innerHTML = `
+    <div class="cmp-top"><h1>A/B side by side</h1>
+      <button class="game-btn amber" id="cmp-close">Main Menu</button></div>
+    <div class="cmp-banner" id="cmp-banner" hidden>Both sessions finished. You are watching a replay.</div>
+    <div class="cmp-panels">${side('A', params.compareA)}${side('B', params.compareB)}</div>
+    <div class="cmp-controls">
+      <button class="game-btn amber" id="cmp-play">Pause</button>
+      <input type="range" id="cmp-scrub" min="0" max="0" value="0" disabled>
+      <span id="cmp-at">Step 0</span><span class="cmp-note" id="cmp-note" hidden>Same index, not necessarily the same game moment</span>
+    </div>`;
+  app.appendChild(el);
+  el.querySelector('#cmp-close').addEventListener('click', () => { location.href = '/'; });
+  const runs = { A: params.compareA, B: params.compareB };
+  const state = { A: { steps: [], ended: false }, B: { steps: [], ended: false } };
+  let at = 0, playing = true, scrubbing = false;
+  const img = { A: el.querySelector('#cmp-img-A'), B: el.querySelector('#cmp-img-B') };
+  const show = () => {
+    for (const arm of ['A', 'B']) {
+      const st = state[arm];
+      const i = Math.min(at, Math.max(0, st.steps.length - 1));
+      const step = st.steps[i];
+      if (!step) {
+        // The first frame is saved before the first decision lands, which
+        // can take a minute: show the opening frame instead of a black box.
+        const src0 = `/api/runs/${encodeURIComponent(runs[arm])}/artifacts/frames/step_000.png`;
+        if (!img[arm].src.endsWith(src0)) img[arm].src = src0;
+        img[arm].onload = () => {
+          if (!state[arm].steps.length) {
+            img[arm].hidden = false;
+            el.querySelector(`#cmp-wait-${arm}`).hidden = true;
+            el.querySelector(`#cmp-thought-${arm}`).textContent = 'The bot is thinking about its first move…';
+          }
+        };
+        continue;
+      }
+      if (step) {
+        const src = `/api/runs/${encodeURIComponent(runs[arm])}/artifacts/frames/step_${String(step.bot_step_index).padStart(3, '0')}.png`;
+        if (!img[arm].src.endsWith(src)) img[arm].src = src;
+        img[arm].hidden = false;
+        el.querySelector(`#cmp-wait-${arm}`).hidden = true;
+        el.querySelector(`#cmp-thought-${arm}`).textContent = step.thought || step.observation_summary || '…';
+        el.querySelector(`#cmp-step-${arm}`).textContent =
+          `Step ${step.bot_step_index}${st.ended ? ' · finished' : ' · playing'}`;
+      }
+    }
+    const bothEnded = state.A.ended && state.B.ended;
+    el.querySelector('#cmp-banner').hidden = !bothEnded;
+    el.querySelector('#cmp-note').hidden = !bothEnded;
+    const maxAt = Math.max(state.A.steps.length, state.B.steps.length) - 1;
+    const scrub = el.querySelector('#cmp-scrub');
+    scrub.max = Math.max(0, maxAt);
+    if (!scrubbing) scrub.value = at;
+    scrub.disabled = !(state.A.ended && state.B.ended);
+    el.querySelector('#cmp-at').textContent = `${bothEnded ? 'Decision step' : 'Step'} ${at}`;
+  };
+  const poll = async () => {
+    for (const arm of ['A', 'B']) {
+      try {
+        const d = await (await fetch(`/api/runs/${encodeURIComponent(runs[arm])}/live?since=0&bot_since=0`)).json();
+        state[arm].steps = d.bot_steps || [];
+        // Live bots think for many seconds between steps, so a quiet
+        // minute is still live: only the run's own end flag finishes it.
+        state[arm].ended = !!(d.summary && d.summary.session_ended);
+        const badge = el.querySelector(`#cmp-badge-${arm}`);
+        if (!state[arm].steps.length) badge.textContent = 'Starting…';
+        else if (state[arm].ended) badge.textContent = 'Finished · replay';
+        else if (state[arm].steps.some((x) => x.muse_cache_hit === false)) badge.textContent = 'Running · fresh decisions';
+        else if (state[arm].steps.every((x) => x.muse_cache_hit)) badge.textContent = 'Running · cached decisions';
+        else badge.textContent = 'Running';
+        const meta = state[arm].steps[0];
+        const seed = (runs[arm].match(/_s(\d+)$/) || [])[1];
+        const metaEl = el.querySelector(`#cmp-meta-${arm}`);
+        metaEl.textContent = ` · ${meta?.persona_id || ''}${seed ? ` · seed ${seed}` : ''}`;
+        metaEl.title = runs[arm];
+      } catch { /* retry next tick */ }
+    }
+    // Follow live runs only; finished runs are driven by the replay ticker.
+    if (playing && !scrubbing && !(state.A.ended && state.B.ended)) at = Math.max(state.A.steps.length, state.B.steps.length) - 1;
+    if (at < 0) at = 0;
+    show();
+  };
+  el.querySelector('#cmp-play').addEventListener('click', (e) => {
+    const bothEnded = state.A.ended && state.B.ended;
+    const maxAt = Math.max(state.A.steps.length, state.B.steps.length) - 1;
+    if (!playing && bothEnded && at >= maxAt) at = 0;
+    playing = !playing;
+    e.target.textContent = playing ? 'Pause' : 'Play';
+    show();
+  });
+  const scrub = el.querySelector('#cmp-scrub');
+  scrub.addEventListener('input', () => { scrubbing = true; playing = false; el.querySelector('#cmp-play').textContent = 'Play'; at = Number(scrub.value); show(); });
+  scrub.addEventListener('change', () => { scrubbing = false; });
+  poll();
+  setInterval(poll, 2000);
+  // Finished runs replay as living playback from the first step, not a
+  // dead last frame; live runs are followed by the poll above.
+  let booted = false;
+  setInterval(() => {
+    const bothEnded = state.A.ended && state.B.ended;
+    if (!booted && bothEnded && state.A.steps.length) {
+      booted = true;
+      at = 0;
+      playing = true;
+      el.querySelector('#cmp-play').textContent = 'Pause';
+      show();
+      return;
+    }
+    if (!playing || scrubbing) return;
+    if (bothEnded) {
+      const maxAt = Math.max(state.A.steps.length, state.B.steps.length) - 1;
+      if (at < maxAt) { at += 1; show(); }
+      else { playing = false; el.querySelector('#cmp-play').textContent = 'Play again'; }
+    }
+  }, 700);
+}
+
 async function boot() {
+  if (params.compareA && params.compareB) { startCompare(); return; }
   // Watch mode: no local game at all, only the bot's saved stream and frames.
   if (params.watch) {
     document.body.classList.add('watch-mode');
     $('watch-screen').hidden = false;
+    // The watch tab is the speaker for the bot's game: it needs its own
+    // sound engine (music and action sounds), or only bot speech is heard.
+    window.__SFX__ = new Sfx({ muted: false });
     initOverlay({ dock: $('right-dock'), game: null, params, runId: params.runId, telemetry: null, provider: 'meta' });
     return;
   }
@@ -276,15 +416,25 @@ async function boot() {
     onFx: (fx) => { renderer?.fx(fx); for (const fn of fxHandlers) fn(fx); },
     botCtx: () => window.__BOT_CTX__ || {},
   });
+  window.__ON_ELDER_VOICE__ = (file) => game.emit('elder_voice', { file });
   renderer = new IsoRenderer($('world'), sprites, { seed: params.seed });
-  const sfx = new Sfx({ muted: defaultMuted(params) });
+  // Bot sessions play with sound and music on: the bot hears the Elder,
+  // and anyone watching hears the game. Human tabs stay as the player
+  // left them (muted under automation only).
+  const isBotSession = !!(params.bot || params.externalBot);
+  const sfx = new Sfx({ muted: isBotSession ? false : defaultMuted(params) });
   window.__SFX__ = sfx;
+  if (isBotSession) {
+    sfx.setMusicVolume?.(0.6);
+    // Music starts on the bot's first click, when audio unlocks.
+    window.addEventListener('pointerdown', () => sfx.startMusic?.(), { once: true });
+  }
   fxHandlers.push((fx) => { if (fx.type === 'sfx') sfx.play(fx.sound); });
 
   // Volume menu (sound button): Music / Sounds / Voice sliders, persisted.
   const volumes = (() => {
-    try { return { music: 0, sfx: 90, voice: 90, ...JSON.parse(localStorage.getItem('doe_volumes') || '{}') }; }
-    catch { return { music: 0, sfx: 90, voice: 90 }; }
+    try { return { music: 60, sfx: 90, voice: 90, ...JSON.parse(localStorage.getItem('doe_volumes') || '{}') }; }
+    catch { return { music: 60, sfx: 90, voice: 90 }; }
   })();
   // Optional calls: a stale cached audio module must never crash the start.
   sfx.setMusicVolume?.(volumes.music / 100);
@@ -312,6 +462,19 @@ async function boot() {
     });
   }
   applyVolumes();
+  // Bot sessions: music on at a fixed level, whatever the sliders say.
+  if (isBotSession) sfx.setMusicVolume?.(0.6);
+  if (!isBotSession && !params.replayA && !params.replayB) {
+    const startGameMusic = () => {
+      if (document.getElementById('manager')) return;
+      window.removeEventListener('pointerdown', startGameMusic);
+      if (volumes.music > 0) {
+        sfx.setMusicVolume?.(volumes.music / 100);
+        sfx.startMusic?.();
+      }
+    };
+    window.addEventListener('pointerdown', startGameMusic);
+  }
   // Valley music track choice (volume menu), persisted.
   const trackSel = $('music-track');
   if (trackSel) {
@@ -325,6 +488,7 @@ async function boot() {
     });
   }
   if (sfx.muted && $('btn_vol_mute')) $('btn_vol_mute').textContent = 'Unmute all';
+  $('btn_mainmenu')?.addEventListener('click', (e) => { e.stopPropagation(); location.href = '/'; });
   // Buildings menu collapse: one button hides the cards, click again expands.
   const buildBar = $('build-bar');
   const buildToggle = $('btn_buildings_toggle');
@@ -348,8 +512,9 @@ async function boot() {
     };
     buildBar.addEventListener('pointerdown', armBuildBarTimer);
     buildToggle.addEventListener('click', () => {
-      setCollapsed(!buildBar.classList.contains('collapsed'));
-      sfx.play('click');
+      const opening = buildBar.classList.contains('collapsed');
+      setCollapsed(!opening);
+      sfx.play(opening ? 'dock_buildings' : 'dock_buildings_close');
       armBuildBarTimer();
     });
     armBuildBarTimer();
@@ -412,6 +577,7 @@ async function boot() {
     const MENU_SOUNDS = {
       btn_heroes: 'dock_heroes', btn_expedition: 'dock_campaign',
       btn_research: 'dock_research', btn_upgrades: 'dock_upgrades',
+      btn_buildings_toggle: 'dock_buildings',
     };
     if (outcome.result === 'rejected') sfx.play('reject');
     if (outcome.result === 'rejected' && target?.startsWith('tech_')) techView.flashRejected(target, game);
@@ -574,6 +740,10 @@ function renderedTargets(game, renderer, config) {
       const st = game.featureStatus();
       t.affordable = !!st.affordable;
       t.cooldown = st.cooldown ? round1(st.cooldown) : 0;
+      // The whole point of a feature card is written on it: title plus its
+      // plain description, exactly what a player reads before tapping.
+      const desc = String(game.feature.description || '').replace(/\s+/g, ' ').trim();
+      if (desc) t.label = `${game.feature.title}. ${desc}`.slice(0, 140);
       const sal = game.feature.button_salience;
       t.computed_salience = sal === 'high_pulse' && game.featureUses > 0 ? 'high' : sal;
       t.is_new = sal === 'high_pulse' && game.featureUses === 0;
@@ -925,7 +1095,7 @@ class Hud {
         return `<div class="upgrade-row"><span class="u-name">${name} <small>Lv.${b.level}</small></span><span class="u-state">Max level</span></div>`;
       }
       if (!st.available) {
-        return `<div class="upgrade-row"><span class="u-name">${name} <small>Lv.${b.level}</small></span><span class="u-state">🔒 Learn ${TECHS[st.requires].label} first</span></div>`;
+        return `<div class="upgrade-row"><span class="u-name">${name} <small>Lv.${b.level}</small></span><span class="u-state">🔒 Research ${TECHS[st.requires].label} first</span></div>`;
       }
       const btn = st.affordable
         ? `<button class="gold-btn" data-target="upgrade_${b.key}">Upgrade · ${costText(st.costs)}</button>`

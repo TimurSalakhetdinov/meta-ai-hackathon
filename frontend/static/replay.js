@@ -7,7 +7,7 @@
 // Runs that were not played by live Muse Spark (provider_mode != meta) are
 // refused unless ?dev=1 is set, so a stub run is never presented as real.
 
-import { ERA_LABEL, Game } from './game.js';
+import { BUILD_ORDER, BUILDINGS, ERA_LABEL, Game, TECH_ORDER, TECHS } from './game.js';
 import { IsoRenderer } from './iso_renderer.js';
 import { loadSprites } from './sprites.js';
 
@@ -17,7 +17,8 @@ export async function startReplay(params) {
   document.getElementById('app').hidden = true;
   const root = document.getElementById('replay-root');
   root.hidden = false;
-  root.innerHTML = `<div class="rp-head">Replay · A vs B<span class="clock" id="rp-clock"></span></div><div id="rp-body"></div>`;
+  root.innerHTML = `<div class="rp-head">Replay · A vs B<button class="game-btn amber" id="rp-back-report">← Back to report</button><span class="clock" id="rp-clock"></span></div><div id="rp-body"></div>`;
+  root.querySelector('#rp-back-report').addEventListener('click', () => { location.href = '/?reportfull=1'; });
   const body = document.getElementById('rp-body');
   window.__REPLAY_STATE__ = { ready: false };
 
@@ -92,6 +93,10 @@ class Panel {
     this.whereStuck = rec.summary?.where_stuck || null;
     this.cursor = 0;
     this.frozen = false;
+    this.markers = [];
+    this.lastTarget = null;
+    this.lastTargetT = -99;
+    this.thoughts = (rec.bot_steps || []).slice().sort((a, b) => (a.sim_elapsed_sec || 0) - (b.sim_elapsed_sec || 0));
     this.game = new Game(rec.resolved_config, {
       runId: meta.run_id, variant: meta.variant_id, patchId: meta.patch_id, persona: meta.persona_id,
       seed: meta.seed, provider: meta.provider_mode, replay: true, onFx: (fx) => this.renderer?.fx(fx),
@@ -103,10 +108,12 @@ class Panel {
     this.el.innerHTML = `
       <div class="rp-label"><span>${label}</span><span class="badge">${esc(meta.run_id)}</span></div>
       <canvas width="960" height="540"></canvas>
+      <div class="rp-thought" title="What this bot is thinking">💭 …</div>
       <div class="rp-hud"></div>
       <div class="rp-badge" hidden></div>`;
     this.canvas = this.el.querySelector('canvas');
     this.hud = this.el.querySelector('.rp-hud');
+    this.thoughtEl = this.el.querySelector('.rp-thought');
     this.badge = this.el.querySelector('.rp-badge');
     this.renderer = new IsoRenderer(this.canvas, sprites, { seed: meta.seed ?? 42 });
   }
@@ -117,10 +124,16 @@ class Panel {
       const c = this.clicks[this.cursor++];
       this.game.advanceTo(c.t);
       this.game.click(c.target, c.x, c.y);
+      this.lastTarget = c.target;
+      this.lastTargetT = c.t;
+      if (typeof c.x === 'number' && typeof c.y === 'number') {
+        this.markers.push({ x: c.x, y: c.y, t: c.t, target: c.target });
+      }
     }
     this.game.advanceTo(Math.min(t, this.lastT));
     this.renderer.render(this.game, dt);
-    this.drawHud();
+    this.drawOverlay(t);
+    this.drawHud(t);
 
     if (this.stuckAt !== null && t >= this.stuckAt && !this.achievedAt) {
       this.showBadge('stalled', `STALLED AT ${this.whereStuck || this.game.step_id}`);
@@ -141,9 +154,97 @@ class Panel {
     this.badge.hidden = false;
   }
 
-  drawHud() {
+  // Menus and bot clicks, drawn over the village: the menu the bot is
+  // using (from the game's modal or its last clicks) as a chip strip, and
+  // an expanding ring with the target name at every recorded click point.
+  drawOverlay(t) {
+    const ctx = this.canvas.getContext('2d');
+    this.markers = this.markers.filter((m) => t - m.t < 1.4);
+    for (const m of this.markers) {
+      const age = Math.max(0, t - m.t);
+      const k = age / 1.4;
+      ctx.save();
+      ctx.globalAlpha = 1 - k;
+      ctx.strokeStyle = '#ffd94d';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, 7 + age * 16, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = '#fff3b0';
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      if (m.target) {
+        ctx.font = '700 11px ui-monospace, Menlo, monospace';
+        const w = ctx.measureText(m.target).width + 10;
+        ctx.fillStyle = 'rgba(30,22,12,.85)';
+        ctx.fillRect(m.x + 10, m.y - 22, w, 16);
+        ctx.fillStyle = '#ffe9a8';
+        ctx.fillText(m.target, m.x + 15, m.y - 10);
+      }
+      ctx.restore();
+    }
+    const g = this.game;
+    const recent = t - this.lastTargetT < 6;
+    // The bot's menus live in its recorded step targets (Buildings, cards,
+    // Research), not in the logic-only click events, so key the strip off
+    // the step the bot is on now.
+    const cur = [...this.thoughts].reverse().find((x) => (x.sim_elapsed_sec || 0) <= t);
+    const mt = cur?.target_id || this.lastTarget || '';
+    let title = null;
+    let chips = [];
+    if (g.modal === 'research' || String(mt).startsWith('tech_') || mt === 'btn_research') {
+      title = '🔬 Research';
+      chips = TECH_ORDER.map((id) => ({ id, label: TECHS[id].label, done: g.techs.has(id) }));
+    } else if (g.modal === 'expedition' || g.modal === 'prebattle') {
+      title = '⚔️ Campaign';
+      chips = [{ id: mt, label: mt || 'Campaign map', done: false }];
+    } else if (g.modal === 'heroes') {
+      title = '🛡️ Heroes';
+      chips = [{ id: mt, label: mt || 'Hero roster', done: false }];
+    } else if (g.modal === 'quests') {
+      title = '📜 Quests';
+      chips = [{ id: 'btn_claim_quest', label: 'Claim Reward', done: !!g.questClaimable }];
+    } else if (g.modal === 'upgrades') {
+      title = '⬆ Upgrades';
+      chips = [{ id: mt, label: mt || 'Upgrades', done: false }];
+    } else if (g.pendingPlacement || /^(card_|pad_|btn_confirm|btn_cancel|btn_buildings)/.test(String(mt))) {
+      title = '🔨 Buildings';
+      chips = BUILD_ORDER.map((id) => ({ id: `card_${id}`, label: BUILDINGS[id].label,
+        done: g.buildings.some((b) => b.type === id && b.status === 'done') }));
+    }
+    if (!title) return;
+    const H = 34;
+    ctx.save();
+    ctx.fillStyle = 'rgba(24,18,10,.88)';
+    ctx.fillRect(0, 540 - H, 960, H);
+    ctx.font = '700 12px Georgia, serif';
+    ctx.fillStyle = '#ffd94d';
+    ctx.fillText(title, 10, 540 - 12);
+    let x = 10 + ctx.measureText(title).width + 14;
+    ctx.font = '11px Georgia, serif';
+    for (const c of chips) {
+      const label = `${c.done ? '✓ ' : ''}${c.label}`;
+      const w = ctx.measureText(label).width + 14;
+      if (x + w > 950) break;
+      const active = c.id && c.id === mt;
+      ctx.fillStyle = active ? '#f0ad3d' : 'rgba(255,244,214,.14)';
+      ctx.beginPath();
+      ctx.roundRect(x, 540 - H + 6, w, 22, 6);
+      ctx.fill();
+      ctx.fillStyle = active ? '#3a2208' : (c.done ? '#9be36a' : '#f3e6c8');
+      ctx.fillText(label, x + 7, 540 - 12);
+      x += w + 6;
+    }
+    ctx.restore();
+  }
+
+  drawHud(t) {
     const g = this.game;
     const r = g.roundedResources();
+    const th = [...this.thoughts].reverse().find((x) => (x.sim_elapsed_sec || 0) <= (t ?? 0));
+    const thought = th ? `💭 ${th.thought || th.observation_summary || ''}` : '💭 …';
+    if (this.thoughtEl && this.thoughtEl.textContent !== thought) this.thoughtEl.textContent = thought;
     const html = `<span>${esc(g.step_id)}</span><span>${ERA_LABEL[g.era]}</span>
       <span>\u{1F35E}${r.food}</span><span>\u{1FAB5}${r.wood}</span><span>\u{1FAA8}${r.stone}</span><span>⭐${g.score}</span>`;
     if (this.hud.innerHTML !== html) this.hud.innerHTML = html;

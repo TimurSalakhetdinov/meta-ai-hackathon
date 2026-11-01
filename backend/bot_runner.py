@@ -269,6 +269,8 @@ class BotRunner:
             return "stuck_abort"
         if spec.run_type == "onboarding":
             return "first_achievement" if state["achieved"] else None
+        if (state.get("quest_index") or 0) >= 6:
+            return "journey_complete"
         if state.get("bronze_achieved"):
             return "bronze_age_mastery"
         if state["sim_elapsed_sec"] >= (spec.time_limit_sim_sec or SIM_WINDOW_SEC):

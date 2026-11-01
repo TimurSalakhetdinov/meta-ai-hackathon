@@ -1,0 +1,34 @@
+{
+  "patch_id": "patch_036",
+  "status": "proposed",
+  "created_by": "designer_agent",
+  "created_at": "2026-11-01T19:49:22Z",
+  "title": "Rework: Supply Cache",
+  "rationale": "Designer rework: move unlock_at_step from onb_03_handoff to free_play; tone down button_salience from high_pulse to medium; pay 10 Food instead of 5 Food; reward 25 Food, 15 Stone, 6 RP and 25 score, the Stone Age bottleneck; set the cooldown to 15 s; halve the cost.",
+  "target_step": "free_play",
+  "baseline_patch_id": null,
+  "body": {
+    "feature_plugin": {
+      "feature_id": "supply_cache",
+      "title": "Supply Cache",
+      "icon": "🪵",
+      "icon_url": "/static/assets/generated/supply_cache.png",
+      "visual_prompt": "Painted Celtic storybook game emblem, a neat stack of cut timber logs with visible round log ends and bark, tied with rope, beside an open wooden crate and a small grain sack, warm ochre and forest green, bold readable silhouette, plain cream background, no text.",
+      "description": "Trade 5 food for 20 wood.",
+      "unlock_at_step": "free_play",
+      "button_salience": "medium",
+      "action_type": "instant_trade",
+      "costs": {
+        "food": 2
+      },
+      "rewards": {
+        "food": 25,
+        "stone": 15,
+        "rp": 6,
+        "score": 25
+      },
+      "cooldown_sec": 15.0,
+      "advisor_intro": "Short of timber, Chief? Trade a little food at the Supply Cache, then carry on with your research."
+    }
+  }
+}

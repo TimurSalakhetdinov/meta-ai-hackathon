@@ -93,7 +93,7 @@ export class TechTreeView {
   flashRejected(id, game) {
     const st = game.techStatus(id);
     const msg = !st.available
-      ? `Learn ${TECHS[st.requires].label} first`
+      ? `Research ${TECHS[st.requires].label} first`
       : st.missing ? `Need ${st.missing.required} ${RESOURCE_LABEL[st.missing.resource]} · have ${Math.floor(st.missing.available)}` : '';
     this.flash = { id, msg, until: performance.now() + 2500 };
     this.signature = '';

@@ -233,7 +233,9 @@ class Experiment:
                  run_type: str = "full_window", worker_pool_size: Optional[int] = None,
                  session_fn: Optional[SessionFn] = None, experiment_id: Optional[str] = None,
                  speed: int = 4, summary_name: str = "ab_summary.json",
-                 hear_voice: bool = False, record_video: bool = False) -> None:
+                 hear_voice: bool = False, record_video: bool = False,
+                 time_limit_sim_sec: float | None = None) -> None:
+        self.time_limit_sim_sec = time_limit_sim_sec
         self.hear_voice = hear_voice
         self.record_video = record_video
         check_homogeneous(clients)
@@ -258,7 +260,8 @@ class Experiment:
         run_id = f"{self.experiment_id}_{arm}_{pair.persona_id}_s{pair.seed}"
         return SessionSpec(variant, pair.persona_id, pair.seed, run_id, patch_id, self.run_type, self.speed,
                            experiment_mode=True, hear_voice=self.hear_voice,
-                           record_video=self.record_video)
+                           record_video=self.record_video,
+                           time_limit_sim_sec=self.time_limit_sim_sec)
 
     async def run(self, pairs: list[Pair], *, patch_id: str, baseline_patch_id: Optional[str] = None,
                   baseline_from: Optional[Path] = None) -> dict[str, Any]:

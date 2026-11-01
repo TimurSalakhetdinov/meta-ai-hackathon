@@ -153,7 +153,7 @@ export class Sfx {
       'build_shelter', 'build_forager_hut', 'build_woodcutter_hut', 'build_stone_quarry',
       'build_granary', 'build_smelter', 'build_tribal_monument', 'build_barracks', 'build_hero_arena',
       'harvest_food', 'harvest_wood', 'harvest_stone', 'harvest_coins', 'research_select',
-      'dock_heroes', 'dock_campaign', 'dock_research', 'dock_upgrades', 'claim_reward', 'ambient_wind', 'upgrade'];
+      'dock_heroes', 'dock_campaign', 'dock_research', 'dock_upgrades', 'dock_buildings', 'dock_buildings_close', 'claim_reward', 'ambient_wind', 'upgrade'];
     for (const n of NAMES) {
       fetch(`/static/assets/audio/sfx/${n}.mp3?v=18`)
         .then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })

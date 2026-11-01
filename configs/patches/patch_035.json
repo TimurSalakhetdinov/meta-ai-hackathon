@@ -1,0 +1,31 @@
+{
+  "patch_id": "patch_035",
+  "status": "proposed",
+  "created_by": "designer_agent",
+  "created_at": "2026-11-01T19:36:37Z",
+  "title": "Feature: Supply Cache",
+  "rationale": "PM prompt: Add a “Supply Cache” at the Basic Toolmaking research handoff that trades 5 food for 20 wood instantly, has a highly visible pulsing card and a 120-second cooldown, includes an Elder line directing the player back to Research, and uses a wooden supply-crate emblem.",
+  "target_step": "onb_03_handoff",
+  "baseline_patch_id": null,
+  "body": {
+    "feature_plugin": {
+      "feature_id": "supply_cache",
+      "title": "Supply Cache",
+      "icon": "🪵",
+      "icon_url": "/static/assets/generated/supply_cache.png",
+      "visual_prompt": "Painted Celtic storybook game emblem, a neat stack of cut timber logs with visible round log ends and bark, tied with rope, beside an open wooden crate and a small grain sack, warm ochre and forest green, bold readable silhouette, plain cream background, no text.",
+      "description": "Trade 5 food for 20 wood.",
+      "unlock_at_step": "onb_03_handoff",
+      "button_salience": "high_pulse",
+      "action_type": "instant_trade",
+      "costs": {
+        "food": 5
+      },
+      "rewards": {
+        "wood": 20
+      },
+      "cooldown_sec": 120.0,
+      "advisor_intro": "Short of timber, Chief? Trade a little food at the Supply Cache, then carry on with your research."
+    }
+  }
+}

@@ -463,7 +463,7 @@ class MetaClient:
         makes the cut, guided or not: it is the only way into the build
         menu, and a bot that cannot see it cannot build at all.
         """
-        interactive = {"button", "build_card", "tech", "hud", "upgrade", "free_finish",
+        interactive = {"button", "build_card", "tech", "hud", "upgrade", "free_finish", "feature",
                        "worker", "placement", "battle_enemy", "battle_hero", "battle_hex"}
         visible = [t for t in targets if t.get("visible", True) and t.get("w") and t.get("h")]
         visible.sort(key=lambda t: (0 if t.get("highlighted") else 1,
@@ -807,6 +807,11 @@ class MetaClient:
         base = {"run_id": run_id, "provider_mode": self.provider_mode, "model_id": "muse-image-1.0",
                 "model_mode": "standard", "bucket": bucket, "images": 1}
         if self.provider_mode != "meta":
+            # Never let the offline placeholder replace a real generated
+            # emblem that already sits at this path.
+            if out_path.exists() and out_path.stat().st_size > 8192:
+                self.ledger.log(base)
+                return out_path
             out_path.write_bytes(_procedural_emblem(prompt))
             self.ledger.log(base)
             return out_path
@@ -980,8 +985,11 @@ def stub_to_raw(stub: dict[str, Any], som: SomResult) -> dict[str, Any]:
     return raw
 
 
-_EMBLEM_MOTIFS = (("sword", "swords"), ("shield", "swords"), ("camel", "coin"), ("merchant", "coin"),
-                  ("bonfire", "flame"), ("fire", "flame"), ("crown", "crown"), ("tax", "crown"))
+_EMBLEM_MOTIFS = (("basket", "wheat"), ("crate", "logs"), ("log", "logs"), ("timber", "logs"),
+                  ("parchment", "scroll"), ("scroll", "scroll"), ("counsel", "scroll"),
+                  ("sword", "swords"), ("shield", "swords"), ("camel", "coin"), ("merchant", "coin"),
+                  ("bonfire", "flame"), ("fire", "flame"), ("crown", "crown"), ("tax", "crown"),
+                  ("grain", "wheat"), ("harvest", "wheat"), ("wheat", "wheat"))
 
 
 def _procedural_emblem(prompt: str = "") -> bytes:
@@ -994,7 +1002,25 @@ def _procedural_emblem(prompt: str = "") -> bytes:
     d = ImageDraw.Draw(img)
     d.ellipse([4, 4, 124, 124], fill=(255, 196, 0, 255), outline=ink, width=6)
     d.ellipse([16, 16, 112, 112], fill=(120 + hue // 4, 70 + hue // 8, 40, 255), outline=ink, width=3)
-    if motif == "swords":
+    if motif == "logs":
+        # Stacked cut logs: bark sides with pale round ends, rope on top log.
+        for i, y in enumerate((78, 58, 38)):
+            x0 = 34 if i < 2 else 44
+            d.rounded_rectangle([x0, y, x0 + 60 - (20 if i == 2 else 0), y + 16], radius=8,
+                                fill=(146, 96, 44, 255), outline=ink, width=3)
+            d.ellipse([x0 + 2, y + 2, x0 + 14, y + 14], fill=(232, 196, 130, 255), outline=ink, width=2)
+    elif motif == "scroll":
+        d.rounded_rectangle([34, 40, 94, 88], radius=6, fill=cream, outline=ink, width=3)
+        d.ellipse([28, 34, 44, 52], fill=(210, 180, 120, 255), outline=ink, width=3)
+        d.ellipse([84, 76, 100, 94], fill=(210, 180, 120, 255), outline=ink, width=3)
+        d.line([(46, 54), (82, 54)], fill=ink, width=3)
+        d.line([(46, 66), (74, 66)], fill=ink, width=3)
+    elif motif == "wheat":
+        for dx in (-18, 0, 18):
+            d.line([(64 + dx, 96), (64 + dx, 44)], fill=(146, 96, 20, 255), width=4)
+            for dy in (0, 10, 20):
+                d.ellipse([58 + dx, 34 + dy, 70 + dx, 48 + dy], fill=(240, 190, 60, 255), outline=ink, width=2)
+    elif motif == "swords":
         d.line([(36, 36), (92, 92)], fill=cream, width=9)
         d.line([(92, 36), (36, 92)], fill=cream, width=9)
         d.line([(28, 80), (48, 100)], fill=ink, width=6)

@@ -74,7 +74,7 @@ export function initOverlay(ctx) {
     if (ctx.params.dock || ctx.blocked) setOpen(true);
     // A plain visit opens on the Game Manager menu; links with a variant, patch or dock go straight in.
     const q = new URLSearchParams(location.search);
-    if (!['variant', 'patch_id', 'dock', 'play'].some((k) => q.has(k))) ui.openManager();
+    if (!['variant', 'patch_id', 'dock', 'play', 'reportfull'].some((k) => q.has(k))) ui.openManager();
   } else if (ctx.params.watch || ctx.params.bot || ctx.params.externalBot) {
     // Bot screens keep the fixed dock, but it closes the same way: the
     // arrow hides it and the yellow AI Studio tab brings it back.
@@ -154,14 +154,41 @@ class Overlay {
     this.renderForge();
     if (ctx.telemetry) ctx.telemetry.listeners.push((ev) => this.onEvent(ev));
     if (this.game || ctx.params.watch) setInterval(() => this.poll(), POLL_MS);
+    if (ctx.params.ab) {
+      // A/B session watch: just the bot playing, no Forge or Bug hunting steps.
+      const stepperEl = document.getElementById('stepper');
+      if (stepperEl) stepperEl.hidden = true;
+    }
+    if (this.fromMenu) this.simplifyStepper();
     const start = { analyst: 'report', report: 'report', live: 'live' }[ctx.params.dock];
     // An explicit Report link means the hunt already finished elsewhere.
     if (start === 'report') this.huntDone = true;
     if (start) this.showTab(start);
     else if (ctx.params.bot || ctx.params.externalBot || ctx.params.flow === 'bug') this.showTab('live');
+    // Open full report means the report alone on its own screen, no game.
+    const rp = new URLSearchParams(location.search).get('report_patch');
+    if (rp) this.reportPatch = rp;
+    if (new URLSearchParams(location.search).get('reportfull') === '1') this.openReportFull();
   }
 
   // Steps 1-3 are sections of the Forge panel; step 4 is the Report panel.
+  simplifyStepper() {
+    // A/B test from the menu: no step strip, the stage and the report speak for themselves.
+    const stepper = document.getElementById('stepper');
+    if (stepper) stepper.hidden = true;
+    const back = document.getElementById('mgr-back');
+    if (back) {
+      back.textContent = '← Back to comparisons';
+      back.title = 'Runs continue when you leave this screen';
+      back.onclick = () => { location.href = '/?mgr=compare'; };
+    }
+    document.querySelectorAll('#stepper .step-btn[data-step]').forEach((b) => {
+      if (b.dataset.step === '1' || b.dataset.step === '2') b.hidden = true;
+      if (b.dataset.step === '3') b.innerHTML = '<b>1</b>Playtest';
+      if (b.dataset.step === '4') b.innerHTML = '<b>2</b>Report';
+    });
+  }
+
   showStep(n) {
     if (n === 4 && this.slide) { this.openReportFull(); return; }
     this.step = n === 4 ? this.step : n;
@@ -260,6 +287,50 @@ class Overlay {
     el.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
   }
 
+  playElder(file) {
+    if (!file) return;
+    try {
+      if (this.elderAudio) { this.elderAudio.pause(); this.elderAudio.currentTime = 0; }
+      this.elderAudio = new Audio(`/static/assets/audio/voice/${encodeURIComponent(file)}?v=3`);
+      this.elderAudio.volume = 0.45;
+      this.elderAudio.play().catch(() => {});
+    } catch { /* voice is decoration here */ }
+  }
+
+  // Music and action sounds for the watch screen, played in this tab.
+  watchSound(step) {
+    const sfx = window.__SFX__;
+    if (!sfx || !this.ctx.params.watch) return;
+    if (!this._watchMusicOn) {
+      this._watchMusicOn = true;
+      this._prevMusicVolume = sfx.musicVolume;
+      sfx.setMusicVolume?.(0.6);
+      sfx.ctx?.resume?.();
+      sfx.startMusic?.();
+    }
+    if (!step) return;
+    const t = step.target_id || '';
+    const name = t === 'btn_confirm_placement' ? 'build'
+      : t === 'btn_claim_quest' ? 'claim_reward'
+      : t.startsWith('tech_') ? 'research_select'
+      : t === 'btn_research' ? 'dock_research'
+      : t === 'btn_heroes' ? 'dock_heroes'
+      : t === 'btn_expedition' ? 'dock_campaign'
+      : t === 'btn_upgrades' ? 'dock_upgrades'
+      : t === 'btn_buildings_toggle' ? 'dock_buildings'
+      : t.startsWith('building_') ? 'harvest'
+      : 'click';
+    try { sfx.play(name); } catch { /* sound is decoration here */ }
+  }
+
+  stopWatchSound() {
+    const sfx = window.__SFX__;
+    if (!sfx || !this._watchMusicOn) return;
+    this._watchMusicOn = false;
+    sfx.stopMusic?.();
+    if (this._prevMusicVolume != null) sfx.setMusicVolume?.(this._prevMusicVolume);
+  }
+
   async poll() {
     if (document.hidden) return;
     const runId = this.ctx.runId;
@@ -269,7 +340,10 @@ class Overlay {
       const data = await r.json();
       this.liveNext = data.next;
       this.botNext = data.bot_next;
-      for (const ev of data.events) if (ev.event_type === 'stuck') this.addStream(streamLine(ev), 'stuck-row');
+      for (const ev of data.events) {
+        if (ev.event_type === 'stuck') this.addStream(streamLine(ev), 'stuck-row');
+        if (ev.event_type === 'elder_voice' && this.ctx.params.watch) this.playElder(ev.payload?.file);
+      }
       // When the hunt ends, the Report (diagnosis and proposed fixes) opens
       // on its own: no hunting for the right tab. Note: /live returns a
       // summary dict from the first event on, so "summary exists" must
@@ -279,12 +353,15 @@ class Overlay {
       if (this.ctx.params.watch && !this.reportOpened && ended) {
         this.reportOpened = true;
         this.huntDone = true;
+        this.stopWatchSound();
         this.showTab('report');
       }
       for (const s of data.bot_steps || []) {
         this.addStream(`<span class="t">#${s.bot_step_index}</span> <span class="thought">💭 ${esc(s.thought || s.observation_summary || '')}</span>${s.target_id ? ` <span class="t">→ ${esc(s.target_id)}</span>` : ''}`);
         this.speakThought(s.thought || s.observation_summary, s.persona_id);
+        this.watchSound(s);
       }
+      if (this.ctx.params.watch && !ended && data.bot_next > 0) this.watchSound(null);
       // Show the bot's latest screenshot so the hunt is visible, not just text.
       if (data.bot_next > 0) {
         const n = String(data.bot_next - 1).padStart(3, '0');
@@ -528,9 +605,8 @@ class Overlay {
       return null;
     };
     if (analysisRun) analysis = await fetchAnalysis(analysisRun);
-    // Bug hunting reports on the current run only: never fall back to a
-    // recorded demo run (its frames show an old build of the game).
-    if (!analysis && !this.bugMode && analysisRun !== 'demo_play_A') analysis = await fetchAnalysis('demo_play_A');
+    // Reports show the current run only: never fall back to a recorded
+    // demo run (its frames show an old build of the game, ocean and all).
     if (this.bugMode && !analysis && this.huntDone && !this.analyzeRequested) {
       // The hunt ended but nobody wrote the diagnosis yet (in-tab bot):
       // ask the analyst (Meta model) once, then redraw with its report.
@@ -547,10 +623,10 @@ class Overlay {
         return;
       }
     }
-    const frame = analysis?.stuck_frame_url
-      ? `<img src="${esc(analysis.stuck_frame_url)}" alt="Stuck frame">`
-      : (analysis ? 'Screenshot unavailable for this run/step.'
-        : 'Diagnosis pending: the hunt is still running or the analyst has not written this run\'s report yet.');
+    // No recorded frame, no frame box: an empty dark panel reads as a bug.
+    const frameHtml = analysis?.stuck_frame_url
+      ? `<div class="section-h">Stuck frame</div><div class="frame-box"><img src="${esc(analysis.stuck_frame_url)}" alt="Stuck frame"></div>`
+      : '';
     const vs = analysis?.visual_salience;
     const samMissing = this.bugMode && analysis && !vs
       ? '<div class="note">Visual analysis unavailable for this frame.</div>' : '';
@@ -567,8 +643,7 @@ class Overlay {
     if (this.bugMode) {
       el.innerHTML = `
         ${noStuck}
-        <div class="section-h">Stuck frame</div>
-        <div class="frame-box">${frame}</div>
+        ${frameHtml}
         ${vsNote}${samMissing}
         <div class="section-h">Diagnosis</div>
         ${diagnosis}
@@ -581,8 +656,7 @@ class Overlay {
     const decided = ['approved', 'rejected'].includes(patch.status);
     const canDecide = patch.status === 'validated';
     el.innerHTML = `
-      <div class="section-h">Stuck frame</div>
-      <div class="frame-box">${frame}</div>
+      ${frameHtml}
       ${vsNote}
       <div class="section-h">Diagnosis</div>
       ${diagnosis}
@@ -673,15 +747,26 @@ class Overlay {
       <div class="note" id="forge-note">The designer agent turns the idea into a config patch. Nothing reaches players until you approve it.</div>
       <section data-steps="2 3"><div id="decree"></div></section>
       <section data-steps="3">
-        <div class="section-h">Choose the playtesters</div>
-        <div class="guild" id="guild"></div>
-        <button class="game-btn amber" id="summon-btn" disabled>▶ Run A/B Playtest</button>
+        <div class="run-status" id="run-status"></div>
+        <div class="pair-progress" id="pair-progress"></div>
+        <details class="bot-thoughts" id="bot-thoughts" hidden>
+          <summary id="bot-thoughts-title">💭 Bot thoughts</summary>
+          <div class="bot-thoughts-list" id="bot-thoughts-list"></div>
+        </details>
+        <div class="run-stall" id="run-stall"></div>
+        <button class="game-btn iron" id="stop-compare" hidden>Stop comparison</button>
         <div class="note" id="summon-note">Approve the patch first.</div>
-        <div class="agents-live" id="agents-live"></div>
       </section>`;
     el.querySelector('#forge-btn').addEventListener('click', () => this.forge());
-    el.querySelector('#summon-btn').addEventListener('click', () => this.summon());
     this.showTab(this.tab);
+    el.querySelector('#stop-compare')?.addEventListener('click', async (e) => {
+      e.currentTarget.disabled = true;
+      for (const x of this.job?.sessions || []) {
+        if (x.run_id) fetch(`/api/runs/${encodeURIComponent(x.run_id)}/stop_hunt`, { method: 'POST' }).catch(() => {});
+      }
+      const n = document.getElementById('summon-note');
+      if (n) n.textContent = 'Stopping the comparison…';
+    });
     this.renderPresets();
     await this.personasReady;
     this.renderGuild();
@@ -694,7 +779,7 @@ class Overlay {
     const el = document.getElementById('presets');
     el.innerHTML = this.presets.map((x) => `
       <button class="preset" data-id="${esc(x.preset_id)}" title="${esc(x.prompt)}">
-        <span class="pr-ico">${esc(x.icon)}</span>
+        <span class="pr-ico"><img src="/static/assets/generated/${esc(x.preset_id)}.png?v=e3" alt="" onerror="this.remove()"><span class="pr-emoji">${esc(x.icon)}</span></span>
         <span class="pr-text"><b>${esc(x.label)}</b><span>${esc(x.summary)}</span></span>
       </button>`).join('');
     el.querySelectorAll('.preset').forEach((b) => b.addEventListener('click', () => {
@@ -706,6 +791,7 @@ class Overlay {
 
   renderGuild() {
     const el = document.getElementById('guild');
+    if (!el) return;
     el.innerHTML = this.personas.map((x) => `
       <button class="medallion ${this.chosen.has(x.persona_id) ? 'on' : ''}" data-id="${esc(x.persona_id)}" aria-pressed="${this.chosen.has(x.persona_id)}"
         title="${esc(x.description)}&#10;${esc((x.grounding || []).join('; '))}">
@@ -755,14 +841,14 @@ class Overlay {
     if (!p) { el.innerHTML = ''; this.updateSummon(); this.renderStepper(); return; }
     const f = p.body.feature_plugin;
     const badges = (obj, sign) => Object.entries(obj || {}).map(([k, v]) => `<span class="res-badge ${sign === '-' ? 'cost' : 'gain'}">${RES_ICON[k] || ''} ${sign}${esc(v)}</span>`).join('');
-    const icon = f.icon_url ? `<img src="${esc(f.icon_url)}?v=${esc(p.patch_id)}" alt="">` : `<span>${esc(f.icon)}</span>`;
+    const icon = f.icon_url ? `<img src="${esc(f.icon_url)}?v=${esc(p.patch_id)}-e3" alt="">` : `<span>${esc(f.icon)}</span>`;
     const canDecide = p.status === 'validated';
     const gen = this.emblemSource[p.patch_id] === 'muse_image' ? 'Generated via Muse Image' : 'Procedural stub emblem';
     const seal = { validated: 'Awaiting approval', approved: '✔ Approved', rejected: '✖ Rejected', proposed: 'Pending' }[p.status] || esc(p.status);
     el.innerHTML = `
       <div class="decree ${esc(p.status)}">
         <div class="decree-top">
-          <div class="emblem">${icon}${f.icon_url ? `<span class="gen-badge">${gen}</span>` : ''}</div>
+          <div class="emblem">${icon}</div>
           <div class="decree-meta">
             <div class="decree-title">${esc(f.title)}</div>
             <div class="decree-step">${esc(STEP_LABEL[f.unlock_at_step] || f.unlock_at_step)} · ${esc(f.button_salience.replace('_', ' '))}</div>
@@ -770,8 +856,12 @@ class Overlay {
           </div>
           <span class="wax-seal ${esc(p.status)}">${seal}</span>
         </div>
-        <div class="decree-why">${esc(p.rationale || '')}</div>
-        <div class="note">${esc(p.patch_id)}${p.baseline_patch_id ? ` · on top of ${esc(p.baseline_patch_id)}` : ''}${p.status === 'approved' ? ` · <a href="/?variant=B&amp;patch_id=${esc(p.patch_id)}">play it yourself</a>` : ''}</div>
+        <div class="decree-ab">A: Current game · B: With ${esc(f.title)}</div>
+        <details class="decree-more"><summary>View changes</summary>
+          <div class="decree-why">${esc(p.rationale || '')}</div>
+          <div class="note">${esc(p.patch_id)}${p.baseline_patch_id ? ` · on top of ${esc(p.baseline_patch_id)}` : ''}</div>
+          ${f.icon_url ? '<div class="note">Emblem by Muse Image</div>' : '<div class="note">Placeholder artwork</div>'}
+        </details>
         ${canDecide ? `<div class="decide">
           <button class="game-btn emerald" id="decree-approve">✔ Approve</button>
           <button class="game-btn iron" id="decree-dismiss">✖ Reject</button>
@@ -784,6 +874,10 @@ class Overlay {
   }
 
   async decideFeature(action) {
+    if (this._deciding) return;
+    this._deciding = true;
+    document.querySelectorAll('#decree-approve, #decree-dismiss, #btn-approve, #btn-reject')
+      .forEach((b) => { b.disabled = true; });
     const note = document.getElementById('forge-note');
     try {
       const r = await fetch(`/api/patches/${encodeURIComponent(this.feature.patch_id)}/${action}`, {
@@ -794,12 +888,19 @@ class Overlay {
       this.feature = data.patch;
       // Approval is the gate: only now does the feature reach the open game.
       if (action === 'approve') this.ctx.activateFeature?.(data.patch.body.feature_plugin);
-      note.textContent = action === 'approve' ? 'Approved by you. Now pick playtesters and run the A/B test.' : 'Rejected. Nothing changes in the game.';
+      note.textContent = action === 'approve' ? 'Approved by you.' : 'Rejected. Nothing changes in the game.';
     } catch (err) {
       note.textContent = `Could not ${action}: ${err.message}`;
     }
+    this._deciding = false;
     this.renderDecree();
     this.showStep(this.feature?.status === 'approved' ? 3 : 1);
+    // Launched from the A/B menu: approval was the last human decision,
+    // so the bots start playing without another Run button push.
+    if (this.feature?.status === 'approved' && this.abLaunch && !this.job && this.chosen.size) {
+      this.abLaunch = false;
+      this.summon();
+    }
   }
 
   updateSummon() {
@@ -814,22 +915,120 @@ class Overlay {
         : 'Tap the playtesters you want to send.';
   }
 
+  // Take over the stage for bot gameplay: the human's idle village and
+  // its Elder modal never compete with the playtest.
+  claimStage() {
+    const ws = document.getElementById('watch-screen');
+    const root = document.getElementById('game-root');
+    if (root) root.style.visibility = 'hidden';
+    if (ws) {
+      ws.hidden = false;
+      const loading = document.getElementById('watch-loading');
+      if (loading) { loading.hidden = false; loading.firstChild.textContent = 'Your playtesters will play here…'; }
+      const status = document.getElementById('watch-status');
+      if (status) status.textContent = 'Waiting for the first bot…';
+    }
+  }
+
+  async updateStageBot(sessions, job) {
+    const ws = document.getElementById('watch-screen');
+    if (!ws || ws.hidden) return;
+    const focus = sessions.find((x) => x.state === 'playing' && x.run_id)
+      || [...sessions].reverse().find((x) => x.run_id);
+    if (!focus) return;
+    try {
+      const d = await (await fetch(`/api/runs/${encodeURIComponent(focus.run_id)}/live?since=0&bot_since=0`)).json();
+      const steps = d.bot_steps || [];
+      const last = steps[steps.length - 1];
+      if (!last) return;
+      const img = document.getElementById('watch-img');
+      const src = `/api/runs/${encodeURIComponent(focus.run_id)}/artifacts/frames/step_${String(last.bot_step_index).padStart(3, '0')}.png`;
+      if (img && !img.src.endsWith(src)) img.src = src;
+      if (img) { img.hidden = false; }
+      const loading = document.getElementById('watch-loading');
+      if (loading) loading.hidden = true;
+      const arm = focus.run_id.includes('_B_') ? 'B' : 'A';
+      // Full thought history of the bot on stage, like the bug-hunt stream.
+      // Re-render only when a new step lands, so an open menu never flickers.
+      const menu = document.getElementById('bot-thoughts');
+      if (menu && steps.length) {
+        const sig = `${focus.run_id}|${steps.length}`;
+        if (this.thoughtSig !== sig) {
+          this.thoughtSig = sig;
+          menu.hidden = false;
+          const who = this.personas.find((x) => focus.run_id.includes(x.persona_id))?.archetype || '';
+          document.getElementById('bot-thoughts-title').textContent =
+            `💭 Bot thoughts · Bot ${arm}${who ? ` · ${who}` : ''} (${steps.length})`;
+          document.getElementById('bot-thoughts-list').innerHTML = [...steps].reverse().map((st) =>
+            `<div class="ev"><span class="t">#${st.bot_step_index}</span> <span class="thought">💭 ${esc(st.thought || st.observation_summary || '')}</span>${st.target_id ? ` <span class="t">→ ${esc(st.target_id)}</span>` : ''}</div>`).join('');
+        }
+      }
+      const status = document.getElementById('watch-status');
+      if (status) status.textContent = `Bot ${arm} is playing · step ${steps.length}${last.thought ? ` · ${last.thought}` : ''}`;
+      const rs = document.getElementById('run-status');
+      if (rs && this.runStatusBase && !rs.dataset.set) { rs.dataset.set = '1'; rs.innerHTML = `<b>Chosen:</b> ${esc(this.runStatusBase)}`; }
+      const stall = document.getElementById('run-stall');
+      const stuckN = (d.summary || {}).stuck_events || 0;
+      if (stall) stall.textContent = stuckN > 0 ? `Possible stall: ${stuckN} attempt${stuckN === 1 ? '' : 's'} without progress` : '';
+      // The dock header pill follows the bot on stage, not the idle game.
+      const sum = d.summary || {};
+      const setPill = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+      const personaName = this.personas.find((x) => focus.run_id.includes(x.persona_id))?.archetype || '';
+      setPill('pill-step', `Bot ${arm} · ${String(sum.last_step_id || 'playing').replaceAll('_', ' ')}`);
+      setPill('pill-check', arm === 'A' ? 'without the feature' : 'with the feature');
+      setPill('pill-stuck', sum.stuck_events ?? 0);
+      // Time left for this bot (estimate): steps remaining to the cap at the
+      // pace seen so far, capped by the runner's 1200 sim-second window.
+      const speed = this.abSettings?.speed || 1;
+      if (this.stageClock?.run !== focus.run_id) this.stageClock = { run: focus.run_id, t: Date.now(), n: steps.length };
+      const elapsedReal = (Date.now() - this.stageClock.t) / 1000;
+      const doneSteps = Math.max(1, steps.length - this.stageClock.n + 1);
+      const stepCap = this.abSettings?.runType === 'onboarding' ? 25 : 100;
+      const bySteps = (elapsedReal / doneSteps) * Math.max(0, stepCap - steps.length);
+      const limitSim = (this.abSettings?.playMin || 20) * 30 * Math.max(1, speed);
+      const bySim = Math.max(0, limitSim - (sum.sim_elapsed_sec || 0)) / Math.max(1, speed);
+      const realLeft = Math.round(Math.min(bySteps, bySim));
+      const clock = `${Math.floor(realLeft / 60)}:${String(realLeft % 60).padStart(2, '0')}`;
+      setPill('pill-ttfa', `${steps.length} steps · ⏱ ~${clock} left`);
+      const ttfaEl = document.getElementById('pill-ttfa');
+      if (ttfaEl?.parentElement) {
+        ttfaEl.parentElement.childNodes[0].textContent = '';
+        if (ttfaEl.parentElement.childNodes[2]) ttfaEl.parentElement.childNodes[2].textContent = ' · ';
+      }
+      if (job) {
+        const doneCount = (job.sessions || []).filter((x) => x.state === 'done').length;
+        setPill('pill-left', `${Math.max(0, (job.sessions_total || 0) - doneCount)} to go`);
+      }
+    } catch { /* next tick retries */ }
+  }
+
   async summon() {
     const note = document.getElementById('summon-note');
     const personas = this.personas.map((x) => x.persona_id).filter((id) => this.chosen.has(id));
+    {
+      const ab0 = this.abSettings || {};
+      const names = personas.map((pid) => this.personas.find((x) => x.persona_id === pid)?.archetype || pid).join(', ');
+      const model = ab0.botModel === 'wonder' ? 'Muse Wonder' : (ab0.runner === 'meta' ? 'Muse Spark' : 'Scripted bot');
+      const journey = { full_window: 'Full journey I–VI', half_game: 'Half game I–III', onboarding: 'Onboarding I' }[ab0.runType] || 'Full journey I–VI';
+      const extras = [ab0.hearVoice ? 'hears Elder' : '', ab0.speakVoice ? 'speaks' : '', ab0.recordVideo ? 'video saved' : ''].filter(Boolean).join(' · ');
+      this.runStatusBase = `${names} · ${ab0.runs || 3} matched pairs · ${model} · ${journey} · ×${ab0.speed || 1} · ${(ab0.playMin || 20) / 2} min per bot${extras ? ` · ${extras}` : ''}`;
+      const rs = document.getElementById('run-status');
+      if (rs) rs.innerHTML = `<b>Chosen:</b> ${esc(this.runStatusBase)}`;
+    }
     const ab = this.abSettings || JSON.parse(localStorage.getItem('doe_ab_settings') || 'null') || {};
     this.abSpeakVoice = !!ab.speakVoice;
     this.spokenAgentThoughts = new Set();
     const base = ab.seedSet === 'varied' ? 100 : 42;
     const seeds = ab.seedSet === 'single' ? [42]
-      : Array.from({ length: ab.runs || 5 }, (_, i) => base + i);
+      : Array.from({ length: ab.runs || 3 }, (_, i) => base + i);
     try {
       const r = await fetch('/api/feature_studio/playtest', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ patch_id: this.feature.patch_id, personas, mode: ab.runner || 'stub',
-          bot_model: ab.botModel || 'wonder', hear_voice: !!ab.hearVoice,
+          bot_model: ab.botModel || 'spark', hear_voice: !!ab.hearVoice,
           record_video: !!ab.recordVideo,
-          seeds, run_type: ab.runType || 'full_window', speed: ab.speed || 1 }),
+          seeds, run_type: ab.runType || 'full_window', speed: ab.speed || 1,
+          pair_minutes: ab.playMin || 20 }),
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
@@ -841,13 +1040,18 @@ class Overlay {
     this.updateSummon();
     this.renderAgents(personas, []);
     note.scrollIntoView({ block: 'nearest' });
+    const forgeNote = document.getElementById('forge-note');
+    if (forgeNote) forgeNote.hidden = true;
+    this.claimStage();
     const tick = async () => {
       try {
         this.job = await (await fetch(`/api/feature_studio/jobs/${this.job.job_id}`)).json();
       } catch { /* retry */ }
       if (this.job.status === 'running') {
-        note.textContent = `Playtesting… ${this.job.sessions_started} of ${this.job.sessions_total} sessions started.`;
+        const finished = (this.job.sessions || []).filter((x) => x.state === 'done').length;
+        note.textContent = `Comparison running · ${this.job.sessions_started} of ${this.job.sessions_total} sessions started · ${finished} finished.`;
         this.renderAgents(personas, this.job.sessions || []);
+        await this.updateStageBot(this.job.sessions || [], this.job);
         setTimeout(tick, JOB_POLL_MS);
         return;
       }
@@ -858,6 +1062,8 @@ class Overlay {
       if (failed) { note.textContent = `Playtest failed: ${failed}`; return; }
       this.reportPatch = this.feature.patch_id;
       note.textContent = 'Playtest finished.';
+      // The result of a run opens as a full-screen report, not a side tab
+      // (showStep(4) already opens it full-screen on the slide dock).
       this.showStep(4);
     };
     tick();
@@ -865,32 +1071,24 @@ class Overlay {
 
   // One card per playtester: arm A (game without the feature) and arm B (with it).
   renderAgents(personas, sessions) {
-    const el = document.getElementById('agents-live');
-    const byId = Object.fromEntries(this.personas.map((x) => [x.persona_id, x]));
-    const arm = (pid, a) => sessions.find((x) => x.run_id.includes(`_${a}_${pid}_s`));
-    el.innerHTML = personas.map((pid) => {
-      const x = byId[pid] || {};
-      const runs = ['A', 'B'].map((a) => [a, arm(pid, a)]);
-      const said = runs.map(([, r]) => r).reverse().find((r) => r?.thought);
-      if (this.abSpeakVoice && said?.thought) {
-        const key = `${said.run_id}:${said.thought}`;
-        if (!this.spokenAgentThoughts.has(key)) {
-          this.spokenAgentThoughts.add(key);
-          this.speakThought(said.thought, pid, true);
-        }
-      }
-      const chip = ([a, r]) => {
-        const st = r ? r.state : 'waiting';
-        const mark = { done: '✓', playing: '…', waiting: '·' }[st];
-        return `<span class="arm st-${st}" title="${a === 'A' ? 'Without' : 'With'} the feature: ${st}">${a} ${mark}</span>`;
-      };
-      return `<div class="agent-card">
-        <span class="ag-ico">${esc(x.emblem || '✦')}</span>
-        <div class="ag-body"><div class="ag-h"><b>${esc(x.archetype || pid)}</b>${runs.map(chip).join('')}
-          ${said?.mood ? `<span class="mood mood-${esc(said.mood)}">${MOOD_ICON[said.mood] || ''}</span>` : ''}</div>
-          ${said ? `<div class="ag-thought">“${esc(said.thought)}”</div>` : ''}</div>
-      </div>`;
-    }).join('');
+    const el = document.getElementById('pair-progress');
+    if (!el) return;
+    const pairs = new Map();
+    for (const x of sessions || []) {
+      const m = String(x.run_id || '').match(/_([AB])_(.+)_s(\d+)$/);
+      if (!m) continue;
+      const key = `${m[2]}|${m[3]}`;
+      if (!pairs.has(key)) pairs.set(key, { persona: m[2], seed: m[3] });
+      pairs.get(key)[m[1]] = x;
+    }
+    const label = (x) => !x ? 'Queued' : x.state === 'done' ? 'Complete' : x.state === 'playing' ? 'Running' : esc(x.state || 'Queued');
+    const rows = [...pairs.values()];
+    el.innerHTML = rows.length ? `<div class="section-h">Session progress</div>` + rows.map((pr, i) => {
+      const name = this.personas.find((x) => x.persona_id === pr.persona)?.archetype || pr.persona;
+      return `<div class="pair-row"><span>Pair ${i + 1} · seed ${esc(pr.seed)}</span><span>A · ${label(pr.A)}</span><span>B · ${label(pr.B)}</span></div>`;
+    }).join('') : '';
+    const stop = document.getElementById('stop-compare');
+    if (stop) stop.hidden = !(this.job && this.job.status === 'running');
   }
 
   // ------------------------------------------------------ Game Manager
@@ -904,9 +1102,9 @@ class Overlay {
         Stuck at: <code>${esc(rep.where_stuck || 'none')}</code> · stuck events: ${esc(rep.stuck_events ?? 0)}<br>
         Diagnosis: ${esc(rep.diagnosis || 'pending')}</div>
         <div class="mgr-actions"><button class="game-btn amber" id="mgr-bug-open">Open full report</button>
-        <button class="mgr-justplay" id="mgr-exp-back">Back to list</button></div>`;
+        <button class="game-btn mgr-secondary" id="mgr-exp-back">Back to list</button></div>`;
       document.getElementById('mgr-bug-open').addEventListener('click', () => {
-        location.href = `/?run_id=${encodeURIComponent(rep.run_id)}&flow=bug&dock=analyst`;
+        location.href = `/?run_id=${encodeURIComponent(rep.run_id)}&flow=bug&dock=analyst&reportfull=1`;
       });
       document.getElementById('mgr-exp-back').addEventListener('click',
         () => el.querySelector('#mgr-to-history').click());
@@ -921,7 +1119,7 @@ class Overlay {
     el.innerHTML = `
       <div class="mgr-panel">
         <div class="mgr-screen" id="mgr-home">
-          <div class="mgr-head"><div class="mgr-game">DAWN OF EMPIRES</div><h1>Playtest Menu</h1>
+          <div class="mgr-head"><div class="mgr-game">HEARTHS OF THE GLEN</div><h1>Playtest Menu</h1>
             <p>What would you like to test?</p></div>
           <div class="mgr-two">
             <div class="mgr-choice">
@@ -931,17 +1129,17 @@ class Overlay {
             </div>
             <div class="mgr-choice">
               <div class="mc-title">A/B TEST A FEATURE</div>
-              <div class="mc-text">Run the same tester through the current game and a proposed change.</div>
+              <div class="mc-text">Run the tester through the current game and a proposed change.</div>
               <button class="game-btn amber" id="mgr-to-compare">Set up A/B test</button>
             </div>
           </div>
           <button class="game-btn amber mgr-history-btn" id="mgr-to-history">Past experiments &amp; reports</button>
           <button class="game-btn amber mgr-play-btn" id="mgr-skip">Just play</button>
-          <div class="mgr-foot">Testing never changes the live game automatically.</div>
+          <div class="mgr-foot">Built with Meta models: Muse Spark · Muse Wonder · SAM 3.1 · Muse Image · Muse Voice Transcribe</div>
         </div>
 
         <div class="mgr-screen" id="mgr-history" hidden>
-          <button class="mgr-back-top" data-back>Back</button>
+          <button class="mgr-back-top" data-back>Main Menu</button>
           <div class="mgr-head"><h1>Past experiments &amp; reports</h1>
             <p>Saved A/B experiments with their frozen plans and verdicts.</p></div>
           <div id="mgr-exp-list"><div class="note">Loading…</div></div>
@@ -957,12 +1155,12 @@ class Overlay {
             <label class="mgr-field">Seed <select id="bug-seed"><option value="" selected>Automatic (42)</option><option value="42">42</option><option value="43">43</option><option value="44">44</option><option value="7">7</option><option value="123">123</option></select></label>
           </div>
           <div class="mgr-fields">
-            <label class="mgr-field">Runner <select id="bug-runner"><option value="meta">Meta bot · Muse Spark (paid)</option><option value="meta_wonder" selected>Meta bot · Muse Wonder (paid, stronger)</option><option value="stub">Scripted bot: no model cost</option></select></label>
+            <label class="mgr-field">Runner <select id="bug-runner"><option value="meta" selected>Meta bot · Muse Spark (paid)</option><option value="meta_wonder">Meta bot · Muse Wonder (paid, stronger)</option><option value="stub">Scripted bot: no model cost</option></select></label>
             <label class="mgr-field">Safety limit <select id="bug-safety"><option value="1" selected>Play time, elapsed</option><option value="1.5">Play time + 50%</option><option value="2">Play time ×2</option></select></label>
             <label class="mgr-field">No-progress limit <select id="bug-stuck"><option value="30">30 sim seconds without progress</option><option value="60" selected>60 sim seconds without progress</option><option value="120">120 sim seconds without progress</option></select></label>
-            <label class="mgr-field">Run video <span class="mgr-static"><input type="checkbox" id="bug-video"> Record video.webm</span></label>
-            <label class="mgr-field">Bot ears <span class="mgr-static"><input type="checkbox" id="bug-hear"> Bot hears the Elder (Muse Voice Transcribe)</span></label>
-            <label class="mgr-field">Bot voice <span class="mgr-static"><input type="checkbox" id="bug-voice"> Bot speaks its thoughts (ElevenLabs)</span></label>
+            <label class="mgr-field">Run video <span class="mgr-static"><input type="checkbox" id="bug-video"> Save session video</span></label>
+            <label class="mgr-field">Bot ears <span class="mgr-static"><input type="checkbox" id="bug-hear"> Hear the Elder · Muse Voice Transcribe</span></label>
+            <label class="mgr-field">Bot voice <span class="mgr-static"><input type="checkbox" id="bug-voice"> Speak bot commentary · ElevenLabs</span></label>
           </div>
           <div class="mgr-note">The scripted bot drives this tab with real clicks. The Meta bot runs on the server and saves its whole run (screenshots, thoughts, telemetry) for the report.</div>
           <div class="mgr-actions">
@@ -972,7 +1170,7 @@ class Overlay {
         </div>
 
         <div class="mgr-screen" id="mgr-compare" hidden>
-          <div class="mgr-head"><h1>A/B test a proposed feature</h1></div>
+          <div class="mgr-head"><h1>Compare a proposed feature</h1></div>
           <div class="mgr-section">Feature</div>
           <div class="mgr-cards" id="mgr-cards"><div class="note">Loading…</div></div>
           <div class="mgr-section">Or describe your own idea</div>
@@ -985,19 +1183,20 @@ class Overlay {
           <div class="mgr-fields">
             <label class="mgr-field">Persona <select id="cmp-persona"></select></label>
             <label class="mgr-field">Seed set <select id="cmp-seeds"><option value="baseline" selected>Saved baseline, paired (42…)</option><option value="varied">Varied seeds, paired (100…)</option><option value="single">Single seed 42, paired</option></select></label>
-            <label class="mgr-field">Runs per variant <select id="cmp-runs"><option value="1">1</option><option value="3">3</option><option value="5" selected>5</option><option value="10">10</option></select></label>
-            <label class="mgr-field">Runner <select id="cmp-runner"><option value="stub">Scripted bot: no model cost</option><option value="meta">Meta bot · Muse Spark (paid)</option><option value="meta_wonder" selected>Meta bot · Muse Wonder (paid, stronger)</option></select></label>
-            <label class="mgr-field">Speed <select id="cmp-speed"><option value="1" selected>×1</option><option value="2">×2</option><option value="4">×4</option></select></label>
-            <label class="mgr-field">Run length <select id="cmp-runlength"><option value="full_window" selected>Full journey: Chapters I–VI</option><option value="onboarding">Onboarding only: Chapter I</option></select></label>
-            <label class="mgr-field">Play time per run <select id="cmp-playtime"><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="20" selected>20 minutes</option><option value="30">30 minutes</option></select></label>
+            <label class="mgr-field">Matched pairs <select id="cmp-runs"><option value="1">1</option><option value="3" selected>3</option><option value="5">5</option><option value="10">10</option></select></label>
+            <label class="mgr-field">Runner <select id="cmp-runner"><option value="stub">Scripted bot: no model cost</option><option value="meta" selected>Meta bot · Muse Spark (paid)</option><option value="meta_wonder">Meta bot · Muse Wonder (paid, stronger)</option></select></label>
+            <label class="mgr-field">Game speed <select id="cmp-speed"><option value="1" selected>×1</option><option value="2">×2</option><option value="4">×4</option></select></label>
+            <label class="mgr-field">Journey to test <select id="cmp-runlength"><option value="full_window" selected>Full journey: Chapters I–VI</option><option value="onboarding">Onboarding only: Chapter I</option></select></label>
+            <label class="mgr-field">Safety time limit per pair <select id="cmp-playtime"><option value="5">5 min per pair · 2.5 min per bot</option><option value="10">10 min per pair · 5 min per bot</option><option value="20" selected>20 min per pair · 10 min per bot</option><option value="30">30 min per pair · 15 min per bot</option></select></label>
+            <label class="mgr-field">Run video <span class="mgr-static"><input type="checkbox" id="cmp-video"> Save session video</span></label>
             <label class="mgr-field">Bot ears <span class="mgr-static"><input type="checkbox" id="cmp-hear"> Bot hears the Elder (Muse Voice Transcribe)</span></label>
             <label class="mgr-field">Bot voice <span class="mgr-static"><input type="checkbox" id="cmp-voice"> Bot speaks its thoughts (ElevenLabs)</span></label>
-            <label class="mgr-field">Run video <span class="mgr-static"><input type="checkbox" id="cmp-video"> Record video.webm</span></label>
           </div>
           <div class="mgr-summary" id="cmp-summary">A · Current game<br>B · Current game + (pick a feature above)<br><br>Success target: More runs complete onboarding<br>Guardrails: No new blockers or worse chapter completion</div>
+          <div class="mgr-note" id="cmp-cost">Quick check: 3 matched pairs, 6 sessions. Exploratory sample; not enough to establish a winner. Reference estimate: about $0.15 per 20-minute hunt; model, audio and session length change the actual cost.</div>
           <div class="mgr-actions">
             <button class="mgr-justplay" data-back>Back</button>
-            <button class="game-btn amber" id="cmp-start">Run comparison</button>
+            <button class="game-btn amber" id="cmp-start">Run A/B test</button>
           </div>
         </div>
       </div>`;
@@ -1006,15 +1205,26 @@ class Overlay {
       el.querySelectorAll('.mgr-screen').forEach((s) => { s.hidden = s.id !== id; });
     };
     el.querySelector('#mgr-skip').addEventListener('click', () => this.closeManager(false));
+    if (new URLSearchParams(location.search).get('mgr') === 'compare') {
+      history.replaceState(null, '', '/');
+      setTimeout(() => show('mgr-compare'), 0);
+    }
+    if (new URLSearchParams(location.search).get('mgr') === 'history') {
+      // One-time deep link from a report: land on the list, then clean the
+      // address so reopening the game starts at the Main Menu again.
+      history.replaceState(null, '', '/');
+      setTimeout(() => el.querySelector('#mgr-to-history')?.click(), 0);
+    }
     el.querySelector('#mgr-to-bug').addEventListener('click', () => show('mgr-bug'));
     el.querySelector('#mgr-to-compare').addEventListener('click', () => show('mgr-compare'));
     el.querySelector('#mgr-to-history').addEventListener('click', async () => {
       show('mgr-history');
       const list = document.getElementById('mgr-exp-list');
       try {
-        const [bugReports, rows] = await Promise.all([
+        const [bugReports, rows, studioReports] = await Promise.all([
           fetch('/api/bug_reports').then((r) => r.json()).catch(() => []),
           fetch('/api/experiments').then((r) => r.json()).catch(() => []),
+          fetch('/api/feature_studio/demos').then((r) => r.json()).catch(() => []),
         ]);
         const fmtDate = (iso) => {
           const d = new Date(iso);
@@ -1022,17 +1232,23 @@ class Overlay {
         };
         const bugs = (bugReports || []).map((b) => `<button class="mgr-exp" data-bug="${esc(b.run_id)}">
           <b>Bug hunt: ${esc(b.persona || 'tester')}</b><span>${esc(b.status || '')} · stuck at ${esc(b.where_stuck || 'none')} · ${esc(fmtDate(b.saved_at || b.generated_at))}</span></button>`).join('');
-        if (bugs) {
-          const bugsHtml = `<div class="mgr-section">Bug hunt reports</div>${bugs}`;
-          list.innerHTML = bugsHtml + '<div class="mgr-section">A/B experiments</div>'
-            + (rows.length ? '' : '<div class="note">No saved experiments yet.</div>');
-          if (!rows.length) { this.wireBugReports(el, list); return; }
-        } else if (!rows.length) {
+        // A/B reports first: studio playtests (live runs, newest patch first), then saved experiments.
+        const abReports = (studioReports || []).filter((d) => d.source === 'live').slice()
+          .sort((a, b) => ((b.source === 'live') - (a.source === 'live'))
+            || String(b.patch_id).localeCompare(String(a.patch_id), undefined, { numeric: true }))
+          .map((d) => `<button class="mgr-exp" data-report="${esc(d.patch_id)}">
+            <b>${esc(d.title || d.patch_id)}</b><span>${esc(d.verdict_label || '')} · ${esc(d.n_pairs ?? '?')} matched pairs · ${esc(d.patch_id)}${d.source === 'live' ? '' : ' · recorded demo'}</span></button>`).join('');
+        const exps = (rows || []).map((x) => `<button class="mgr-exp" data-exp="${esc(x.experiment_id)}">
+          <b>${esc(x.title || x.experiment_id)}</b><span>${esc(x.status)} · patch ${esc(x.patch_id)} rev ${esc(x.patch_revision)} · ${esc(fmtDate(x.created_at))}</span></button>`).join('');
+        if (!abReports && !exps && !bugs) {
           list.innerHTML = '<div class="note">No saved reports yet. Bug hunts and A/B tests you run are saved here.</div>';
           return;
         }
-        list.innerHTML += rows.map((x) => `<button class="mgr-exp" data-exp="${esc(x.experiment_id)}">
-          <b>${esc(x.title || x.experiment_id)}</b><span>${esc(x.status)} · patch ${esc(x.patch_id)} rev ${esc(x.patch_revision)} · ${esc(fmtDate(x.created_at))}</span></button>`).join('');
+        list.innerHTML = `<div class="mgr-section">A/B test reports</div>${abReports}${exps || ''}`
+          + (bugs ? `<div class="mgr-section">Bug hunt reports</div>${bugs}` : '');
+        list.querySelectorAll('[data-report]').forEach((b) => b.addEventListener('click', () => {
+          location.href = `/?report_patch=${encodeURIComponent(b.dataset.report)}&reportfull=1`;
+        }));
         list.querySelectorAll('[data-exp]').forEach((b) => b.addEventListener('click', async () => {
           const rep = await (await fetch(`/api/experiments/${encodeURIComponent(b.dataset.exp)}/report`)).json();
           const v = rep.verdict || {};
@@ -1041,7 +1257,7 @@ class Overlay {
             Primary metric: <code>${esc(rep.primary_metric || '')}</code><br>
             Verdict: <b>${esc(v.verdict || 'incomplete')}</b> (${esc(v.reason || '')})<br>
             Pairs: ${esc(v.n ?? 0)}/${esc(v.planned_pairs ?? 0)} · A ${esc(v.a_rate ?? '-')} · B ${esc(v.b_rate ?? '-')}</div>
-            <div class="mgr-actions"><button class="mgr-justplay" id="mgr-exp-back">Back to list</button></div>`;
+            <div class="mgr-actions"><button class="game-btn mgr-secondary" id="mgr-exp-back">Back to list</button></div>`;
           document.getElementById('mgr-exp-back').addEventListener('click',
             () => el.querySelector('#mgr-to-history').click());
         }));
@@ -1106,8 +1322,12 @@ class Overlay {
         hearVoice: !!document.getElementById('cmp-hear')?.checked,
         speakVoice: !!document.getElementById('cmp-voice')?.checked,
         recordVideo: !!document.getElementById('cmp-video')?.checked,
+        playMin: Number(document.getElementById('cmp-playtime').value),
       };
       localStorage.setItem('doe_ab_settings', JSON.stringify(this.abSettings));
+      this.abLaunch = true;
+      this.fromMenu = true;
+      this.simplifyStepper();
       this.managerPick(this.comparePreset);
     });
 
@@ -1231,6 +1451,9 @@ class Overlay {
     const decree = document.getElementById('decree');
     if (decree && decree.closest('#manager')) document.querySelector('#tab-forge [data-steps="2 3"]').appendChild(decree);
     document.getElementById('manager')?.remove();
+    // Just play is the game alone: no AI Studio tab on the edge.
+    const toggle = document.getElementById('council-toggle');
+    if (toggle && !openStudio) toggle.hidden = true;
     if (openStudio) {
       this.showStep(3);
       this.setOpen?.(true);
@@ -1244,15 +1467,17 @@ class Overlay {
       modal = document.createElement('div');
       modal.id = 'report-full';
       modal.className = 'report-full';
-      modal.innerHTML = `<div class="rf-head"><h2>Playtest report</h2>
+      modal.innerHTML = `<div class="rf-head"><img class="rf-crest" src="/static/assets/generated/report_crest.jpg?v=2" alt=""><h2>Playtest report</h2>
+        <button class="back-menu-btn rf-main" id="report-main">← Main Menu</button>
         <button class="council-close" id="report-close" aria-label="Close the report">✕</button></div><div class="rf-body"></div>`;
       document.getElementById('app').appendChild(modal);
+      modal.querySelector('#report-main').addEventListener('click', () => { location.href = '/'; });
       modal.querySelector('#report-close').addEventListener('click', () => this.closeReportFull());
     }
     const tab = document.getElementById('tab-report');
     modal.querySelector('.rf-body').appendChild(tab);
-    // Drop the previous report so nothing stale shows while the new one loads.
-    tab.innerHTML = '';
+    // Show a turning sign while the report is written, never a blank screen.
+    tab.innerHTML = '<div class="rf-loading"><div class="rf-spinner"></div><div>Writing your report…</div></div>';
     tab.hidden = false;
     modal.hidden = false;
     this.setOpen?.(false);
@@ -1260,11 +1485,16 @@ class Overlay {
   }
 
   closeReportFull() {
+    // Opened from the reports list: X returns to that screen, not the game.
+    if (new URLSearchParams(location.search).get('reportfull') === '1') {
+      location.href = '/?mgr=history';
+      return;
+    }
     const modal = document.getElementById('report-full');
     if (!modal || modal.hidden) return;
     modal.hidden = true;
     document.getElementById('director').appendChild(document.getElementById('tab-report'));
-    this.showTab(this.tab === 'report' ? 'forge' : this.tab);
+    this.showTab(this.bugMode ? 'report' : (this.tab === 'report' ? 'forge' : this.tab));
   }
 
   // Saved experiment (frozen plan) verdict, above the legacy patch report.
@@ -1307,12 +1537,22 @@ class Overlay {
       await this.renderAnalyst();
       return;
     }
+    const token = ++this.reportToken || (this.reportToken = 1);
     let report = this.reportPatch ? await this.fetchStudioReport(this.reportPatch) : null;
-    let demos = [];
-    try {
-      const r = await fetch('/api/feature_studio/demos');
-      if (r.ok) demos = await r.json();
-    } catch { /* no switcher */ }
+    if (!report) {
+      // The page may have reloaded since the playtest finished: fall back
+      // to the newest feature patch that has a finished report on the server.
+      try {
+        const rows = await (await fetch('/api/patches')).json();
+        const list = (Array.isArray(rows) ? rows : rows.patches || [])
+          .filter((x) => x.body?.feature_plugin).reverse();
+        for (const cand of list.slice(0, 8)) {
+          report = await this.fetchStudioReport(cand.patch_id);
+          if (report) { this.reportPatch = cand.patch_id; break; }
+        }
+      } catch { /* no fallback */ }
+    }
+    if (token !== this.reportToken) return;
     if (!report) {
       // No playtest has run yet: no report to show, and no recorded demo
       // report as a placeholder. The Report step unlocks after step 3.
@@ -1350,22 +1590,30 @@ class Overlay {
         <div class="pd-track"><div class="pd-bar ${d < 0 ? 'neg' : 'pos'}" style="${d < 0 ? `right:50%` : `left:50%`};width:${w}%"></div></div>
         <div class="pd-v">${d > 0 ? '+' : ''}${esc(d)}</div></div>`;
     }).join('');
-    const quotes = report.quotes.map((q) => {
-      const x = byId[q.persona_id] || {};
-      return `<div class="speech"><div class="sp-h">${esc(x.emblem || '')} ${esc(x.archetype || q.persona_id)}
-          <span class="mood mood-${esc(q.mood)}">${MOOD_ICON[q.mood] || ''} ${esc(q.mood)}</span></div>
-        <div class="sp-t">“${esc(q.thought)}”</div><div class="sp-o">${esc(q.outcome)}</div></div>`;
-    }).join('');
+    const thoughtList = (arm) => (report.thoughts?.[arm] || []).map((t) =>
+      `<div class="ev"><span class="t">#${esc(t.step)}</span> <span class="thought">💭 ${esc(t.thought)}</span>${t.target_id ? ` <span class="t">→ ${esc(t.target_id)}</span>` : ''}</div>`).join('')
+      || '<div class="note">No thoughts recorded.</div>';
+    const thoughtsHtml = report.thoughts ? `
+      <div class="section-h">Bot thoughts · ${esc(byId[report.thought_pair?.persona_id]?.archetype || report.thought_pair?.persona_id || '')} · seed ${esc(report.thought_pair?.seed ?? '')}</div>
+      <div class="thought-cols">
+        <div class="thought-col"><div class="tc-h">Bot A · without the feature</div>${thoughtList('A')}</div>
+        <div class="thought-col"><div class="tc-h">Bot B · with ${esc(report.plugin?.title || 'the feature')}</div>${thoughtList('B')}</div>
+      </div>` : '';
+    const frameFor = (arm) => {
+      const steps = report.thoughts?.[arm] || [];
+      const runId = report.replay?.[arm];
+      if (!runId || !steps.length) return '';
+      const n = String(steps[steps.length - 1].step).padStart(3, '0');
+      return `/api/runs/${encodeURIComponent(runId)}/artifacts/frames/step_${n}.png`;
+    };
+    const framesHtml = (frameFor('A') || frameFor('B')) ? `
+      <div class="section-h">From the playtest · last frame of each bot</div>
+      <div class="thought-cols frames-row">
+        <figure class="frame-fig"><figcaption>Bot A · without the feature</figcaption><img src="${esc(frameFor('A'))}" alt="Bot A's last frame" onerror="this.closest('figure').remove()"></figure>
+        <figure class="frame-fig"><figcaption>Bot B · with ${esc(report.plugin?.title || 'the feature')}</figcaption><img src="${esc(frameFor('B'))}" alt="Bot B's last frame" onerror="this.closest('figure').remove()"></figure>
+      </div>` : '';
     const p = report.plaques;
-    const demoIds = new Set(demos.filter((d) => d.source === 'demo').map((d) => d.patch_id));
-    const pillIcon = { positive: '✅', hurts: '❌', mixed: '⚠️' };
-    const pills = demos.length ? `
-      <div class="demo-pills"><span class="demo-pills-label">Reports:</span>${demos.map((d) => `
-        <button class="demo-pill${d.patch_id === report.patch_id ? ' active' : ''}${d.source === 'live' ? ' live' : ''}" data-pid="${esc(d.patch_id)}"
-          title="${esc(d.verdict_label)} · ${esc(d.title)} (${esc(d.patch_id)}${d.source === 'live' ? ', this session' : ', recorded demo'})">${esc(d.short)} ${pillIcon[d.verdict_key] || ''}${d.source === 'live' ? ' ●' : ''}</button>`).join('')}</div>
-      ${demoIds.has(report.patch_id) ? '<div class="note">Recorded demo report. Pick a feature in the Playtest Menu or step 1 to playtest it live.</div>' : ''}` : '';
     el.innerHTML = `
-      ${pills}
       <div id="report-exp"></div>
       <div class="verdict ${esc(report.key)}">${esc(report.label)}</div>
       <div class="takeaway">${esc(report.takeaway)}</div>
@@ -1375,28 +1623,22 @@ class Overlay {
           ${bars('Tutorial', p.onboarding)}${bars('Stone Age', p.stone_age)}</div>
         ${rows.length ? `<div class="chart"><div class="chart-h">Score change per playtester (B − A)</div>${deltas}</div>` : ''}
       </div>
-      <div class="quotes">${quotes}</div>
+      ${report.summary && report.summary !== report.takeaway ? `<div class="summary-box"><div class="section-h">Summary · Muse Spark</div><p>${esc(report.summary)}</p></div>` : ''}
+      ${framesHtml}
+      ${thoughtsHtml}
       <div class="note">${esc(report.patch_id)} vs ${esc(report.baseline)} · ${esc(report.n_pairs)} paired runs · ${esc(report.provider_mode)} · $${esc(report.cost_usd)}</div>
       <div class="decide">
-        <button class="game-btn bronze" id="rework-btn" ${report.key === 'positive' ? 'disabled' : ''}>⚒️ Ask AI for a Fix</button>
+        <button class="game-btn bronze" id="rework-btn" disabled title="Fixes start from the Playtest step, not from a finished report">⚒️ Ask AI for a Fix</button>
         <button class="game-btn iron" id="replay-btn" ${report.replay ? '' : 'disabled'}>\u{1F3AC} Watch A/B Replay</button>
       </div>
-      <div class="note" id="rework-note"></div>
-      <details class="onboarding-details"><summary class="section-h">Onboarding fix patch_001: diagnosis and A/B</summary>
-        <div id="report-loop"></div><div class="section-h">Onboarding fix A/B</div><div id="report-ab"></div></details>`;
+      <div class="note" id="rework-note"></div>`;
     el.querySelector('#rework-btn').addEventListener('click', () => this.rework(report.patch_id));
-    el.querySelectorAll('.demo-pill').forEach((b) => b.addEventListener('click', () => {
-      this.reportPatch = b.dataset.pid;
-      this.renderReport();
-    }));
     await this.renderExperiment();
     el.querySelector('#replay-btn').addEventListener('click', () => {
       // Stub runs need dev=1, and the replay then labels them STUB / DEV MODE.
       const dev = report.provider_mode === 'meta' ? '' : '&dev=1';
       location.href = `/?replay_a=${encodeURIComponent(report.replay.A)}&replay_b=${encodeURIComponent(report.replay.B)}${dev}`;
     });
-    await this.renderAnalyst();
-    await this.renderAb();
   }
 
   async rework(patchId) {

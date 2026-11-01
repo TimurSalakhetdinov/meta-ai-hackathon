@@ -1,0 +1,27 @@
+{
+  "patch_id": "patch_032",
+  "status": "proposed",
+  "created_by": "designer_agent",
+  "created_at": "2026-11-01T19:05:16Z",
+  "title": "Feature: Elder's Counsel",
+  "rationale": "PM prompt: Add an “Elder's Counsel” card at the Basic Toolmaking research handoff that reminds the player their next task is Basic Toolmaking and to check its wood cost in Research before spending timber elsewhere, with a parchment emblem and an Elder line.",
+  "target_step": "onb_03_handoff",
+  "baseline_patch_id": null,
+  "body": {
+    "feature_plugin": {
+      "feature_id": "elders_counsel",
+      "title": "Elder's Counsel",
+      "icon": "📜",
+      "icon_url": "/static/assets/generated/elders_counsel.png",
+      "visual_prompt": "Painted Celtic storybook game emblem, an unfurled parchment beside a small carved wooden pointer, warm ivory and muted blue, bold readable silhouette, plain cream background, no letters or symbols resembling text.",
+      "description": "Your next task is Basic Toolmaking. Open Research and check its wood cost before spending timber elsewhere.",
+      "unlock_at_step": "onb_03_handoff",
+      "button_salience": "medium",
+      "action_type": "encounter_modal",
+      "costs": {},
+      "rewards": {},
+      "cooldown_sec": 120.0,
+      "advisor_intro": "Open Research and learn Basic Toolmaking next, Chief. My counsel is here if the day's work slips your mind."
+    }
+  }
+}

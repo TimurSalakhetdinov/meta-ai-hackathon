@@ -503,10 +503,8 @@ export class IsoRenderer {
       ctx.stroke();
     }
 
-    // 4 grazing white sheep near the meadow edges
+    // 2 grazing white sheep near the meadow's east edge
     const sheepPos = [
-      { x: 120, y: 375 },
-      { x: 148, y: 395 },
       { x: 800, y: 342 },
       { x: 832, y: 360 },
     ];

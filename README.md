@@ -4,6 +4,8 @@
 
 Built for the [Meta Global AI Developer Hackathon](https://cerebralvalley.ai/e/meta-ai-developer-hackathon) (Oct 26 – Nov 4, 2026) · Problem statement: **Build for Your World**
 
+The game under test is **Hearths of the Glen**, our own Celtic dawn-age village builder (three eras, heroes, a campaign arena), built alongside the agents so every fix can be played, not just described.
+
 > 🚧 Work in progress. All code in this repository is written during the hackathon.
 
 ## Why

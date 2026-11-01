@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=1280">
-  <title>Dawn of Empires</title>
-  <link rel="stylesheet" href="/static/styles.css?v=28">
+  <title>Hearths of the Glen</title>
+  <link rel="stylesheet" href="/static/styles.css?v=55">
 </head>
 <body>
   <div id="app">
     <div id="watch-screen" hidden>
       <img id="watch-img" alt="The bot playing, latest screenshot" hidden>
-      <div id="watch-loading">Starting the bot…<small>The first screenshot appears in a few seconds.</small></div>
+      <div id="watch-loading">Starting the bot…<small>The play screen will appear in a few seconds.</small></div>
       <div id="watch-status">Meta bot is playing…</div>
     </div>
     <main id="game-root" aria-label="Settlement">
@@ -32,6 +32,7 @@
         <button id="btn_speed" class="hud-btn" data-target="btn_speed" title="Game speed">1x</button>
         <button id="btn_inspect" class="hud-btn" data-target="btn_inspect" title="Config inspector">i</button>
         <button id="btn_mute" class="hud-btn" data-target="btn_mute" title="Volume settings">&#x1F507;</button>
+        <button id="btn_mainmenu" class="hud-btn mainmenu-top" title="Back to the Main Menu">Main Menu</button>
         <div id="volume-menu" class="volume-menu" hidden>
           <div class="vol-row"><label for="vol-music">🎵 Music</label><input id="vol-music" type="range" min="0" max="100" value="60"><b id="vol-music-val">60%</b></div>
           <div class="vol-row"><label for="music-track">🎼 Track</label><select id="music-track" class="vol-track">
@@ -60,7 +61,7 @@
         </div>
         <ul id="quest-objectives" class="q-objectives"></ul>
         <div class="q-bar"><div id="quest-fill" class="q-fill"></div></div>
-        <button id="btn_claim_quest" class="game-btn amber claim" data-target="btn_claim_quest" title="Claim Reward" hidden>Claim Reward</button>
+        <button id="btn_claim_quest" class="gold-btn claim" data-target="btn_claim_quest" title="Claim Reward" hidden>Claim Reward</button>
       </section>
 
       <footer id="build-bar">
@@ -295,6 +296,6 @@
 
   <div id="replay-root" hidden></div>
 
-  <script type="module" src="/static/main.js?v=111"></script>
+  <script type="module" src="/static/main.js?v=196"></script>
 </body>
 </html>

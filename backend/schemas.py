@@ -209,6 +209,7 @@ EventType = Literal[
     "hero_unlocked",
     "hero_leveled",
     "territory_expanded",
+    "elder_voice",
 ]
 
 

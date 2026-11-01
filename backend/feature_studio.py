@@ -258,15 +258,25 @@ def propose_feature(prompt: str, *, configs_dir: Path, client: MetaClient,
         raw = client.reason_json(ARCHITECT_SYSTEM, prompt, stub_result=stub, run_id="feature_studio",
                                  bucket="analysis", model_id=client.designer_model_id)
     plugin = _clean_plugin(raw if isinstance(raw, dict) else {}, stub)
-    emblem = client.generate_ui_emblem(plugin.visual_prompt or stub["visual_prompt"],
-                                       out_path=Path(generated_dir) / f"{plugin.feature_id}.png",
-                                       bucket="analysis", run_id="feature_studio")
+    emblem_path = Path(generated_dir) / f"{plugin.feature_id}.png"
+    sprite = preset.get("emblem_sprite") if preset else None
+    if sprite and (ROOT / "frontend" / "static" / "assets" / "sprites" / sprite).exists():
+        # A preset may carry real game art as its emblem (Elder's Counsel
+        # shows Elder Kaelen himself), copied instead of generated.
+        emblem_path.parent.mkdir(parents=True, exist_ok=True)
+        emblem_path.write_bytes((ROOT / "frontend" / "static" / "assets" / "sprites" / sprite).read_bytes())
+        emblem = emblem_path
+    else:
+        emblem = client.generate_ui_emblem(plugin.visual_prompt or stub["visual_prompt"],
+                                           out_path=emblem_path,
+                                           bucket="analysis", run_id="feature_studio")
     plugin = plugin.model_copy(update={"icon_url": f"/static/assets/generated/{emblem.name}"})
     record = stage_feature(ConfigService(configs_dir), plugin, title=f"Feature: {plugin.title}",
                            rationale=f"PM prompt: {prompt}")
     source = f"preset_{preset.get('recorded_from', 'prebuilt')}" if preset else client.provider_mode
     return {"patch": record.model_dump(), "plugin": plugin.model_dump(), "provider_mode": client.provider_mode,
-            "source": source, "emblem_source": "muse_image" if client.provider_mode == "meta" else "procedural_stub"}
+            "source": source, "emblem_source": ("game_art" if sprite else
+                                                "muse_image" if client.provider_mode == "meta" else "procedural_stub")}
 
 
 # ------------------------------------------------------------------ verdict
@@ -476,11 +486,17 @@ def summary_name(patch_id: str) -> str:
     return f"studio_{patch_id}_ab.json"
 
 
+def per_session_limit(pair_minutes: float, speed: int) -> float:
+    """Safety limit is set per pair and split evenly: Bot A and Bot B each
+    get half, in sim seconds (minutes x 60 x speed, like a bug hunt)."""
+    return pair_minutes * 60 * max(1, speed) / 2
+
+
 def run_playtest(patch_id: str, *, configs_dir: Path, runs_dir: Path, client: MetaClient,
                  personas: Optional[list[str]] = None, seeds: Optional[list[int]] = None,
                  run_type: str = "full_window", speed: int = 4, session_fn: Any = None,
                  on_log: Any = None, hear_voice: bool = False,
-                 record_video: bool = False) -> dict[str, Any]:
+                 record_video: bool = False, pair_minutes: float = 20) -> dict[str, Any]:
     """Paired A/B playtest of an approved feature patch against its baseline patch."""
     import asyncio
 
@@ -498,15 +514,38 @@ def run_playtest(patch_id: str, *, configs_dir: Path, runs_dir: Path, client: Me
     exp = Experiment(configs_dir=configs_dir, runs_dir=runs_dir, clients={"A": client, "B": client},
                      run_type=run_type, speed=speed, session_fn=session_fn, experiment_id=f"studio_{patch_id}",
                      summary_name=summary_name(patch_id), hear_voice=hear_voice,
-                     record_video=record_video)
+                     record_video=record_video,
+                     time_limit_sim_sec=per_session_limit(pair_minutes, speed))
     if on_log is not None:
         exp.log = on_log
     return asyncio.run(exp.run([Pair(p, s) for p in personas for s in (seeds or [42])],
                                patch_id=patch_id, baseline_patch_id=baseline))
 
 
+SUMMARY_SYSTEM = (
+    "You are the playtest analyst for a village-building game. Summarise one finished A/B playtest "
+    "for the game designer in 2-3 plain sentences: what was tested, what Bot B (with the feature) did "
+    "compared with Bot A (without it), and whether the evidence is strong enough to act on. Use only "
+    "the facts in the JSON; never invent numbers. Reply with one JSON object: {\"summary\": \"...\"}."
+)
+
+
+def spark_summary(report: dict[str, Any], client: Any) -> str:
+    """Muse Spark's written summary of a finished A/B report (cached by the client)."""
+    payload = {"feature": (report.get("plugin") or {}).get("title"), "verdict": report.get("label"),
+               "takeaway": report.get("takeaway"), "plaques": report.get("plaques"),
+               "persona_breakdown": report.get("persona_breakdown"),
+               "quotes": [{"persona": q.get("persona_id"), "thought": q.get("thought"),
+                           "outcome": q.get("outcome")} for q in report.get("quotes", [])],
+               "n_pairs": report.get("n_pairs")}
+    out = client.reason_json(SUMMARY_SYSTEM, json.dumps(payload),
+                             stub_result={"summary": report.get("takeaway", "")},
+                             run_id="studio_summary", model_id=client.muse_model_id)
+    return str(out.get("summary") or report.get("takeaway", ""))
+
+
 def build_report(patch_id: str, *, configs_dir: Path, runs_dir: Path, read_bot_steps: Any,
-                 demo_dir: Optional[Path] = None) -> Optional[dict[str, Any]]:
+                 demo_dir: Optional[Path] = None, client: Any = None) -> Optional[dict[str, Any]]:
     """Council report for a playtested patch; falls back to the committed `runs_demo/` bundle.
 
     A fresh clone or deploy has no live runs, so the pre-baked HURTS and POSITIVE
@@ -526,12 +565,34 @@ def build_report(patch_id: str, *, configs_dir: Path, runs_dir: Path, read_bot_s
     plugin = record.body.get("feature_plugin") or {}
     report = verdict(ab, plugin)
     target = f"btn_feature_{plugin['feature_id']}" if plugin.get("feature_id") else None
+    replay = replay_pair(ab)
+    # Full think-aloud of the shown pair, per arm, so the report can list
+    # what Bot A and Bot B each thought, not only one quote per persona.
+    thoughts: dict[str, list[dict[str, Any]]] = {"A": [], "B": []}
+    thought_pair = None
+    if replay:
+        pick = next((pr for pr in ab.get("pairs", [])
+                     if pr.get("A", {}).get("run_id") == replay["A"]), None)
+        if pick:
+            thought_pair = {"persona_id": pick.get("persona_id"), "seed": pick.get("seed")}
+            for arm in ("A", "B"):
+                steps = read_bot_steps(pick[arm]["run_id"]) or []
+                thoughts[arm] = [{"step": st.get("bot_step_index", i),
+                                  "thought": st.get("thought") or st.get("observation_summary") or "",
+                                  "target_id": st.get("target_id")}
+                                 for i, st in enumerate(steps) if st.get("thought") or st.get("observation_summary")]
     report.update(patch_id=patch_id, plugin=plugin, experiment_id=ab.get("experiment_id"),
                   baseline=ab.get("baseline"), run_type=ab.get("run_type"), n_pairs=ab.get("n_pairs"),
                   provider_mode=ab.get("provider_mode"), cost_usd=ab.get("cost_usd"),
                   persona_breakdown=summarize_persona_outcomes(ab, configs_dir),
                   quotes=persona_quotes(ab, read_bot_steps, target),
-                  replay=replay_pair(ab))
+                  replay=replay, thoughts=thoughts, thought_pair=thought_pair)
+    if client is not None:
+        try:
+            report["summary"] = spark_summary(report, client)
+            report["summary_model"] = client.muse_model_id
+        except Exception:
+            report["summary"] = None  # the report must never fail over a summary
     return report
 
 

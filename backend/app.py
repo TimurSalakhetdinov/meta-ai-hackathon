@@ -65,6 +65,8 @@ class BotHuntRequest(BaseModel):
 
 class PlaytestRequest(BaseModel):
     patch_id: str
+    # Safety limit for one A/B pair, split evenly between Bot A and Bot B.
+    pair_minutes: int = 20
     mode: Literal["stub", "meta"] = "stub"
     bot_model: Literal["spark", "wonder"] = "wonder"
     hear_voice: bool = False
@@ -507,7 +509,8 @@ def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = No
                                             seeds=req.seeds, run_type=req.run_type, speed=req.speed,
                                             session_fn=app.state.studio_session_fn, on_log=log,
                                             hear_voice=req.hear_voice,
-                                            record_video=req.record_video)
+                                            record_video=req.record_video,
+                                            pair_minutes=req.pair_minutes)
                 job["status"] = "done"
             except Exception as exc:  # surfaced to the studio UI
                 job.update(status="failed", error=str(exc))
@@ -553,6 +556,27 @@ def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = No
     @app.get("/api/experiments")
     def list_experiments():
         return studio.list_experiments()
+
+    @app.get("/api/ab_pairs")
+    def list_ab_pairs():
+        """Finished or running A/B session pairs on disk, newest first."""
+        import re as _re
+        pairs: dict[tuple, dict] = {}
+        if runs_dir.exists():
+            for d in runs_dir.iterdir():
+                if not d.is_dir() or not (d / "frames").exists():
+                    continue
+                m = _re.match(r"^(studio_.+)_(A|B)_(.+)_s(\d+)$", d.name)
+                if not m:
+                    continue
+                key = (m.group(1), m.group(3), int(m.group(4)))
+                pairs.setdefault(key, {"patch": m.group(1), "persona_id": m.group(3),
+                                       "seed": int(m.group(4)), "mtime": 0.0})
+                pairs[key][m.group(2)] = d.name
+                pairs[key]["mtime"] = max(pairs[key]["mtime"], d.stat().st_mtime)
+        out = [v for v in pairs.values() if "A" in v and "B" in v]
+        out.sort(key=lambda v: -v["mtime"])
+        return out[:10]
 
     @app.get("/api/bug_reports")
     def list_bug_reports():
@@ -659,8 +683,10 @@ def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = No
     @app.get("/api/feature_studio/report/{patch_id}")
     def studio_report(patch_id: str):
         patch_or_404(patch_id)
+        client = studio_client("meta" if os.environ.get("META_API_KEY") else "stub")
         report = feature_studio.build_report(patch_id, configs_dir=configs_dir, runs_dir=runs_dir,
-                                             read_bot_steps=studio_bot_steps, demo_dir=demo_dir)
+                                             read_bot_steps=studio_bot_steps, demo_dir=demo_dir,
+                                             client=client)
         if report is None:
             raise HTTPException(404, f"No playtest has run for {patch_id} yet")
         return report

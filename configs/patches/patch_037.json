@@ -1,0 +1,31 @@
+{
+  "patch_id": "patch_037",
+  "status": "proposed",
+  "created_by": "designer_agent",
+  "created_at": "2026-11-01T19:49:55Z",
+  "title": "Feature: Harvest Bargain",
+  "rationale": "PM prompt: Add a “Harvest Bargain” at the farm step that trades 10 wood for 30 food, with a tempting golden card, a woven grain-basket emblem, and an Elder warning to keep enough timber for the work ahead.",
+  "target_step": "onb_02_forager",
+  "baseline_patch_id": null,
+  "body": {
+    "feature_plugin": {
+      "feature_id": "harvest_bargain",
+      "title": "Harvest Bargain",
+      "icon": "🌾",
+      "icon_url": "/static/assets/generated/harvest_bargain.png",
+      "visual_prompt": "Painted Celtic storybook game emblem, a woven basket overflowing with grain and bread beside a small timber bundle, honey gold and russet, bold readable silhouette, plain cream background, no text.",
+      "description": "Trade 10 wood for 30 food. Keep enough timber for your next building and research.",
+      "unlock_at_step": "onb_02_forager",
+      "button_salience": "high_pulse",
+      "action_type": "encounter_modal",
+      "costs": {
+        "wood": 10
+      },
+      "rewards": {
+        "food": 30
+      },
+      "cooldown_sec": 120.0,
+      "advisor_intro": "A tempting bargain, Chief: timber for food. Mind you leave enough wood for the work ahead."
+    }
+  }
+}

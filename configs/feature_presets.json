@@ -1,83 +1,77 @@
 [
   {
-    "preset_id": "raider_ambush",
-    "label": "Raider Ambush",
-    "icon": "⚔️",
-    "summary": "A flashing battle button in tutorial step 2. Costs wood, gives stone and score.",
-    "prompt": "Add a Raider Ambush button at tutorial step 2 that costs wood and rewards score",
+    "preset_id": "supply_cache",
+    "label": "Supply Cache",
+    "icon": "🪵",
+    "summary": "Trade a little food for the timber needed to keep your village growing.",
+    "prompt": "Add a “Supply Cache” at the Basic Toolmaking research handoff that trades 5 food for 20 wood instantly, has a highly visible pulsing card and a 120-second cooldown, includes an Elder line directing the player back to Research, and uses a wooden supply-crate emblem.",
     "recorded_from": "prebuilt",
     "plugin": {
-      "feature_id": "raider_ambush",
-      "title": "Raider Ambush",
-      "icon": "⚔️",
-      "visual_prompt": "2.5D hand-painted strategy game icon emblem for Raider Ambush, crossed bronze swords over a round shield, warm gold and stone border, isolated on solid light background",
-      "description": "Add a Raider Ambush button at tutorial step 2 that costs wood and rewards score",
-      "unlock_at_step": "onb_02_forager",
+      "feature_id": "supply_cache",
+      "title": "Supply Cache",
+      "icon": "🪵",
+      "visual_prompt": "Painted Celtic storybook game emblem, a neat stack of cut timber logs with visible round log ends and bark, tied with rope, beside an open wooden crate and a small grain sack, warm ochre and forest green, bold readable silhouette, plain cream background, no text.",
+      "description": "Trade 5 food for 20 wood.",
+      "unlock_at_step": "onb_03_handoff",
       "button_salience": "high_pulse",
-      "action_type": "encounter_modal",
-      "costs": {
-        "wood": 55
-      },
-      "rewards": {
-        "rp": 6,
-        "stone": 15,
-        "score": 15
-      },
-      "cooldown_sec": 12.0,
-      "advisor_intro": "Raiders by the river, Chief! Our hunters drove them off and took their spoils."
-    }
-  },
-  {
-    "preset_id": "harvest_festival",
-    "label": "Harvest Festival",
-    "icon": "🌾",
-    "summary": "A village feast after the tutorial. Spend a little food for food and score.",
-    "prompt": "Add a Harvest Festival after the tutorial that costs 10 food and gives 25 food and 20 score, with a 30 second cooldown",
-    "recorded_from": "prebuilt",
-    "plugin": {
-      "feature_id": "harvest_festival",
-      "title": "Harvest Festival",
-      "icon": "🌾",
-      "description": "A village feast after the tutorial: spend a little food, get more food and score.",
-      "unlock_at_step": "free_play",
-      "button_salience": "medium",
-      "action_type": "festival_buff",
-      "costs": {
-        "food": 10
-      },
-      "rewards": {
-        "food": 25,
-        "score": 20
-      },
-      "cooldown_sec": 30.0,
-      "advisor_intro": "The harvest is in, Chief! The village feasts and works harder for it.",
-      "visual_prompt": "2.5D hand-painted strategy game icon emblem for Harvest Festival, wheat sheaf and bread basket, warm gold and stone border, isolated on solid light background"
-    }
-  },
-  {
-    "preset_id": "wandering_merchant",
-    "label": "Wandering Merchant",
-    "icon": "🐪",
-    "summary": "A trader in tutorial step 1. Swap a little food for score.",
-    "prompt": "Add a Wandering Merchant at tutorial step 1 that trades 5 food for 10 score",
-    "recorded_from": "prebuilt",
-    "plugin": {
-      "feature_id": "wandering_merchant",
-      "title": "Wandering Merchant",
-      "icon": "🐪",
-      "description": "A trader visits during the first tutorial step and swaps food for score.",
-      "unlock_at_step": "onb_01_shelter",
-      "button_salience": "medium",
       "action_type": "instant_trade",
       "costs": {
         "food": 5
       },
       "rewards": {
-        "score": 10
+        "wood": 20
       },
-      "cooldown_sec": 12.0,
-      "advisor_intro": "A merchant at the gate, Chief! He pays well for fresh food.",
-      "visual_prompt": "2.5D hand-painted strategy game icon emblem for Wandering Merchant, camel with trade bags, warm gold and stone border, isolated on solid light background"
+      "cooldown_sec": 120,
+      "advisor_intro": "Short of timber, Chief? Trade a little food at the Supply Cache, then carry on with your research."
+    }
+  },
+  {
+    "preset_id": "elders_counsel",
+    "label": "Elder's Counsel",
+    "icon": "📜",
+    "summary": "Ask the Elder what to do next before spending your supplies.",
+    "prompt": "Add an “Elder's Counsel” card at the Basic Toolmaking research handoff that reminds the player their next task is Basic Toolmaking and to check its wood cost in Research before spending timber elsewhere, with a parchment emblem and an Elder line.",
+    "recorded_from": "prebuilt",
+    "plugin": {
+      "feature_id": "elders_counsel",
+      "title": "Elder's Counsel",
+      "icon": "📜",
+      "visual_prompt": "Painted Celtic storybook game emblem, an unfurled parchment beside a small carved wooden pointer, warm ivory and muted blue, bold readable silhouette, plain cream background, no letters or symbols resembling text.",
+      "description": "Your next task is Basic Toolmaking. Open Research and check its wood cost before spending timber elsewhere.",
+      "unlock_at_step": "onb_03_handoff",
+      "button_salience": "medium",
+      "action_type": "encounter_modal",
+      "costs": {},
+      "rewards": {},
+      "cooldown_sec": 120,
+      "advisor_intro": "Open Research and learn Basic Toolmaking next, Chief. My counsel is here if the day's work slips your mind."
+    },
+    "emblem_sprite": "advisor_welcome.png"
+  },
+  {
+    "preset_id": "harvest_bargain",
+    "label": "Harvest Bargain",
+    "icon": "🌾",
+    "summary": "Exchange spare timber for a generous basket of food.",
+    "prompt": "Add a “Harvest Bargain” at the farm step that trades 10 wood for 30 food, with a tempting golden card, a woven grain-basket emblem, and an Elder warning to keep enough timber for the work ahead.",
+    "recorded_from": "prebuilt",
+    "plugin": {
+      "feature_id": "harvest_bargain",
+      "title": "Harvest Bargain",
+      "icon": "🌾",
+      "visual_prompt": "Painted Celtic storybook game emblem, a woven basket overflowing with grain and bread beside a small timber bundle, honey gold and russet, bold readable silhouette, plain cream background, no text.",
+      "description": "Trade 10 wood for 30 food. Keep enough timber for your next building and research.",
+      "unlock_at_step": "onb_02_forager",
+      "button_salience": "high_pulse",
+      "action_type": "encounter_modal",
+      "costs": {
+        "wood": 10
+      },
+      "rewards": {
+        "food": 30
+      },
+      "cooldown_sec": 120,
+      "advisor_intro": "A tempting bargain, Chief: timber for food. Mind you leave enough wood for the work ahead."
     }
   }
 ]

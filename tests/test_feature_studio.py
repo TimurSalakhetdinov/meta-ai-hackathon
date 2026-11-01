@@ -140,6 +140,35 @@ def test_playtest_requires_human_approval(app_client: TestClient, configs_dir: P
     assert actors == {"designer_agent", "validator"}
 
 
+def test_pair_time_limit_splits_between_bots(app_client: TestClient, configs_dir: Path,
+                                             runs_dir: Path) -> None:
+    # 20 minutes per pair means 10 minutes for Bot A and 10 for Bot B.
+    _approve(configs_dir, "patch_001")
+    seen: list[SessionSpec] = []
+    base = fake_session(runs_dir, configs_dir)
+
+    async def capture(spec: SessionSpec) -> SessionResult:
+        seen.append(spec)
+        return await base(spec)
+
+    app_client.app.state.studio_session_fn = capture
+    pid = app_client.post("/api/feature_studio/propose", json={"prompt": PROMPT}).json()["patch"]["patch_id"]
+    _approve(configs_dir, pid)
+    r = app_client.post("/api/feature_studio/playtest",
+                        json={"patch_id": pid, "personas": ["impatient_newcomer"],
+                              "pair_minutes": 20, "speed": 1})
+    assert r.status_code == 202, r.text
+    job = r.json()
+    for _ in range(200):
+        job = app_client.get(f"/api/feature_studio/jobs/{job['job_id']}").json()
+        if job["status"] != "running":
+            break
+        time.sleep(0.02)
+    assert job["status"] == "done", job
+    assert len(seen) == 2  # one pair: Bot A and Bot B
+    assert [s.time_limit_sim_sec for s in seen] == [600.0, 600.0]
+
+
 # ------------------------------------------------------- verdict and rework loop
 def _run_job(app_client: TestClient, pid: str, personas: list[str]) -> dict[str, Any]:
     r = app_client.post("/api/feature_studio/playtest", json={"patch_id": pid, "personas": personas})
@@ -188,6 +217,43 @@ def test_early_feature_hurts_then_rework_is_positive(app_client: TestClient, con
     assert fixed["key"] == "positive" and fixed["label"].startswith("✅ POSITIVE IMPACT")
     assert fixed["plaques"]["onboarding"] == {"A": "100%", "B": "100%"}
     assert fixed["plaques"]["score"] == {"A": "180", "B": "200"}
+
+
+def test_report_lists_both_bots_thoughts(app_client: TestClient, configs_dir: Path,
+                                         runs_dir: Path) -> None:
+    _approve(configs_dir, "patch_001")
+    app_client.app.state.studio_session_fn = fake_session(runs_dir, configs_dir)
+    pid = app_client.post("/api/feature_studio/propose", json={"prompt": PROMPT}).json()["patch"]["patch_id"]
+    _approve(configs_dir, pid)
+    report = _run_job(app_client, pid, ["impatient_newcomer"])
+    assert report["thought_pair"]["persona_id"] == "impatient_newcomer"
+    assert report["thoughts"]["A"][0]["thought"] == "Harvest the berries first."
+    assert report["thoughts"]["B"][0]["thought"].startswith("Ooo, a glowing Raider Ambush")
+    assert report["thoughts"]["A"][0]["target_id"] == "res_berries"
+
+
+def test_report_summary_comes_from_muse_spark(app_client: TestClient, configs_dir: Path,
+                                              runs_dir: Path) -> None:
+    _approve(configs_dir, "patch_001")
+    app_client.app.state.studio_session_fn = fake_session(runs_dir, configs_dir)
+    pid = app_client.post("/api/feature_studio/propose", json={"prompt": PROMPT}).json()["patch"]["patch_id"]
+    _approve(configs_dir, pid)
+    _run_job(app_client, pid, ["impatient_newcomer"])
+    calls: dict[str, Any] = {}
+
+    class FakeSpark:
+        muse_model_id = "muse-spark-1.3"
+
+        def reason_json(self, system: str, user: str, **kw: Any) -> dict[str, Any]:
+            calls.update(kw)
+            return {"summary": "Spark summary of the playtest."}
+
+    report = fs.build_report(pid, configs_dir=configs_dir, runs_dir=runs_dir,
+                             read_bot_steps=lambda rid: [], client=FakeSpark())
+    assert report is not None
+    assert report["summary"] == "Spark summary of the playtest."
+    assert report["summary_model"] == "muse-spark-1.3"
+    assert calls["model_id"] == "muse-spark-1.3"
 
 
 def test_unused_feature_is_mixed() -> None:
