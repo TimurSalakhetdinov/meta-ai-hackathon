@@ -1,4 +1,4 @@
-// Super-rich procedural Web Audio sound synthesis & background music engine for "Dawn of Empires".
+// Super-rich procedural Web Audio sound synthesis & background music engine for "Hearths of the Glen".
 //
 // Features:
 // 1. Dual-Engine Background Music System (`setMusicTheme('valley' | 'battle')`):

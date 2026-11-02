@@ -55,7 +55,7 @@ flowchart LR
 
 | Component | Location | Responsibility |
 |---|---|---|
-| Game frontend | `frontend/static/` | 2.5D isometric settlement canvas (Dawn of Empires: 3 eras *Dawn → Stone → Bronze Age*, 8 buildable buildings + Town Center with Lv.1–3 upgrades, 8 techs, 6-Chapter Quests, 8-Stage Campaign battles with Stage 6 Sabertooth Wall, Live 2.5D Tactical Battle Arena with Ultimate cut-ins, Hero Hall Lv.1–7, Territory Expansions `exp_1`/`exp_2`, Sacred Obelisk +20% Culture aura, `⚡ FREE` instant-finish, dual-engine soundtrack (committed synth WAV loops, optional MusicGen regeneration) + SFX, worker assignment, and custom `FeaturePlugin` button). Emits raw events. Exposes `window.__GAME_STATE__` and `window.__GAME_DEBUG__.getRenderedTargets()`. |
+| Game frontend | `frontend/static/` | 2.5D isometric settlement canvas (Hearths of the Glen: 3 eras *Dawn → Stone → Bronze Age*, 8 buildable buildings + Town Center with Lv.1–3 upgrades, 8 techs, 6-Chapter Quests, 8-Stage Campaign battles with Stage 6 Sabertooth Wall, Live 2.5D Tactical Battle Arena with Ultimate cut-ins, Hero Hall Lv.1–7, Territory Expansions `exp_1`/`exp_2`, Sacred Obelisk +20% Culture aura, `⚡ FREE` instant-finish, dual-engine soundtrack (committed synth WAV loops, optional MusicGen regeneration) + SFX, worker assignment, and custom `FeaturePlugin` button). Emits raw events. Exposes `window.__GAME_STATE__` and `window.__GAME_DEBUG__.getRenderedTargets()`. |
 | Right dock (Architect's Council) | `frontend/static/overlay.js` | **Telemetry Pill** (top: step id, time to first action, onboarding checklist) and **Architect's Council** studio (`📜 Feature Forge` for free-text PM feature prototyping + approval gate + 5-persona guild selector, `🏛️ Council Report` with 1-click `HURTS` / `POSITIVE` switcher + SAM 3.1 `6.76x` onboarding diagnosis, and `👁️ Live Chronicle` with `[▶ Watch Bot Play]`). Lives outside the `960x540` bot clip. |
 | Replay player | `frontend/static/replay.js` | `/?replay_a=<run>&replay_b=<run>&speed=4`: side-by-side playback from recorded artifacts on one timeline, no API calls. Refuses runs whose `provider_mode` is not `meta` unless `?dev=1`. |
 | Config & patch service | `backend/config_service.py` | Loads `configs/base_config.json`, applies patches (including `FeaturePlugin`), validates with Pydantic, enforces the approval gate, writes `audit_log.jsonl`. |
@@ -149,9 +149,9 @@ To achieve a high-craft historical F2P strategy game look (*Dawn Age → Stone A
   - `first_time_casual` follows the Advisor carefully, succeeds when UI salience and hints are clear, but hesitates when `research_button_salience = "low"` or when worker/stone dependencies are unclear in `free_play`.
   - `optimizer` balances Shelter population, Wood/Food/Stone production cycles, and Tech Tree multipliers to reach *Stone Age Awakening* and `first_achievement_target_score` fastest.
 
-## 3c. Dawn of Empires: 2.5D Systems, Audio & Assets Architecture
+## 3c. Hearths of the Glen: 2.5D Systems, Audio & Assets Architecture
 
-The "Dawn of Empires" overhaul elevates the browser game into a modern, full-bleed 2.5D strategy and hero-tactics experience while maintaining 100% backward compatibility with all existing configs, patches, and Playwright bot contracts.
+The "Hearths of the Glen" overhaul elevates the browser game into a modern, full-bleed 2.5D strategy and hero-tactics experience while maintaining 100% backward compatibility with all existing configs, patches, and Playwright bot contracts.
 
 ### 1. Full-Bleed Alpine Valley & Environmental Atmosphere (`iso_renderer.js`)
 - **Sunlit Alpine Valley Backdrop (`valley_backdrop.jpg`):** Eliminates flat ocean boxes in favor of a full-bleed sunlit mountain valley framed by northern limestone cliffs with cascading waterfalls and mist particles, dense pine/oak forest flanks, and a rushing southern river crossed by an arched stone bridge. A multi-layered procedural fallback draws dynamically if the image is pending.
@@ -317,7 +317,7 @@ The game emits **raw events only**. `stuck` is derived on the Python side with a
 ```
 
 - Game event types: `session_start`, `step_enter`, `step_complete`, `click`, `action_rejected`, `hint_shown`, `achievement`, `heartbeat`, `session_end`, `stuck` (derived), `quest_claimed`, `battle_won`, `battle_lost`, `hero_unlocked`, `hero_leveled`, `territory_expanded`.
-- **Dawn of Empires Telemetry Extensions:**
+- **Hearths of the Glen Telemetry Extensions:**
   - `battle_lost`: Emitted when squad HP drops to 0 in tactical combat (e.g., rushing Stage 6 Sabertooth Canyon); carries `{"stage_id": "...", "enemy_power": N, "squad_power": N, "wave": N}`. Classified as non-progress by `_is_progress()`. Triggers the `combat_wall_underleveled_heroes` hypothesis in the Analyst agent diagnosis.
   - `hero_leveled`: Emitted upon Hero level-up; carries `{"hero_id": "...", "level": N, "squad_power": N}`. Classified as progress and tracked in the `hero_levelups` summary metric.
   - `territory_expanded`: Emitted when unlocking Expansion Sector `exp_1` or `exp_2`; carries `{"sector_id": "...", "unlocked_pads": [...]}`. Classified as progress.

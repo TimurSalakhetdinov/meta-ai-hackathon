@@ -1,7 +1,7 @@
-# Task Spec: Full "Dawn of Empires" Visual & Gameplay Overhaul (First-20-Minute Experience)
+# Task Spec: Full "Hearths of the Glen" Visual & Gameplay Overhaul (First-20-Minute Experience)
 
 ## 1. Goal & Philosophy
-Transform the browser game in `frontend/` from a basic 12x12 floating island into a **lush, full-bleed 2.5D Historical Empire & Hero-Tactics Strategy Game ("Dawn of Empires")** capturing the full depth of a modern 20-minute mobile/web 4X + Hero Battler onboarding experience:
+Transform the browser game in `frontend/` from a basic 12x12 floating island into a **lush, full-bleed 2.5D Historical Empire & Hero-Tactics Strategy Game ("Hearths of the Glen")** capturing the full depth of a modern 20-minute mobile/web 4X + Hero Battler onboarding experience:
 1. **Full-Bleed Sunlit Alpine Valley Environment (`iso_renderer.js`)** — NO flat blue ocean box (`drawSea`). The city sits in a lush **Alpine Valley** framed by northern limestone cliffs & cascading waterfalls, dense swaying pine/oak forest flanks, a rushing southern mountain river with an arched stone bridge, drifting parallax cloud shadows, grazing sheep, flying birds, multi-tile building footprints, **Checkered 4x4 Expansion Sectors (`exp_1`, `exp_2`)**, a **Sacred Culture Site lime-green radial adjacency aura (`+20%` yield boost)**, **`⚡ FREE` Instant-Finish construction buttons**, and **curved Bezier resource fly-to-HUD collection arcs**.
 2. **Categorized Build Bar + Coins/Scrolls/Stamina/Expansion Economy (`game.js`, `main.js`, `index.html`, `styles.css`)** — Small Homes (`shelter`) provide Workers AND generate **Coins (`🪙`)**; Rural Farms (`forager_hut`) produce **Food (`🌾`)**; Woodcutters (`woodcutter_hut`) chop **Wood (`🪵`)**; Quarries (`stone_quarry`) cut **Stone (`🪨`)**; Infantry Barracks (`barracks`) train Heroes & generate **Hero Scrolls (`📜`)**; Sacred Obelisks (`tribal_monument`) project a **lime-green Culture Adjacency Aura (`+20%` yield to adjacent Homes & Farms)**.
 3. **Hero Roster & Level-Up Hall (`🛡️ Heroes` Modal)** — 2 playable Champions (**Commander Vaelen**, Infantry Vanguard Tank, and **Sun-Priestess Lyra**, Mystic Healer unlocked at Campaign Stage 2 or Toolmaking) + 2 locked Legendary silhouettes, with interactive **Level Up (Lv.1–7)** spending Food + Scrolls/Coins, **Ability** tab, and **Awaken** star constellation tab.
@@ -15,7 +15,7 @@ Transform the browser game in `frontend/` from a basic 12x12 floating island int
 ---
 
 ## 2. Hard Rules (`AGENTS.md`)
-- **100% Original Names & Lore:** Use our original names: **Dawn of Empires**, Advisor **Elder Kaelen / Archon Solon**, **Commander Vaelen** (Infantry Vanguard), **Sun-Priestess Lyra** (Mystic Healer), **Alpha Shadowclaw** (Stage 8 Sabertooth Boss), and **Province 1: Ancient Wilds**. Never reference any external game title or company in code, comments, or UI.
+- **100% Original Names & Lore:** Use our original names: **Hearths of the Glen**, Advisor **Elder Kaelen / Archon Solon**, **Commander Vaelen** (Infantry Vanguard), **Sun-Priestess Lyra** (Mystic Healer), **Alpha Shadowclaw** (Stage 8 Sabertooth Boss), and **Province 1: Ancient Wilds**. Never reference any external game title or company in code, comments, or UI.
 - **Zero Meta API Spend:** All tests and audits run in `stub` mode (`$0.00`). Never export `META_API_KEY`.
 
 ---

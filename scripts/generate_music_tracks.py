@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Procedural & AI Soundtrack Generator for "Dawn of Empires".
+Procedural & AI Soundtrack Generator for "Hearths of the Glen".
 
 Supports:
 1. `--mode synth` (default): Fast offline multi-layered stereo acoustic/orchestral synthesizer
@@ -434,7 +434,7 @@ def run_synth_mode(output_dir, duration_valley=16.0, duration_battle=12.0):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Soundtrack Generator for Dawn of Empires")
+    parser = argparse.ArgumentParser(description="Soundtrack Generator for Hearths of the Glen")
     parser.add_argument("--mode", choices=["synth", "musicgen"], default="synth",
                         help="Generator mode: 'synth' (fast offline stereo synthesis) or 'musicgen' (Meta AI model)")
     parser.add_argument("--output-dir", default="frontend/static/assets/audio",
