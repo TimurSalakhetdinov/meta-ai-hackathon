@@ -4,6 +4,10 @@
 
 Built for the [Meta Global AI Developer Hackathon](https://cerebralvalley.ai/e/meta-ai-developer-hackathon) (Oct 26 – Nov 4, 2026) · Problem statement: **Build for Your World**
 
+## About the event
+
+This project was built for the **Meta Global AI Developer Hackathon**, run by Meta with Cerebral Valley from **October 26 to November 4, 2026**. About ten days, one constraint: build something real with Meta's model family (Muse Spark, Muse Wonder, Muse Image, SAM 3.1) inside the event window. We entered the **indie developer track** under the theme **Build for Your World**: bring Meta's models into a domain you know firsthand. Ours is game development, where the first minutes of a game decide whether a player stays and playtesting those minutes is slow and expensive. Winners are announced at the closing ceremony on November 9, 2026.
+
 The game under test is **Hearths of the Glen**, our own Celtic dawn-age village builder (three eras, heroes, a campaign arena), built alongside the agents so every fix can be played, not just described.
 
 > All code in this repository was written during the event (Oct 26 to Nov 4, 2026).
