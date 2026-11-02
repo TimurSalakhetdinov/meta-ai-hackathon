@@ -145,7 +145,7 @@ To achieve a high-craft historical F2P strategy game look (*Dawn Age → Stone A
   6. `stone_quarry`: Unlocked by *Masonry*; costs Wood + Food; produces Stone.
   7. `tribal_monument`: Unlocked by *Basic Toolmaking*; costs Wood + Food + Stone; awards high settlement score toward `first_achievement`.
 - **Why all 3 personas behave differently over the 20-minute window:**
-  - `impatient_newcomer` (rush-clicker) clicks bright affordable build cards immediately — falling into the baseline wood trap at `onb_03_handoff` by building `woodcutter_hut` before researching *Basic Toolmaking*, or later over-building production huts without enough `shelter` population.
+  - `impatient_newcomer` (rush-clicker) clicks bright affordable build cards immediately, falling into the baseline wood trap at `onb_03_handoff` by building `woodcutter_hut` before researching *Basic Toolmaking*, or later over-building production huts without enough `shelter` population.
   - `first_time_casual` follows the Advisor carefully, succeeds when UI salience and hints are clear, but hesitates when `research_button_salience = "low"` or when worker/stone dependencies are unclear in `free_play`.
   - `optimizer` balances Shelter population, Wood/Food/Stone production cycles, and Tech Tree multipliers to reach *Stone Age Awakening* and `first_achievement_target_score` fastest.
 
@@ -193,7 +193,7 @@ The "Hearths of the Glen" overhaul elevates the browser game into a modern, full
   3. *Megalithic Ruins* (Power 240, 2 waves)
   4. *Whispering Pine Gorge* (Power 310, 2 waves)
   5. *Quarry Ridge Outpost* (Power 390, 2 waves, awards 2nd Expansion Token)
-  6. **Sabertooth Canyon (Power 520, 3 waves — The Level-Check Wall):** Rushing this stage with under-leveled heroes (`squadPower < 460`) results in a squad wipe on Wave 3, triggering the DEFEAT recovery screen.
+  6. **Sabertooth Canyon (Power 520, 3 waves, the Level-Check Wall):** Rushing this stage with under-leveled heroes (`squadPower < 460`) results in a squad wipe on Wave 3, triggering the DEFEAT recovery screen.
   7. *Obsidian Crag* (Power 640, 3 waves)
   8. **BOSS: Shadowclaw's Lair (Power 780, Alpha Shadowclaw boss wave)**
 - **Legacy Compatibility:** Stages 1–3 maintain backward compatibility with legacy `encounter_misty_river`, `encounter_megalithic_ruins`, and `encounter_quarry_ridge` target IDs.
@@ -359,7 +359,7 @@ The runner clicks the centroid of the chosen mask (or `fallback_xy`), draws the 
 **Vision policy.**
 - Recorded and reported runs use honest vision: SAM 3.1 marks on the screenshot, Muse Spark picks the mark.
 - `?assist=true` debug fallback: if SAM fails, `__GAME_DEBUG__` supplies boxes for numbering while Muse Spark still decides from the image. Every run records `vision_mode` (`sam_3_1` or `debug_fallback`).
-- **Stub mode** (dev and tests only): a heuristic policy that reads `getRenderedTargets()` (visible, locked, affordable, computed salience) and picks by a salience score with seeded tie-breaks. It never reads `variant_id` or config files. Non-`meta` runs show a yellow `STUB / DEV MODE — NOT LIVE MUSE SPARK` banner and are never shown in the video; the experiment runner refuses to mix provider modes.
+- **Stub mode** (dev and tests only): a heuristic policy that reads `getRenderedTargets()` (visible, locked, affordable, computed salience) and picks by a salience score with seeded tie-breaks. It never reads `variant_id` or config files. Non-`meta` runs show a yellow `STUB / DEV MODE, NOT LIVE MUSE SPARK` banner and are never shown in the video; the experiment runner refuses to mix provider modes.
 
 ## 7. Determinism and A/B serving
 
