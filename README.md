@@ -51,7 +51,7 @@ Model choice is part of the test design, so runs record which model played. A ch
 - [x] Browser game with config-driven onboarding and event logging (2.5D isometric, Dawn Age to Stone Age)
 - [x] Config, patch and human approval gate backend (FastAPI, Pydantic)
 - [x] Unbiased telemetry: raw events, server-derived `stuck` events and run summaries
-- [x] In-game AI Director dock: Telemetry Pill, live stream, patch diff, Approve/Reject, A/B tab
+- [x] Playtest Menu on the main screen: bug hunting, A/B tests and saved reports, plus the Studio panel with live bot view, patch approval and the full-screen report
 - [x] Side-by-side replay of two recorded runs
 - [x] Stub persona bot behind Watch Bot Play (offline placeholder, labelled STUB)
 - [x] Three eras (Dawn, Stone, Bronze Age), upgrades, quests, expeditions and worker assignment
@@ -62,14 +62,14 @@ Model choice is part of the test design, so runs record which model played. A ch
 - [x] Experiment agent: canary, worker pool, paired A/B reruns, McNemar and bootstrap report
 - [x] Closed loop from the CLI in stub mode (`python -m backend.cli run-closed-loop`)
 - [x] Committed demo runs in `runs_demo/` and a Dockerfile for a single-port deploy
-- [x] Feature studio in the dock: free-text feature to a validated patch with a stub emblem, five research-grounded personas, playtest behind the approval gate, verdict report and archetype-aware rework synthesis. Pre-baked HURTS → POSITIVE demo bundle (`patch_005`/`patch_006` + 20 committed runs) with a 1-click Council Report switcher and split replays
+- [x] Feature studio in the Playtest Menu: free-text feature to a validated patch with a Muse Image emblem, five research-grounded personas, playtest behind the approval gate, verdict report and archetype-aware rework synthesis. Pre-baked HURTS → POSITIVE demo bundle (`patch_005`/`patch_006` + 20 committed runs) with a 1-click Council Report switcher and split replays
 - [x] Full "Hearths of the Glen" 2.5D overhaul: sunlit Alpine Valley backdrop, Checkered 4x4 Territory Expansions (exp_1/exp_2), Sacred Obelisk +20% Culture Adjacency Aura, FREE instant-finish chips, Hero Roster & Level-Up Hall (Bera the Shield-Hunter & Sunweaver Lyra Lv.1–7), 8-Stage Ancient Wilds Campaign with Stage 6 Sabertooth Defeat Wall, Live 2.5D Tactical Combat Arena with Ultimate Portrait Cut-Ins, 6-Chapter Quest Ledger, and continuous Valley/Battle soundtrack + physical-modeling SFX
 - [x] Gameplay-fix batch: 8-tech tree (Sturdy Construction gates Lv.2, Stone Age Awakening gates Lv.3, Bronze Age Dawn needs every earlier Dawn/Stone research plus the 20-minute `bronze_unlock_min_sim_sec` timer, Irrigation last as a Bronze Age tech; Tech Tree window draggable by its header), free placement on any open meadow tile with a soft meadow glow (forest corner and cliffs blocked, no numbered plot boxes), separate Upgrades menu with the on-building chip only when usable and no permanent Lv badge, worker sign only on unstaffed producers (tap assigns; producers built with no free worker start unstaffed), production cycles 12s food / 20s wood / 15s stone / 20s smelter, Heroes' Arena (needs Barracks) with timed hero training (`hero_training_sec`, never instant), renamed heroes Bera the Shield-Hunter, Sunweaver Lyra, Ember-Keeper Ignis and Tor the Stone-Breaker (ids unchanged, new stone-age bust portraits), campaign stages as medallion nodes on a dotted trail over the campaign map backdrop, and Elder Kaelen advisor speech pre-rendered with ElevenLabs (silent in battle; in bot runs the watch screen relays it quietly)
-- [x] Game Manager in the Architect's Council: 3 prebuilt feature presets (`configs/feature_presets.json`), "Approve & play" approval, custom idea box, and full-screen council report
+- [x] Playtest Menu: 3 prebuilt feature presets (`configs/feature_presets.json`), "Approve & play" approval, custom idea box, and full-screen report
 - [x] Handover regression fixed: stub bot saves for Masonry in free play, so variant B reaches the Stone Age on seeds 42 and 44 again (full suite: 99 passed)
 - [x] Sound and voice (ElevenLabs, not a Meta model): Celtic soundtrack, Elder Kaelen voice lines, bot persona voices and sound effects, generated once and shipped as audio files (`scripts/generate_kaelen_voice.py`, `scripts/generate_sfx.py`)
-- [ ] Validation against human sessions
-- [ ] Demo video
+- [x] Validation against human sessions
+- [x] Demo video (3 minutes, linked in the hackathon submission)
 
 The onboarding friction in the base config is planted on purpose, so the loop has a known problem to find. At `onb_03_handoff` the Woodcutter Hut is unlocked and marked NEW!, while the Research button is small. A player who builds the hut drops below the 30 wood that Basic Toolmaking needs, and the hut produces nothing without that tech. `configs/patches/patch_001.json` is the baseline onboarding fix behind the approval gate; `patch_005.json` (naive Step-2 Raider Ambush, `❌ HURTS ONBOARDING`) and `patch_006.json` (free-play Designer rework, `✅ POSITIVE IMPACT`) are pre-baked Feature Studio patches stacked on `patch_001`.
 
