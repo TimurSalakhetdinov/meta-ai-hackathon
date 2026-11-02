@@ -120,6 +120,10 @@ Run the tests (unit tests plus headless Playwright end-to-end and layout tests):
 .venv/bin/python -m pytest -q
 ```
 
+## License
+
+MIT. See [LICENSE](LICENSE).
+
 ## Author
 
 **Timur Salakhetdinov** · [Portfolio](https://timursalakhetdinov.com) · [LinkedIn](https://www.linkedin.com/in/timursalakhetdinov) · [GitHub](https://github.com/TimurSalakhetdinov)
