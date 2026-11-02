@@ -1,0 +1,11 @@
+Asset license notice
+
+The MIT License in LICENSE covers the source code of this repository only.
+
+The generated game assets are not covered by the MIT License. This includes,
+without limitation, everything under frontend/static/assets/ (sprites,
+backdrops, portraits, emblems, music, sound effects and voice lines) created
+with Muse Image (Meta) and ElevenLabs. These assets remain the copyright of
+the repository author. You may run and study them as part of this project;
+you may not reuse, redistribute or sell them as standalone assets without
+written permission.

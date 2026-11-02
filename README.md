@@ -122,7 +122,9 @@ Run the tests (unit tests plus headless Playwright end-to-end and layout tests):
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+Source code: MIT, see [LICENSE](LICENSE). Generated game assets (Muse Image art
+and ElevenLabs audio under `frontend/static/assets/`) are not covered by the MIT
+License; see [NOTICE](NOTICE).
 
 ## Author
 
