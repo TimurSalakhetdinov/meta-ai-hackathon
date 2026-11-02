@@ -440,6 +440,8 @@ def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = No
 
     @app.post("/api/bot_hunt", status_code=202)
     def start_bot_hunt(req: BotHuntRequest):
+        if public_play_only():
+            raise HTTPException(403, "Paid bot hunts are off on this public build.")
         job_id = uuid.uuid4().hex[:12]
         run_id = f"meta_{req.persona}_s{req.seed}_{job_id[:6]}"
         job = bot_hunt_jobs[job_id] = {"job_id": job_id, "run_id": run_id, "status": "running",
@@ -464,6 +466,10 @@ def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = No
     def studio_client(mode: str) -> MetaClient:
         return MetaClient(runs_dir=runs_dir, configs_dir=configs_dir, provider_mode=mode)
 
+    def public_play_only() -> bool:
+        # Public Space builds set this so a stray secret can never be spent from the UI.
+        return os.environ.get("PUBLIC_PLAY_ONLY") == "1"
+
     @app.post("/api/feature_studio/propose", status_code=201)
     def studio_propose(req: FeatureProposeRequest):
         try:
@@ -484,10 +490,13 @@ def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = No
         """Whether a custom idea goes to live Muse Spark or the offline stub designer."""
         client = studio_client("stub")
         return {"meta_ready": bool(os.environ.get("META_API_KEY")), "muse_model_id": client.muse_model_id,
-                "designer_model_id": client.designer_model_id}
+                "designer_model_id": client.designer_model_id,
+                "public_play_only": public_play_only()}
 
     @app.post("/api/feature_studio/playtest", status_code=202)
     def studio_playtest(req: PlaytestRequest):
+        if public_play_only() and req.mode == "meta":
+            raise HTTPException(403, "Paid playtests are off on this public build.")
         record = patch_or_404(req.patch_id)
         if "feature_plugin" not in record.body:
             raise HTTPException(400, f"{req.patch_id} carries no feature_plugin")

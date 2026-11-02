@@ -11,7 +11,7 @@ import { Sfx, defaultMuted } from './audio.js?v=27';
 import { IsoRenderer } from './iso_renderer.js?v=71';
 import { loadSprites, spriteUrl } from './sprites.js?v=69';
 import { TechTreeView } from './tech_tree.js?v=53';
-import { initOverlay } from './overlay.js?v=66';
+import { initOverlay } from './overlay.js?v=67';
 
 const PROVIDERS = ['human', 'stub', 'open_weights', 'meta'];
 const SPEEDS = [1, 2, 4];

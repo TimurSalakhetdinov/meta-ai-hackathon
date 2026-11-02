@@ -1334,6 +1334,14 @@ class Overlay {
     let status = { meta_ready: false, muse_model_id: '' };
     try { status = await (await fetch('/api/feature_studio/status')).json(); } catch { /* stub */ }
     this.museMode = status.meta_ready ? 'meta' : 'stub';
+    if (status.public_play_only) {
+      for (const id of ['bug-runner', 'cmp-runner']) {
+        const sel = document.getElementById(id);
+        if (!sel) continue;
+        sel.value = 'stub';
+        sel.querySelectorAll('option').forEach((o) => { if (o.value.startsWith('meta')) o.disabled = true; });
+      }
+    }
     document.getElementById('mgr-note').textContent = status.meta_ready
       ? `Your idea goes live to the designer agent (${status.designer_model_id || 'Muse Wonder'}). It takes about half a minute.`
       : 'No META_API_KEY in .env, so the offline stub designer drafts your idea.';
