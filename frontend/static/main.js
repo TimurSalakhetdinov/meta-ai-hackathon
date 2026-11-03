@@ -11,7 +11,7 @@ import { Sfx, defaultMuted } from './audio.js?v=27';
 import { IsoRenderer } from './iso_renderer.js?v=71';
 import { loadSprites, spriteUrl } from './sprites.js?v=69';
 import { TechTreeView } from './tech_tree.js?v=53';
-import { initOverlay } from './overlay.js?v=68';
+import { initOverlay } from './overlay.js?v=69';
 
 const PROVIDERS = ['human', 'stub', 'open_weights', 'meta'];
 const SPEEDS = [1, 2, 4];
@@ -419,7 +419,8 @@ async function boot() {
   const fxHandlers = [];
   const game = new Game(config, {
     runId, variant: params.variant, patchId: params.patchId, persona: params.persona, seed: params.seed,
-    provider, speed: params.speed,
+    // Scripted bots always play at 1x so a hunt is watchable at human pace.
+    provider, speed: params.bot ? 1 : params.speed,
     onEvent: (ev) => telemetry.push(ev),
     onFx: (fx) => { renderer?.fx(fx); for (const fn of fxHandlers) fn(fx); },
     botCtx: () => window.__BOT_CTX__ || {},

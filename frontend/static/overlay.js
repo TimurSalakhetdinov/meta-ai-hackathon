@@ -1185,7 +1185,7 @@ class Overlay {
             <label class="mgr-field">Seed <select id="bug-seed"><option value="" selected>Automatic (42)</option><option value="42">42</option><option value="43">43</option><option value="44">44</option><option value="7">7</option><option value="123">123</option></select></label>
           </div>
           <div class="mgr-fields">
-            <label class="mgr-field">Runner <select id="bug-runner"><option value="meta" selected>Meta bot · Muse Spark (paid)</option><option value="meta_wonder">Meta bot · Muse Wonder (paid, stronger)</option><option value="stub">Scripted bot: no model cost</option></select></label>
+            <label class="mgr-field">Runner <select id="bug-runner"><option value="meta">Meta bot · Muse Spark (paid)</option><option value="meta_wonder">Meta bot · Muse Wonder (paid, stronger)</option><option value="stub" selected>Scripted bot: no model cost</option></select></label>
             <label class="mgr-field">Safety limit <select id="bug-safety"><option value="1" selected>Play time, elapsed</option><option value="1.5">Play time + 50%</option><option value="2">Play time ×2</option></select></label>
             <label class="mgr-field">No-progress limit <select id="bug-stuck"><option value="30">30 sim seconds without progress</option><option value="60" selected>60 sim seconds without progress</option><option value="120">120 sim seconds without progress</option></select></label>
             <label class="mgr-field">Run video <span class="mgr-static"><input type="checkbox" id="bug-video"> Save session video</span></label>
