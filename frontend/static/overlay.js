@@ -472,6 +472,21 @@ class Overlay {
           this.game.end(reason);
           await this.ctx.telemetry.drain();
           await this.stopRunRecorder?.();
+          if (p.extjob) {
+            try {
+              await fetch(`/api/feature_studio/playtest_external/${encodeURIComponent(p.extjob)}/session_done`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ run_id: this.ctx.runId }),
+              });
+              const job = await (await fetch(`/api/feature_studio/playtest_external/${encodeURIComponent(p.extjob)}`)).json();
+              const next = (job.sessions || []).find((x) => !x.done);
+              if (next) { location.href = extSessionUrl(job, next); return; }
+              location.href = `/?report_patch=${encodeURIComponent(job.patch_id)}&reportfull=1`;
+              return;
+            } catch (err) {
+              this.addStream(`<span class="thought">Could not continue the A/B test: ${esc(err.message)}</span>`);
+            }
+          }
           this.setBotButton('done');
           const stopBtn = document.getElementById('bot-stop');
           if (stopBtn) stopBtn.hidden = true;
@@ -1022,6 +1037,21 @@ class Overlay {
     const seeds = ab.seedSet === 'single' ? [42]
       : Array.from({ length: ab.runs || 3 }, (_, i) => base + i);
     try {
+      if (this.publicPlayOnly) {
+        // No server browser on a public host: this tab plays each session.
+        const er = await fetch('/api/feature_studio/playtest_external', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ patch_id: this.feature.patch_id, personas, seeds,
+            run_type: ab.runType || 'full_window', speed: ab.speed || 1,
+            pair_minutes: ab.playMin || 20 }),
+        });
+        const job = await er.json();
+        if (!er.ok) throw new Error(job.detail || `HTTP ${er.status}`);
+        const first = job.sessions.find((x) => !x.done) || job.sessions[0];
+        note.textContent = 'Opening Bot A in this tab…';
+        location.href = extSessionUrl(job, first);
+        return;
+      }
       const r = await fetch('/api/feature_studio/playtest', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ patch_id: this.feature.patch_id, personas, mode: ab.runner || 'stub',
@@ -1334,6 +1364,7 @@ class Overlay {
     let status = { meta_ready: false, muse_model_id: '' };
     try { status = await (await fetch('/api/feature_studio/status')).json(); } catch { /* stub */ }
     this.museMode = status.meta_ready ? 'meta' : 'stub';
+    this.publicPlayOnly = !!status.public_play_only;
     if (status.public_play_only) {
       for (const id of ['bug-runner', 'cmp-runner']) {
         const sel = document.getElementById(id);
@@ -1698,6 +1729,15 @@ function streamLine(ev) {
     case 'achievement': return `${t} \u{1F3C6} ${esc(p.title || p.achievement_id)}`;
     default: return `${t} ${esc(ev.event_type)}`;
   }
+}
+
+// One browser-driven A/B session (public hosts): the scripted bot plays it in this tab.
+function extSessionUrl(job, s) {
+  const q = new URLSearchParams({ bot: '1', flow: 'ab', persona: s.persona_id, seed: String(s.seed),
+    variant: s.variant, run_id: s.run_id, speed: String(job.speed || 1),
+    playmin: String((job.pair_minutes || 20) / 2), extjob: job.job_id });
+  if (s.patch_id) q.set('patch_id', s.patch_id);
+  return `/?${q.toString()}`;
 }
 
 function esc(s) {

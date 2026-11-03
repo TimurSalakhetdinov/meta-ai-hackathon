@@ -77,6 +77,19 @@ class PlaytestRequest(BaseModel):
     speed: int = 1
 
 
+class PlaytestExternalRequest(BaseModel):
+    patch_id: str
+    personas: Optional[list[str]] = None
+    seeds: Optional[list[int]] = None
+    run_type: Literal["onboarding", "full_window", "half_game"] = "full_window"
+    speed: int = 1
+    pair_minutes: int = 20
+
+
+class SessionDoneRequest(BaseModel):
+    run_id: str
+
+
 class SpeakRequest(BaseModel):
     text: str
     persona_id: Optional[str] = None
@@ -525,6 +538,81 @@ def create_app(configs_dir: Optional[Path] = None, runs_dir: Optional[Path] = No
                 job.update(status="failed", error=str(exc))
         threading.Thread(target=work, daemon=True).start()
         return studio_job(job_id)
+
+    # Browser-driven playtest for hosts without a server browser (public Space):
+    # the visitor's own tab plays each scripted session, the server pairs the saves.
+    external_jobs: dict[str, dict[str, Any]] = {}
+    app.state.external_jobs = external_jobs
+
+    def external_job_view(job: dict[str, Any]) -> dict[str, Any]:
+        nxt = next((x for x in job["sessions"] if not x["done"]), None)
+        return {**job, "next": nxt}
+
+    @app.post("/api/feature_studio/playtest_external", status_code=202)
+    def studio_playtest_external(req: PlaytestExternalRequest):
+        record = patch_or_404(req.patch_id)
+        if "feature_plugin" not in record.body:
+            raise HTTPException(400, f"{req.patch_id} carries no feature_plugin")
+        if record.status != "approved":
+            raise HTTPException(403, f"Human approval required: {req.patch_id} is {record.status}")
+        from .bot_runner import load_personas
+        personas = req.personas or list(load_personas(configs_dir))
+        seeds = req.seeds or [42]
+        baseline = record.baseline_patch_id
+        if baseline:
+            try:
+                if ConfigService(configs_dir).load_patch(baseline).status != "approved":
+                    baseline = None
+            except Exception:
+                baseline = None
+        sessions: list[dict[str, Any]] = []
+        for persona in personas:
+            for seed in seeds:
+                sessions.append({"arm": "A", "persona_id": persona, "seed": seed,
+                                 "run_id": f"studio_{req.patch_id}_A_{persona}_s{seed}",
+                                 "variant": "B" if baseline else "A", "patch_id": baseline, "done": False})
+                sessions.append({"arm": "B", "persona_id": persona, "seed": seed,
+                                 "run_id": f"studio_{req.patch_id}_B_{persona}_s{seed}",
+                                 "variant": "B", "patch_id": req.patch_id, "done": False})
+        job_id = uuid.uuid4().hex[:12]
+        job = external_jobs[job_id] = {"job_id": job_id, "patch_id": req.patch_id, "status": "running",
+                                       "sessions": sessions, "speed": req.speed,
+                                       "pair_minutes": req.pair_minutes, "run_type": req.run_type,
+                                       "error": None}
+        return external_job_view(job)
+
+    @app.get("/api/feature_studio/playtest_external/{job_id}")
+    def studio_playtest_external_get(job_id: str):
+        job = external_jobs.get(job_id)
+        if job is None:
+            raise HTTPException(404, f"Unknown external playtest {job_id}")
+        return external_job_view(job)
+
+    @app.post("/api/feature_studio/playtest_external/{job_id}/session_done")
+    def studio_playtest_external_done(job_id: str, req: SessionDoneRequest):
+        job = external_jobs.get(job_id)
+        if job is None:
+            raise HTTPException(404, f"Unknown external playtest {job_id}")
+        sess = next((x for x in job["sessions"] if x["run_id"] == req.run_id), None)
+        if sess is None:
+            raise HTTPException(404, f"Unknown session {req.run_id} for this playtest")
+        if store.summary(req.run_id) is None:
+            raise HTTPException(400, f"Session {req.run_id} has no saved summary yet")
+        sess["done"] = True
+        if all(x["done"] for x in job["sessions"]):
+            pairs: dict[tuple[str, int], dict[str, Any]] = {}
+            for x in job["sessions"]:
+                pair = pairs.setdefault((x["persona_id"], x["seed"]),
+                                        {"persona_id": x["persona_id"], "seed": x["seed"]})
+                pair[x["arm"]] = {"run_id": x["run_id"], "summary": store.summary(x["run_id"])}
+            try:
+                feature_studio.write_external_summary(
+                    job["patch_id"], list(pairs.values()), runs_dir=runs_dir,
+                    configs_dir=configs_dir, run_type=job["run_type"])
+                job["status"] = "done"
+            except Exception as exc:  # surfaced to the menu, never silent
+                job.update(status="failed", error=str(exc))
+        return external_job_view(job)
 
     @app.get("/api/feature_studio/jobs/{job_id}")
     def studio_job(job_id: str):

@@ -11,7 +11,7 @@ import { Sfx, defaultMuted } from './audio.js?v=27';
 import { IsoRenderer } from './iso_renderer.js?v=71';
 import { loadSprites, spriteUrl } from './sprites.js?v=69';
 import { TechTreeView } from './tech_tree.js?v=53';
-import { initOverlay } from './overlay.js?v=67';
+import { initOverlay } from './overlay.js?v=68';
 
 const PROVIDERS = ['human', 'stub', 'open_weights', 'meta'];
 const SPEEDS = [1, 2, 4];
@@ -190,13 +190,21 @@ function fitToWindow() {
 fitToWindow();
 window.addEventListener('resize', fitToWindow);
 
+function hideBootScreen() {
+  const el = document.getElementById('boot-loading');
+  if (!el) return;
+  el.style.transition = 'opacity .35s';
+  el.style.opacity = '0';
+  setTimeout(() => el.remove(), 380);
+}
+
 if (params.replayA || params.replayB) {
-  import('./replay.js').then((m) => m.startReplay(params));
+  import('./replay.js').then((m) => { m.startReplay(params); hideBootScreen(); });
 } else {
   boot().catch((err) => {
     console.error(err);
     showFatal(`Could not start the game: ${err.message}`);
-  });
+  }).finally(hideBootScreen);
 }
 
 // ------------------------------------------------------------- telemetry
@@ -433,8 +441,8 @@ async function boot() {
 
   // Volume menu (sound button): Music / Sounds / Voice sliders, persisted.
   const volumes = (() => {
-    try { return { music: 60, sfx: 90, voice: 90, ...JSON.parse(localStorage.getItem('doe_volumes') || '{}') }; }
-    catch { return { music: 60, sfx: 90, voice: 90 }; }
+    try { return { music: 60, sfx: 80, voice: 90, ...JSON.parse(localStorage.getItem('doe_volumes') || '{}') }; }
+    catch { return { music: 60, sfx: 80, voice: 90 }; }
   })();
   // Optional calls: a stale cached audio module must never crash the start.
   sfx.setMusicVolume?.(volumes.music / 100);

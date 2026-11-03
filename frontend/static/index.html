@@ -4,9 +4,28 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=1280">
   <title>Hearths of the Glen</title>
-  <link rel="stylesheet" href="/static/styles.css?v=55">
+  <link rel="stylesheet" href="/static/styles.css?v=58">
+  <style>
+    #boot-loading { position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 16px;
+      background: radial-gradient(ellipse at 50% 35%, #2e4a26 0%, #1c2b16 55%, #101a0c 100%);
+      color: #f3e5bb; font-family: Georgia, 'Times New Roman', serif; text-align: center; }
+    #boot-loading .boot-title { font-size: 34px; font-weight: 700; letter-spacing: .5px; color: #ffd75e;
+      text-shadow: 0 2px 0 #6b4f17, 0 4px 14px rgba(0,0,0,.6); }
+    #boot-loading .boot-sub { font-size: 14px; font-style: italic; color: #cdbd8a; }
+    #boot-loading .boot-spinner { width: 44px; height: 44px; border-radius: 50%;
+      border: 5px solid rgba(243,229,187,.25); border-top-color: #ffd75e;
+      animation: bootSpin .8s linear infinite; }
+    @keyframes bootSpin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { #boot-loading .boot-spinner { animation-duration: 2.4s; } }
+  </style>
 </head>
 <body>
+  <div id="boot-loading" role="status" aria-label="Loading the game">
+    <div class="boot-title">Hearths of the Glen</div>
+    <div class="boot-spinner"></div>
+    <div class="boot-sub">Raising the village…</div>
+  </div>
   <div id="app">
     <div id="watch-screen" hidden>
       <img id="watch-img" alt="The bot playing, latest screenshot" hidden>
@@ -41,7 +60,7 @@
             <option value="valley2">Nordic Settlement</option>
             <option value="valley3">Village Work</option>
           </select></div>
-          <div class="vol-row"><label for="vol-sfx">🔔 Sounds</label><input id="vol-sfx" type="range" min="0" max="100" value="90"><b id="vol-sfx-val">90%</b></div>
+          <div class="vol-row"><label for="vol-sfx">🔔 Sounds</label><input id="vol-sfx" type="range" min="0" max="100" value="80"><b id="vol-sfx-val">80%</b></div>
           <div class="vol-row"><label for="vol-voice">🗣️ Voice</label><input id="vol-voice" type="range" min="0" max="100" value="90"><b id="vol-voice-val">90%</b></div>
           <button id="btn_vol_mute" class="gold-btn vol-mute" data-target="btn_vol_mute">Mute all</button>
         </div>
@@ -296,6 +315,6 @@
 
   <div id="replay-root" hidden></div>
 
-  <script type="module" src="/static/main.js?v=197"></script>
+  <script type="module" src="/static/main.js?v=199"></script>
 </body>
 </html>

@@ -71,6 +71,7 @@ export function urlParams() {
     externalBot: p.get('bot') === 'external',
     playMin: Number(p.get('playmin')) || null,
     flow: p.get('flow') || null,
+    extjob: p.get('extjob') || null,
     watch: p.get('watch') === '1',
     ab: p.get('ab') === '1',
     voice: p.get('voice') === '1',

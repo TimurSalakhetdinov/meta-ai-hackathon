@@ -482,6 +482,36 @@ def propose_rework(plugin: dict[str, Any], report: dict[str, Any], *, configs_di
 
 
 # ------------------------------------------------------------------ playtest and report
+def write_external_summary(patch_id: str, pair_summaries: list[dict[str, Any]], *,
+                           runs_dir: Path, configs_dir: Path, run_type: str = "full_window") -> dict[str, Any]:
+    """Pair runs the visitor's own browser played (public Space) into the studio A/B summary.
+
+    Same file and shape as a server-run playtest, so reports, replays and the
+    verdict read them identically; provider_mode records that scripted bots played.
+    """
+    from .agents.experiment import build_summary, session_metrics
+
+    service = ConfigService(configs_dir)
+    record = service.load_patch(patch_id)
+    baseline = record.baseline_patch_id
+    if baseline and service.load_patch(baseline).status != "approved":
+        baseline = None
+    rows = []
+    for pair in pair_summaries:
+        rows.append({"persona_id": pair["persona_id"], "seed": pair["seed"],
+                     "A": {"run_id": pair["A"]["run_id"], **session_metrics(pair["A"].get("summary") or {})},
+                     "B": {"run_id": pair["B"]["run_id"], **session_metrics(pair["B"].get("summary") or {})},
+                     "errors": []})
+    meta = {"experiment_id": f"studio_{patch_id}", "provider_mode": "stub",
+            "muse_model_id": "stub", "model_mode": "stub", "run_type": run_type,
+            "patch_id": patch_id, "baseline": baseline or "variant_A",
+            "baseline_reused_pairs": 0, "worker_pool_size": 1, "cost_usd": 0}
+    ab = build_summary(rows, meta)
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    (runs_dir / summary_name(patch_id)).write_text(json.dumps(ab, indent=2) + "\n")
+    return ab
+
+
 def summary_name(patch_id: str) -> str:
     return f"studio_{patch_id}_ab.json"
 

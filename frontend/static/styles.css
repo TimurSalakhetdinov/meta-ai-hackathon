@@ -69,9 +69,9 @@ button { font: inherit; cursor: pointer; }
   background: linear-gradient(#2c241d, #3a3027); border: 1px solid #786548; border-radius: 14px;
   color: #fbe9c1; box-shadow: inset 0 2px 4px rgba(0,0,0,.5);
 }
-.res .ico { font-family: var(--emoji); font-size: 13px; width: 20px; height: 20px; display: grid; place-items: center;
+.res .ico { font-family: var(--emoji); font-size: 12px; line-height: 1; width: 20px; height: 20px; display: grid; place-items: center; flex: none;
   background: radial-gradient(#fff3d1, #d8b56a); border-radius: 50%; border: 1px solid var(--gold-lo); }
-.res b { font-size: 13px; font-variant-numeric: tabular-nums; }
+.res b { font-size: 13px; font-variant-numeric: tabular-nums; line-height: 1; display: flex; align-items: center; height: 20px; }
 .res.low b { color: #ff8a75; }
 .res.bump { animation: bump .45s ease-out; }
 @keyframes bump { 30% { transform: scale(1.14); } 100% { transform: scale(1); } }
@@ -233,15 +233,15 @@ button { font: inherit; cursor: pointer; }
 
 /* Volume menu under the sound button. */
 .volume-menu {
-  position: absolute; top: 50px; right: 118px; z-index: 40; width: 250px; padding: 10px 12px;
+  position: absolute; top: 50px; right: 118px; z-index: 40; width: 276px; padding: 10px 12px; box-sizing: border-box;
   border-radius: 12px; background: linear-gradient(#fff5d8, var(--parch-2));
   border: 2px solid var(--gold); box-shadow: 0 3px 0 #6b4f17, 0 10px 24px rgba(0,0,0,.45); color: var(--ink);
 }
 .volume-menu[hidden] { display: none; }
 .vol-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 12px; font-weight: bold; }
 .vol-row label { flex: 0 0 74px; }
-.vol-row input[type="range"] { flex: 1; accent-color: #8a5a17; }
-.vol-row b { flex: 0 0 34px; text-align: right; font-size: 11px; }
+.vol-row input[type="range"] { flex: 1; min-width: 0; accent-color: #8a5a17; }
+.vol-row b { flex: 0 0 40px; text-align: right; font-size: 11px; }
 .vol-mute { width: 100%; margin-top: 6px; }
 .vol-track { flex: 1; min-width: 0; padding: 3px 4px; border-radius: 6px; border: 1px solid var(--gold-lo); background: #fffaf0; color: var(--ink); font-size: 12px; }
 
@@ -873,10 +873,10 @@ select.persona { flex: 1; padding: 4px; background: #fffaf0; color: var(--ink); 
 .q-objectives li.ok::before { content: "\2714  "; }
 .q-bar { height: 6px; border-radius: 3px; background: #5a4a38; overflow: hidden; }
 .q-fill { height: 100%; width: 0; background: linear-gradient(90deg, #9be36a, #f0c24b); transition: width .3s; }
- .quest-card .claim { margin-top: 10px; width: 100%; height: 54px; font: 700 15px var(--serif); letter-spacing: .2px;
-  white-space: nowrap;
+ .quest-card .claim { margin-top: 10px; width: 100%; height: 54px; font: 700 14px var(--serif); letter-spacing: 0;
+  white-space: nowrap; box-sizing: border-box; text-align: center;
   color: #4a2a06; background: url('/static/assets/sprites/btn_claim.png?v=1') center / cover no-repeat;
-  border: 2px solid #8a6a34; border-radius: 12px; padding-left: 36%;
+  border: 2px solid #8a6a34; border-radius: 12px; padding-left: 33%; padding-right: 4px;
   box-shadow: 0 4px 0 #6b4f17, 0 6px 12px rgba(0,0,0,.35);
   text-shadow: 0 1px 0 rgba(255,240,190,.8); cursor: pointer; animation: claimPulse 1.6s ease-in-out infinite; }
 @keyframes claimPulse { 50% { box-shadow: 0 4px 0 #6b4f17, 0 0 16px rgba(240,173,61,.85), inset 0 1px 0 rgba(255,255,255,.6); } }
