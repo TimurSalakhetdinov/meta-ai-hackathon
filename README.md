@@ -73,6 +73,7 @@ Model choice is part of the test design, so runs record which model played. A ch
 - [x] Handover regression fixed: stub bot saves for Masonry in free play, so variant B reaches the Stone Age on seeds 42 and 44 again (full suite: 99 passed)
 - [x] Sound and voice (ElevenLabs, not a Meta model): Celtic soundtrack, Elder Kaelen voice lines, bot persona voices and sound effects, generated once and shipped as audio files (`scripts/generate_kaelen_voice.py`, `scripts/generate_sfx.py`)
 - [x] Validation against human sessions
+- [x] Automated eval suite in `evals/` (7 grounded scenarios, stub CI smoke test + live meta benchmark, 17 framework tests)
 - [x] Demo video (3 minutes, linked in the hackathon submission)
 
 The onboarding friction in the base config is planted on purpose, so the loop has a known problem to find. At `onb_03_handoff` the Woodcutter Hut is unlocked and marked NEW!, while the Research button is small. A player who builds the hut drops below the 30 wood that Basic Toolmaking needs, and the hut produces nothing without that tech. `configs/patches/patch_001.json` is the baseline onboarding fix behind the approval gate; `patch_005.json` (naive Step-2 Raider Ambush, `❌ HURTS ONBOARDING`) and `patch_006.json` (free-play Designer rework, `✅ POSITIVE IMPACT`) are pre-baked Feature Studio patches stacked on `patch_001`.
@@ -119,6 +120,58 @@ Run the tests (unit tests plus headless Playwright end-to-end and layout tests):
 ```bash
 .venv/bin/python -m pytest -q
 ```
+
+## Benchmark & Reliability (Evals)
+
+The closed loop is only worth trusting if it finds the planted friction without inventing friction that is not there. `evals/` benchmarks exactly that on 7 canonical *Hearths of the Glen* scenarios: 2 clean onboarding runs (hallucination checks), 3 seeded bottlenecks (the Step-2 Raider Ambush wood drain from `patch_005`, a shelter worker-allocation stall, an Elder handoff deadlock) and 2 corrupted-telemetry cases (a truncated log, out-of-order locked-button click spam).
+
+80% of the checks are deterministic Python/Pydantic assertions (diagnosis schema, status, tool trajectory `query_telemetry -> analyze_dropoff -> synthesize_patch`, no loops, patch presence); 20% is a binary `PASS`/`FAIL` LLM-as-a-judge rubric over patch quality. Each case runs 3 times and only passes if all 3 runs agree on classification (flakiness rule). The two modes measure different things and are never mixed:
+
+- **Stub mode (offline CI smoke test)** — deterministic stand-ins for both variants, $0 spend, proves the framework and fixtures in CI.
+- **Meta mode (real LLM benchmark)** — the baseline is one raw Muse call over the unsorted telemetry; the agent pipeline really executes `query_telemetry` (code) → `analyze_dropoff` (Muse analyst call) → `synthesize_patch` (Muse designer call), judged by a live Muse call. The response cache is bypassed, so all 3 runs per case are fresh model calls; tokens, latency and cost are real API usage priced from `configs/budget_config.json`, with a preflight estimate that refuses to cross the budget's global stop.
+
+### Offline CI smoke test (stub mode)
+
+Latest stub run (`runs/evals_summary.json`, 7 cases × 3 runs, $0 spent; latency is local and machine-dependent, cost is the would-be live estimate):
+
+| System Variant | Pass Rate | Precision | Recall | Latency (p50) | Est. Cost/Run |
+|---|---:|---:|---:|---:|---:|
+| Baseline (Raw LLM) | 42.9% | 0.40 | 0.50 | 0.04 ms | $0.0001 |
+| Agent Pipeline | 100.0% | 1.00 | 1.00 | 0.04 ms | $0.0003 |
+| Delta / Uplift | +57.1% | +0.60 | +0.50 | +0.00 ms | +$0.0002 |
+
+The stub baseline is a naive single-turn heuristic: it hallucinates a bottleneck on efficient optimizer play, names symptoms (`wood_shortfall`) instead of root causes, and guesses on truncated logs. These numbers validate the harness, not the models — the live numbers below are the portfolio evidence.
+
+### Real LLM benchmark (meta mode)
+
+Live run on 2026-11-12, model `muse-spark-1.3-contributor` (the playtester model in `configs/budget_config.json`), 7 cases × 3 runs per variant, cache bypassed, live judge included in the cost totals (`runs/evals_meta_summary.json`):
+
+| System Variant | Pass Rate | Precision | Recall | Consistency | Latency (p50) | Latency (p95) | Total Cost |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Baseline (Raw LLM) | 100.0% | 1.00 | 1.00 | 100% | 7.29 s | 9.27 s | $0.0096 |
+| Agent Pipeline | 85.7% | 1.00 | 1.00 | 100% | 9.84 s | 19.55 s | $0.0121 |
+| Delta / Uplift | −14.3% | +0.00 | +0.00 | +0% | +2.55 s | +10.28 s | +$0.0025 |
+
+Total spend for the benchmark above: **$0.0216** (diagnoses + judge, both variants). Read the result honestly: on this small, taxonomy-scoped dataset a strong single-turn prompt already saturates diagnosis (precision/recall 1.00 for both), so the pipeline's extra structure buys no accuracy here — it buys an auditable tool trajectory, and it costs latency. The eval also caught the pipeline's real failure mode: in `tc_07` run 0 the analyst named the bottleneck correctly in all 3 runs (hence 100% classification consistency), but one designer reply failed patch-schema validation, so that case failed on patch presence. That is exactly what the suite is for: the loss is in structured-output reliability of the multi-step chain, not in diagnostic judgement, and it is visible per-run in the JSON artifact instead of being averaged away.
+
+Reproduce:
+
+```bash
+# Offline CI smoke test ($0)
+.venv/bin/python -m evals.evals --dataset evals/eval_dataset.json --runs 3 --mode stub
+.venv/bin/python -m evals.evals --compare-baseline --output runs/evals_summary.json
+.venv/bin/python -m pytest tests/test_evals.py -q
+
+# Real LLM benchmark (live Meta API, ~$0.02 at contributor rates; needs META_API_KEY in .env)
+.venv/bin/python -m evals.evals --mode meta --compare-baseline --runs 3 --output runs/evals_meta_summary.json
+```
+
+Portfolio talking points:
+
+- **Automated error-seeding:** every seeded bottleneck is planted in telemetry the same way `patch_005` plants it in the game, so recall is measured against ground truth, not vibes.
+- **Deterministic verification:** schema, trajectory and hallucination checks fail loudly in CI (`tests/test_evals.py`, 17 tests, no network) before any judge verdict counts — including live replies that fail schema validation, which are scored as failed checks rather than crashing the run.
+- **Token budget governance:** live calls are charged through the same budget ledger and caps as playtester runs (`configs/budget_config.json`, per-session and global-stop checks, plus an eval preflight estimate), and stub mode proves the whole suite at $0.
+- **Honest negative result:** the benchmark can show the agent pipeline *losing* to a raw LLM on pass rate (structured-output failure in one designer call) — a suite that can only flatter the system under test would prove nothing.
 
 ## License
 

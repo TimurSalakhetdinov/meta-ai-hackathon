@@ -771,19 +771,42 @@ class MetaClient:
         The designer passes `model_id=client.designer_model_id` (Muse Wonder);
         analyst and playtester reasoning stay on the playtester model.
         """
+        return self.reason_json_detailed(system, user, stub_result=stub_result, run_id=run_id,
+                                         bucket=bucket, model_id=model_id)["result"]
+
+    def reason_json_detailed(self, system: str, user: str, *, stub_result: dict[str, Any],
+                             run_id: str = "agents", bucket: str = "analysis",
+                             model_id: Optional[str] = None, use_cache: bool = True) -> dict[str, Any]:
+        """`reason_json` plus measured usage for benchmarks that must report real cost.
+
+        Returns {"result", "prompt_tokens", "completion_tokens", "latency_ms",
+        "estimated_cost_usd", "cache_hit", "model_id"}. Token counts and cost are
+        the API's real usage (settled in the ledger); cache hits report 0.
+        `use_cache=False` forces a fresh live call and does not write the cache,
+        so repeated benchmark runs measure the model, not the disk cache.
+        """
         model_id = model_id or self.muse_model_id
         mode = model_mode(model_id)
-        if self.provider_mode == "stub":
-            self.ledger.log({"run_id": run_id, "provider_mode": "stub", "model_id": model_id,
-                             "model_mode": mode, "bucket": bucket})
-            return stub_result
-        key = hashlib.sha256(json.dumps([model_id, system, user]).encode()).hexdigest()
-        cache = self.muse_cache_dir / f"reason_{key}.json"
         base = {"run_id": run_id, "provider_mode": self.provider_mode, "model_id": model_id,
                 "model_mode": mode, "bucket": bucket}
-        if cache.exists():
+        t0 = time.perf_counter()
+
+        def done(result: dict[str, Any], prompt_tokens: int = 0, completion_tokens: int = 0,
+                 cost: float = 0.0, cache_hit: bool = False) -> dict[str, Any]:
+            return {"result": result, "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "latency_ms": round((time.perf_counter() - t0) * 1000, 1),
+                    "estimated_cost_usd": round(cost, 8), "cache_hit": cache_hit,
+                    "model_id": model_id}
+
+        if self.provider_mode == "stub":
+            self.ledger.log({**base})
+            return done(stub_result)
+        key = hashlib.sha256(json.dumps([model_id, system, user]).encode()).hexdigest()
+        cache = self.muse_cache_dir / f"reason_{key}.json"
+        if use_cache and cache.exists():
             self.ledger.log({**base, "cache_hit": True})
-            return json.loads(cache.read_text())
+            return done(json.loads(cache.read_text()), cache_hit=True)
         if self.cache_only:
             raise CacheMissError(f"Muse reasoning {key[:12]} not cached (META_CACHE_ONLY=1)")
         est = self.muse_cost(self.budget.muse_est_input_tokens, self.budget.muse_max_output_tokens, model_id)
@@ -791,12 +814,13 @@ class MetaClient:
                            use_reserve=self.use_reserve)
         text, usage = self._call_muse_api([{"role": "system", "content": system},
                                            {"role": "user", "content": user}], model_id=model_id)
-        self.ledger.log({**base, **usage, "estimated_cost_usd": self.muse_cost(
-            usage["prompt_tokens"], usage["completion_tokens"], model_id) - est, "entry_type": "settlement"})
+        cost = self.muse_cost(usage["prompt_tokens"], usage["completion_tokens"], model_id)
+        self.ledger.log({**base, **usage, "estimated_cost_usd": cost - est, "entry_type": "settlement"})
         result = parse_decision_json(text)
-        cache.parent.mkdir(parents=True, exist_ok=True)
-        cache.write_text(json.dumps(result))
-        return result
+        if use_cache:
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            cache.write_text(json.dumps(result))
+        return done(result, usage["prompt_tokens"], usage["completion_tokens"], cost)
 
     # ------------------------------------------------------- Muse Image
     def generate_ui_emblem(self, prompt: str, out_path: Path, bucket: str = "reserve",
