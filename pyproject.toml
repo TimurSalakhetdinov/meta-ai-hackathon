@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [tool.setuptools]
-packages = ["backend", "backend.agents", "evals"]
+packages = ["backend", "backend.agents"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
