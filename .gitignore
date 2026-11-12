@@ -12,6 +12,10 @@ configs/patches/audit_log.jsonl
 test-results/
 frontend/static/assets/generated/
 
+# Local tool artifacts
+/generated_images/
+/scratch/
+
 # Local agent handover notes
 docs/HANDOFF.md
 .DS_Store
